@@ -132,8 +132,12 @@ contract Baal is ReentrancyGuard {
         if (proposals[proposal].yesVotes > proposals[proposal].noVotes) { // check if proposal approved by simple majority of members
             proposals[proposal].flags[2] = true; // flag that vote passed
             if (proposals[proposal].flags[0]) { // check into governance proposal
-                extensions[target] = true;
-                votingPeriod = value;
+                if (value > 0) {
+                    extensions[target] = true; // approve extension
+                    votingPeriod = value; // reset voting period
+                } else {
+                    extensions[target] = false; // remove extension
+                }
             } else if (proposals[proposal].flags[1]) { // check into membership proposal
                 // update list of member accounts if new
                 if (!members[msg.sender].exists) { 
@@ -173,9 +177,9 @@ contract Baal is ReentrancyGuard {
             balanceOf[msg.sender] += minted; // add member votes
             emit Transfer(address(this), msg.sender, minted); // event reflects mint of erc20 votes
         } else {    
-            MemberAction(target).memberBurn(msg.sender, amount); // burn `amount` againt `target` based on member
             totalSupply -= amount; // subtract from total member votes
             balanceOf[msg.sender] -= amount; // subtract member votes
+            MemberAction(target).memberBurn(msg.sender, amount); // burn `amount` againt `target` based on member
             emit Transfer(address(this), address(0), amount); // event reflects burn of erc20 votes
         }
     }
