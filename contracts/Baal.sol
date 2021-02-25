@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 /// @dev interface for Baal extensions
 interface MemberAction {
-    function memberBurn(address member, uint256 votes) external; // vote-weighted member burn - e.g., "ragequit" to claim capital
+    function memberBurn(address member, uint256 votes) external; // amount-weighted member burn - e.g., "ragequit" to claim capital in external bank contract
     function memberMint(address member) external payable returns (uint256); // amount-weighted member vote mint - e.g., submit direct "tribute" for votes
 }
 
@@ -25,9 +25,8 @@ contract ReentrancyGuard {
     }
 }
 
-/// @dev Baal for ETH guilds
+/// @dev Baal for Guilds
 contract Baal is ReentrancyGuard {
-    address public memberExit; // external contract with logic for member exit redemption on removal proposal
     address[] public memberList; // array of member accounts summoned or added by proposal
     uint256 public proposalCount; // counter for proposals submitted
     uint256 public totalSupply; // counter for member votes minted - erc20 compatible
@@ -43,12 +42,12 @@ contract Baal is ReentrancyGuard {
     
     event SubmitProposal(address indexed target, uint8 indexed flag, uint256 indexed proposal, uint256 value, bytes data, string details); // emits when member submits proposal 
     event SubmitVote(address indexed member, uint256 balance, uint256 indexed proposal, bool approve); // emits when member submits vote on proposal
-    event ProcessProposal(uint256 indexed proposal); // emits when proposal is processed and finalized
+    event ProcessProposal(uint256 indexed proposal); // emits when proposal is processed and executed
     event Transfer(address indexed from, address indexed to, uint256 amount); // emits when member votes are minted or burned - erc20 compatible
     
     struct Member {
         bool exists; // tracks member account registration
-        mapping(uint256 => mapping(bool => uint256)) voted; // maps votes on proposals by member account - whether approved and votes cast
+        mapping(uint256 => mapping(uint256 => bool)) voted; // maps votes on proposals by member account - whether approved and votes cast
     }
     
     struct Proposal {
@@ -58,7 +57,7 @@ contract Baal is ReentrancyGuard {
         uint256 yesVotes; // counter for member yes votes to calculate approval on processing
         uint256 votingEnds; // termination date for proposal in seconds since epoch - derived from votingPeriod
         bytes data; // raw data sent to `target` account for low-level call
-        bool[5] flags; // [governance, membership, removal, passed, processed]
+        bool[6] flags; // [action, governance, membership, removal, passed, processed]
         string details; // context for proposal - could be IPFS hash, plaintext, or JSON
     }
     
@@ -79,88 +78,9 @@ contract Baal is ReentrancyGuard {
              emit Transfer(address(this), summoners[i], votes[i]); // event reflects mint of erc20 votes to summoning members
         }
         
-        memberExit = _extensions[0]; // set default extension contract for member removal redemptions
         votingPeriod = _votingPeriod; 
         name = _name;
         symbol = _symbol;
-    }
-    
-    /// @dev Submit proposal to Baal members for approval within voting period
-    /// @param target Account that receives low-level call `data` and ETH `value` - if `membership`, the account that will receive `value` votes - if `removal`, the account that will lose votes
-    /// @param value ETH sent from Baal to execute approved proposal low-level call - if `membership`, reflects `votes` to grant member
-    /// @param data Raw data sent to `target` account for low-level call 
-    /// @param details Context for proposal - could be IPFS hash, plaintext, or JSON
-    function submitProposal(address target, uint8 flag, uint256 value, bytes calldata data, string calldata details) external nonReentrant returns (uint256 count) {
-        proposalCount++;
-        uint256 proposal = proposalCount;
-        
-        bool[5] memory flags; // [governance, membership, removal, passed, processed]
-        flags[flag] = true; // flag proposal type - must be 
-        
-        proposals[proposal] = Proposal(target, value, 0, 0, block.timestamp + votingPeriod, data, flags, details); // push params into proposal struct - start voting timer
-        
-        emit SubmitProposal(target, flag, proposal, value, data, details);
-        return proposal;
-    }
-    
-    /// @dev Submit vote - proposal must exist and voting period must not have ended
-    /// @param proposal Number of proposal in `proposals` mapping to cast vote on 
-    /// @param approve If `true`, member will cast `yesVotes` onto proposal - if `false, `noVotes` will be counted
-    function submitVote(uint256 proposal, bool approve) external nonReentrant {
-        uint256 balance = balanceOf[msg.sender];
-        require(proposal <= proposalCount, "!exist");
-        require(proposals[proposal].votingEnds >= block.timestamp, "ended");
-        
-        if (approve) {proposals[proposal].yesVotes += balance;} // cast 'yes' votes per member balance to proposal
-        else {proposals[proposal].noVotes += balance;} // cast 'no' votes per member balance to proposal
-        
-        members[msg.sender].voted[proposal][approve] = balance; // record member vote to account
-        
-        emit SubmitVote(msg.sender, balance, proposal, approve);
-    }
-    
-    /// @dev Process proposal and execute low-level call or membership management - proposal must exist, be unprocessed, and voting period must not have ended
-    /// @param proposal Number of proposal in `proposals` mapping to process for execution
-    function processProposal(uint256 proposal) external nonReentrant returns (bool success, bytes memory retData) {
-        require(proposal <= proposalCount, "!exist");
-        require(proposals[proposal].votingEnds <= block.timestamp, "!ended");
-        require(!proposals[proposal].flags[4], "processed");
-      
-        address target = proposals[proposal].target;
-        uint256 value = proposals[proposal].value;
-        
-        if (proposals[proposal].yesVotes > proposals[proposal].noVotes) { // check if proposal approved by simple majority of members
-            proposals[proposal].flags[2] = true; // flag that vote passed
-            if (proposals[proposal].flags[0]) { // check into governance proposal
-                if (value > 0) {
-                    extensions[target] = true; // approve extension
-                    votingPeriod = value; // reset voting period
-                } else {
-                    extensions[target] = false; // remove extension
-                }
-            } else if (proposals[proposal].flags[1]) { // check into membership proposal
-                // update list of member accounts if new
-                if (!members[msg.sender].exists) { 
-                    memberList.push(target);
-                } 
-                totalSupply += value; // add to total member votes
-                balanceOf[target] += value; // add to `target` member votes
-                emit Transfer(address(this), target, value); // event reflects mint of erc20 votes
-            } else if (proposals[proposal].flags[2]) { // alternatively, check into removal proposal
-                uint256 balance = balanceOf[target];
-                MemberAction(memberExit).memberBurn(target, balance); // burn `balance` againt `memberExit` based on `target` member 
-                totalSupply -= balance; // subtract `balance` from total member votes
-                balanceOf[target] = 0; // reset member votes
-                members[target].exists = false; // reset member registration status
-                emit Transfer(address(this), address(0), balance); // event reflects burn of erc20 votes
-            } else { // otherwise, check into low-level call
-                (bool callSuccess, bytes memory returnData) = target.call{value: proposals[proposal].value}(proposals[proposal].data); // execute low-level call
-                return (callSuccess, returnData); // return call success and data
-            }
-        }
-        
-        proposals[proposal].flags[4] = true; // flag that proposal processed
-        emit ProcessProposal(proposal);
     }
     
     /// @dev Execute member action to mint or burn votes against external contract - caller must have votes
@@ -184,9 +104,130 @@ contract Baal is ReentrancyGuard {
         }
     }
     
+    /// @dev Submit proposal to Baal members for approval within voting period
+    /// @param target Account that receives low-level call `data` and ETH `value` - if `membership` flag (2), the account that will receive `value` votes - if `removal` (3), the account that will lose votes
+    /// @param value ETH sent from Baal to execute approved proposal low-level call - if `membership`, reflects `votes` to grant member
+    /// @param data Raw data sent to `target` account for low-level call 
+    /// @param details Context for proposal - could be IPFS hash, plaintext, or JSON
+    function submitProposal(address target, uint8 flag, uint256 value, bytes calldata data, string calldata details) external nonReentrant returns (uint256 count) {
+        proposalCount++;
+        uint256 proposal = proposalCount;
+        bool[6] memory flags; // [governance, membership, removal, passed, processed]
+        flags[flag] = true; // flag proposal type - must be 
+        proposals[proposal] = Proposal(target, value, 0, 0, block.timestamp + votingPeriod, data, flags, details); // push params into proposal struct - start voting timer
+        emit SubmitProposal(target, flag, proposal, value, data, details);
+        return proposal;
+    }
+    
+    /// @dev Submit vote - proposal must exist and voting period must not have ended
+    /// @param proposal Number of proposal in `proposals` mapping to cast vote on 
+    /// @param approve If `true`, member will cast `yesVotes` onto proposal - if `false, `noVotes` will be counted
+    function submitVote(uint256 proposal, bool approve) external nonReentrant {
+        uint256 balance = balanceOf[msg.sender];
+        require(proposal <= proposalCount, "!exist");
+        require(proposals[proposal].votingEnds >= block.timestamp, "ended");
+        if (approve) {proposals[proposal].yesVotes += balance;} // cast 'yes' votes per member balance to proposal
+        else {proposals[proposal].noVotes += balance;} // cast 'no' votes per member balance to proposal
+        members[msg.sender].voted[proposal][balance] = approve; // record member vote to account
+        emit SubmitVote(msg.sender, balance, proposal, approve);
+    }
+    
+    /// @dev Process proposal and execute low-level call if not flaged for governance, membership or removal - proposal must exist, be unprocessed, and voting period must not have ended
+    /// @param proposal Number of proposal in `proposals` mapping to process for execution
+    function processActionProposal(uint256 proposal) external nonReentrant returns (bool success, bytes memory retData) {
+        require(proposal <= proposalCount, "!exist");
+        require(proposals[proposal].votingEnds <= block.timestamp, "!ended");
+        require(proposals[proposal].flags[0] && !proposals[proposal].flags[5], "!action or processed");
+        
+        if (proposals[proposal].yesVotes > proposals[proposal].noVotes) { // check if proposal approved by simple majority of members
+            proposals[proposal].flags[4] = true; // flag that vote passed
+            (bool callSuccess, bytes memory returnData) = proposals[proposal].target.call{value: proposals[proposal].value}(proposals[proposal].data); // execute low-level call
+            proposals[proposal].flags[5] = true; // flag that proposal processed
+            emit ProcessProposal(proposal);
+            return (callSuccess, returnData); // return call success status and data
+        } else {
+            proposals[proposal].flags[5] = true; // flag that proposal processed
+            emit ProcessProposal(proposal);
+        }
+    }
+    
+    /// @dev Process proposal and execute low-level call if not flaged for governance, membership or removal - proposal must exist, be unprocessed, and voting period must not have ended
+    /// @param proposal Number of proposal in `proposals` mapping to process for execution
+    function processGovernanceProposal(uint256 proposal) external nonReentrant {
+        require(proposal <= proposalCount, "!exist");
+        require(proposals[proposal].votingEnds <= block.timestamp, "!ended");
+        require(proposals[proposal].flags[1] && !proposals[proposal].flags[5], "!governance or processed");
+        
+        if (proposals[proposal].yesVotes > proposals[proposal].noVotes) { // check if proposal approved by simple majority of members
+            proposals[proposal].flags[4] = true; // flag that vote passed
+            if (proposals[proposal].value > 0) { // crib `value` to toggle between approving or removing extension
+                extensions[proposals[proposal].target] = true; // approve extension
+                votingPeriod = proposals[proposal].value; // reset voting period - note: placed here as sanity check to avoid setting period to '0'
+            } else {
+                extensions[proposals[proposal].target] = false; // remove extension
+            }
+        }
+        
+        proposals[proposal].flags[5] = true; // flag that proposal processed
+        emit ProcessProposal(proposal);
+        
+    }
+    
+    /// @dev Process proposal and execute low-level call if not flaged for governance, membership or removal - proposal must exist, be unprocessed, and voting period must not have ended
+    /// @param proposal Number of proposal in `proposals` mapping to process for execution
+    function processMemberProposal(uint256 proposal) external nonReentrant {
+        require(proposal <= proposalCount, "!exist");
+        require(proposals[proposal].votingEnds <= block.timestamp, "!ended");
+        require(proposals[proposal].flags[2] && !proposals[proposal].flags[5], "!member or processed");
+          
+        if (proposals[proposal].yesVotes > proposals[proposal].noVotes) { // check if proposal approved by simple majority of members
+            proposals[proposal].flags[4] = true; // flag that vote passed
+            address target = proposals[proposal].target;
+            uint256 value = proposals[proposal].value;
+            
+            if (!members[msg.sender].exists) { // update list of member accounts if new
+                memberList.push(target);
+            } 
+
+            totalSupply += value; // add to total member votes
+            balanceOf[target] += value; // add to `target` member votes
+            emit Transfer(address(this), target, value); // event reflects mint of erc20 votes
+        }
+        
+        proposals[proposal].flags[5] = true; // flag that proposal processed
+        emit ProcessProposal(proposal);
+    }
+    
+    /// @dev Process proposal and execute low-level call if not flaged for governance, membership or removal - proposal must exist, be unprocessed, and voting period must not have ended
+    /// @param proposal Number of proposal in `proposals` mapping to process for execution
+    function processRemovalProposal(uint256 proposal) external nonReentrant {
+        require(proposal <= proposalCount, "!exist");
+        require(proposals[proposal].votingEnds <= block.timestamp, "!ended");
+        require(proposals[proposal].flags[3] && !proposals[proposal].flags[5], "processed");
+        
+        if (proposals[proposal].yesVotes > proposals[proposal].noVotes) { // check if proposal approved by simple majority of members
+            uint256 value = proposals[proposal].value;
+            proposals[proposal].flags[4] = true; // flag that vote passed
+            totalSupply -= value; // subtract `balance` from total member votes
+            balanceOf[proposals[proposal].target] -= value; // subtract member votes
+            emit Transfer(address(this), address(0), value); // event reflects burn of erc20 votes
+        }
+        
+        proposals[proposal].flags[5] = true; // flag that proposal processed
+        emit ProcessProposal(proposal);
+    }
+    
+    /***************
+    HELPER FUNCTIONS
+    ***************/
     /// @dev Returns array list of member accounts in Baal
-    function getMembers() external view returns (address[] memory membership) {
+    function getMemberList() external view returns (address[] memory membership) {
         return memberList;
+    }
+
+    /// @dev Returns flags for proposal in Baal
+    function getProposalFlags(uint256 proposal) external view returns (bool[6] memory flags) {
+        return proposals[proposal].flags;
     }
     
     /// @dev Fallback to collect received ETH into Baal
