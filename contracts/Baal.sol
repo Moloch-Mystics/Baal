@@ -1,7 +1,7 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+/// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-/// @dev interface for Baal extensions
+/// @dev interface for Baal banks
 interface MemberAction {
     function memberBurn(address member, uint256 votes) external; // amount-weighted member burn - e.g., "ragequit" to claim capital in external bank contract
     function memberMint(address member) external payable returns (uint256); // amount-weighted member vote mint - e.g., submit direct "tribute" for votes
@@ -26,7 +26,14 @@ contract ReentrancyGuard {
 }
 
 /// @dev Baal for Guilds
+// ~ TO - DO - make approvedTokens array. Use ierc20 balanceOf / transfer for ragequit pull
+// --- add approvedTokens to governance approval / constructor
+/// ----- ragequit timer? 
+///// ------ bool flag to uint8 
+////// -------- require prop processing order
+/////// -------- custom voting params
 contract Baal is ReentrancyGuard {
+    address[] public approvedTokens;
     address[] public memberList; // array of member accounts summoned or added by proposal
     uint256 public proposalCount; // counter for proposals submitted
     uint256 public totalSupply; // counter for member votes minted - erc20 compatible
@@ -36,7 +43,7 @@ contract Baal is ReentrancyGuard {
     string public symbol; // symbol for erc20 vote accounting
     
     mapping(address => uint256) public balanceOf; // maps member accounts to votes
-    mapping(address => bool) public extensions; // maps contracts approved for `memberAction()` 
+    mapping(address => bool) public banks; // maps contracts approved for `memberAction()` 
     mapping(address => Member) public members; // maps member account to registration
     mapping(uint256 => Proposal) public proposals; // maps proposal number to struct details
     
@@ -62,18 +69,20 @@ contract Baal is ReentrancyGuard {
     }
     
     /// @dev deploy Baal and create initial array of member accounts with specific vote weights
-    /// @param _extensions Accounts to approve for `memberAction()` in `extensions`
+    /// @param _approvedTokens erc20 tokens approved for internal accounting - `ragequit()` of votes
+    /// @param _banks Accounts to approve for `memberAction()` in `banks`
     /// @param summoners Accounts to add as members
     /// @param votes Voting weight per member
     /// @param _votingPeriod Voting period in seconds for members to cast votes on proposals
     /// @param _name Name for erc20 vote accounting
     /// @param _symbol Symbol for erc20 vote accounting
-    constructor(address[] memory _extensions, address[] memory summoners, uint256[] memory votes, uint256 _votingPeriod, string memory _name, string memory _symbol) {
+    constructor(address[] memory _approvedTokens, address[] memory _banks, address[] memory summoners, uint256[] memory votes, uint256 _votingPeriod, string memory _name, string memory _symbol) {
         for (uint256 i = 0; i < summoners.length; i++) {
+             approvedTokens.push(_approvedTokens[i]);
              memberList.push(summoners[i]); // update array of member accounts
              totalSupply += votes[i]; // total votes incremented by summoning with erc20 accounting
              balanceOf[summoners[i]] = votes[i]; // vote weights granted to summoning member with erc20 accounting
-             extensions[_extensions[i]] = true; // update mapping of approved extensions
+             banks[_banks[i]] = true; // update mapping of approved banks
              members[summoners[i]].exists = true; // confirm summoning member `exists`
              emit Transfer(address(this), summoners[i], votes[i]); // event reflects mint of erc20 votes to summoning members
         }
@@ -84,12 +93,12 @@ contract Baal is ReentrancyGuard {
     }
     
     /// @dev Execute member action to mint or burn votes against external contract - caller must have votes
-    /// @param target Account to call to trigger member action - must be approved in `extensions`
+    /// @param target Account to call to trigger member action - must be approved in `banks`
     /// @param amount Number of member votes to submit in action
     /// @param mint Confirm whether transaction involves mint - if `false,` perform balance-based burn
     function memberAction(address target, uint256 amount, bool mint) external payable nonReentrant {
         require(members[msg.sender].exists, "!member");
-        require(extensions[target], "!extension"); 
+        require(banks[target], "!bank"); 
         
         if (mint) {
             uint256 minted = MemberAction(target).memberMint{value: msg.value}(msg.sender); // mint from `target` `msg.value` return based on member
@@ -110,6 +119,7 @@ contract Baal is ReentrancyGuard {
     /// @param data Raw data sent to `target` account for low-level call 
     /// @param details Context for proposal - could be IPFS hash, plaintext, or JSON
     function submitProposal(address target, uint8 flag, uint256 value, bytes calldata data, string calldata details) external nonReentrant returns (uint256 count) {
+        // require() flag limit
         proposalCount++;
         uint256 proposal = proposalCount;
         bool[6] memory flags; // [governance, membership, removal, passed, processed]
@@ -160,11 +170,11 @@ contract Baal is ReentrancyGuard {
         
         if (proposals[proposal].yesVotes > proposals[proposal].noVotes) { // check if proposal approved by simple majority of members
             proposals[proposal].flags[4] = true; // flag that vote passed
-            if (proposals[proposal].value > 0) { // crib `value` to toggle between approving or removing extension
-                extensions[proposals[proposal].target] = true; // approve extension
+            if (proposals[proposal].value > 0) { // crib `value` to toggle between approving or removing bank
+                banks[proposals[proposal].target] = true; // approve bank
                 votingPeriod = proposals[proposal].value; // reset voting period - note: placed here as sanity check to avoid setting period to '0'
             } else {
-                extensions[proposals[proposal].target] = false; // remove extension
+                banks[proposals[proposal].target] = false; // remove bank
             }
         }
         
