@@ -1,6 +1,12 @@
 /// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
+/// @dev brief interface for erc20 token
+interface IERC20 { 
+    function balanceOf(address account) external view returns (uint256);
+    function transfer(address to, uint256 amount) external returns (bool);
+}
+
 /// @dev interface for Baal banks
 interface MemberAction {
     function memberBurn(address member, uint256 votes) external; // amount-weighted member burn - e.g., "ragequit" to claim capital in external bank contract
@@ -26,14 +32,12 @@ contract ReentrancyGuard {
 }
 
 /// @dev Baal for Guilds
-// ~ TO - DO - make approvedTokens array. Use ierc20 balanceOf / transfer for ragequit pull
-// --- add approvedTokens to governance approval / constructor
-/// ----- ragequit timer? 
-///// ------ bool flag to uint8 
+// ~ TO - DO - add ragequitting on guildTokens
+// --- add guildTokens to governance approval
 ////// -------- require prop processing order
 /////// -------- custom voting params
 contract Baal is ReentrancyGuard {
-    address[] public approvedTokens;
+    address[] public guildTokens;
     address[] public memberList; // array of member accounts summoned or added by proposal
     uint256 public proposalCount; // counter for proposals submitted
     uint256 public totalSupply; // counter for member votes minted - erc20 compatible
@@ -69,16 +73,16 @@ contract Baal is ReentrancyGuard {
     }
     
     /// @dev deploy Baal and create initial array of member accounts with specific vote weights
-    /// @param _approvedTokens erc20 tokens approved for internal accounting - `ragequit()` of votes
-    /// @param _banks Accounts to approve for `memberAction()` in `banks`
+    /// @param _guildTokens erc20 tokens approved for internal accounting - `ragequit()` of votes
+    /// @param _banks External contracts to approve for `memberAction()`
     /// @param summoners Accounts to add as members
     /// @param votes Voting weight per member
     /// @param _votingPeriod Voting period in seconds for members to cast votes on proposals
     /// @param _name Name for erc20 vote accounting
     /// @param _symbol Symbol for erc20 vote accounting
-    constructor(address[] memory _approvedTokens, address[] memory _banks, address[] memory summoners, uint256[] memory votes, uint256 _votingPeriod, string memory _name, string memory _symbol) {
+    constructor(address[] memory _guildTokens, address[] memory _banks, address[] memory summoners, uint256[] memory votes, uint256 _votingPeriod, string memory _name, string memory _symbol) {
         for (uint256 i = 0; i < summoners.length; i++) {
-             approvedTokens.push(_approvedTokens[i]);
+             guildTokens.push(_guildTokens[i]);
              memberList.push(summoners[i]); // update array of member accounts
              totalSupply += votes[i]; // total votes incremented by summoning with erc20 accounting
              balanceOf[summoners[i]] = votes[i]; // vote weights granted to summoning member with erc20 accounting
@@ -119,7 +123,7 @@ contract Baal is ReentrancyGuard {
     /// @param data Raw data sent to `target` account for low-level call 
     /// @param details Context for proposal - could be IPFS hash, plaintext, or JSON
     function submitProposal(address target, uint8 flag, uint256 value, bytes calldata data, string calldata details) external nonReentrant returns (uint256 count) {
-        // require() flag limit
+        require(flag <= 5, "!flag"); 
         proposalCount++;
         uint256 proposal = proposalCount;
         bool[6] memory flags; // [governance, membership, removal, passed, processed]
@@ -146,6 +150,7 @@ contract Baal is ReentrancyGuard {
     /// @param proposal Number of proposal in `proposals` mapping to process for execution
     function processActionProposal(uint256 proposal) external nonReentrant returns (bool success, bytes memory retData) {
         require(proposal <= proposalCount, "!exist");
+        if (proposal == 1) {require(!proposals[proposal-1].flags[5], "previous !processed");} 
         require(proposals[proposal].votingEnds <= block.timestamp, "!ended");
         require(proposals[proposal].flags[0] && !proposals[proposal].flags[5], "!action or processed");
         
@@ -161,10 +166,12 @@ contract Baal is ReentrancyGuard {
         }
     }
     
+    //// TO - DO add way to update guildTokens - maybe like, if there's data and flagged as gov?
     /// @dev Process proposal and execute low-level call if not flaged for governance, membership or removal - proposal must exist, be unprocessed, and voting period must not have ended
     /// @param proposal Number of proposal in `proposals` mapping to process for execution
     function processGovernanceProposal(uint256 proposal) external nonReentrant {
         require(proposal <= proposalCount, "!exist");
+        if (proposal == 1) {require(!proposals[proposal-1].flags[5], "previous !processed");} 
         require(proposals[proposal].votingEnds <= block.timestamp, "!ended");
         require(proposals[proposal].flags[1] && !proposals[proposal].flags[5], "!governance or processed");
         
@@ -187,6 +194,7 @@ contract Baal is ReentrancyGuard {
     /// @param proposal Number of proposal in `proposals` mapping to process for execution
     function processMemberProposal(uint256 proposal) external nonReentrant {
         require(proposal <= proposalCount, "!exist");
+        if (proposal == 1) {require(!proposals[proposal-1].flags[5], "previous !processed");} 
         require(proposals[proposal].votingEnds <= block.timestamp, "!ended");
         require(proposals[proposal].flags[2] && !proposals[proposal].flags[5], "!member or processed");
           
@@ -208,10 +216,12 @@ contract Baal is ReentrancyGuard {
         emit ProcessProposal(proposal);
     }
     
+    ///// TO - DO add ragequit stuff
     /// @dev Process proposal and execute low-level call if not flaged for governance, membership or removal - proposal must exist, be unprocessed, and voting period must not have ended
     /// @param proposal Number of proposal in `proposals` mapping to process for execution
     function processRemovalProposal(uint256 proposal) external nonReentrant {
         require(proposal <= proposalCount, "!exist");
+        if (proposal == 1) {require(!proposals[proposal-1].flags[5], "previous !processed");} 
         require(proposals[proposal].votingEnds <= block.timestamp, "!ended");
         require(proposals[proposal].flags[3] && !proposals[proposal].flags[5], "processed");
         
