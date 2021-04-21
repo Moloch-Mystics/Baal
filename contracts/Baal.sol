@@ -125,7 +125,6 @@ contract Baal {
     function submitVote(uint proposal, bool approve) external lock {
         Proposal storage prop = proposals[proposal];
         uint balance = balanceOf[msg.sender]; // gas-optimize variable
-        require(proposal <= proposalCount, "!exist"); // check proposal exists
         require(prop.votingEnds >= block.timestamp, "ended"); // check voting period has not ended
         if (approve) {prop.yesVotes += balance;} // cast 'yes' votes per member balance to proposal
         else {prop.noVotes += balance;} // cast 'no' votes per member balance to proposal
@@ -141,7 +140,7 @@ contract Baal {
     function processActionProposal(uint proposal) external lock returns (bool[] memory successes, bytes[] memory results) {
         _validateProposalForProcessing(proposal); // validate basic processing requirements
         Proposal storage prop = proposals[proposal];
-        require(prop.flags[0] && !prop.flags[5], "!action or processed"); // check proposal type and whether already processed
+        require(prop.flags[0], "!action"); // check proposal type and whether already processed
         if (prop.yesVotes > prop.noVotes) { // check if proposal approved by simple majority of `members`
             prop.flags[4] = true; // flag that vote passed
             for (uint i = 0; i < prop.target.length; i++) {
@@ -157,7 +156,7 @@ contract Baal {
     function processGovernanceProposal(uint proposal) external lock {
         _validateProposalForProcessing(proposal); // validate basic processing requirements
         Proposal storage prop = proposals[proposal];
-        require(prop.flags[1] && !prop.flags[5], "!governance or processed"); // check proposal type and whether already processed
+        require(prop.flags[1], "!governance"); // check proposal type and whether already processed
         if (prop.yesVotes > prop.noVotes) { // check if proposal approved by simple majority of members
             prop.flags[4] = true; // flag that vote passed
             for (uint i = 0; i < prop.target.length; i++) {
@@ -176,7 +175,7 @@ contract Baal {
     function processMemberProposal(uint proposal) external lock {
         _validateProposalForProcessing(proposal); // validate basic processing requirements
         Proposal storage prop = proposals[proposal];
-        require(prop.flags[2] && !prop.flags[5], "!member or processed"); // check proposal type and whether already processed
+        require(prop.flags[2], "!member"); // check proposal type and whether already processed
         if (prop.yesVotes > prop.noVotes) { // check if proposal approved by simple majority of members
             prop.flags[4] = true; // flag that vote passed
             for (uint i = 0; i < prop.target.length; i++) {
@@ -193,7 +192,7 @@ contract Baal {
     function processRemovalProposal(uint proposal) external lock {
         _validateProposalForProcessing(proposal); // validate basic processing requirements
         Proposal storage prop = proposals[proposal];
-        require(prop.flags[3] && !prop.flags[5], "processed"); // check proposal type and whether already processed
+        require(prop.flags[3], "!removal"); // check proposal type and whether already processed
         if (prop.yesVotes > prop.noVotes) { // check if proposal approved by simple majority of members
             prop.flags[4] = true; // flag that vote passed
             for (uint i = 0; i < prop.target.length; i++) {
@@ -225,13 +224,14 @@ contract Baal {
     /***************
     HELPER FUNCTIONS
     ***************/
-    /// @notice Deposit ETH into Baal.
+    /// @notice Deposit ETH.
     receive() external payable {}
     
-    /// @dev Private Baal function to validate basic processing requirements. 
+    /// @dev Internal checks to validate basic proposal processing requirements. 
     function _validateProposalForProcessing(uint proposal) private view {
         require(proposal <= proposalCount, "!exist"); // check proposal exists
-        require(!proposals[proposal - 1].flags[5], "previous !processed"); // check previous proposal has processed
+        require(proposals[proposal - 1].flags[5], "prev!processed"); // check previous proposal has processed
+        require(!proposals[proposal].flags[5], "processed"); // check proposal has not processed
         require(proposals[proposal].votingEnds <= block.timestamp, "!ended"); // check voting period has ended
     }
 }
