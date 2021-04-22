@@ -14,7 +14,8 @@ contract Baal {
     address[] memberList; // internal array of `members` accounts summoned or added by proposal
     uint public proposalCount; // counter for proposals submitted
     uint public totalSupply; // counter for `members` votes minted with erc20 accounting
-    uint public votingPeriod; // period for `members` to cast votes on proposals in epoch time
+    uint public minVotingPeriod; // min. period proposal voting in epoch time
+    uint public maxVotingPeriod; // max. period for proposal voting in epoch time
     uint8 constant public decimals = 18; // decimals for erc20 vote accounting - 18 is default to match ETH and most erc20
     string public name; // 'name' for erc20 vote accounting
     string public symbol; // 'symbol' for erc20 vote accounting
@@ -26,6 +27,7 @@ contract Baal {
     mapping(address => Member) public members; // maps `members` accounts to struct details
     mapping(uint => Proposal) public proposals; // maps proposal number to struct details
     
+    event SummonComplete(address[] indexed summoners, address[] indexed ragequitTokens, uint256[] votes, uint256 minVotingPeriod, uint256 maxVotingPeriod, string name, string symbol);
     event SubmitProposal(address[] target, uint8 indexed flag, uint indexed proposal, uint[] value, bytes[] data, string details); // emits when `members` submit proposal 
     event SubmitVote(address indexed member, uint balance, uint indexed proposal, bool approve); // emits when `members` submit vote on proposal
     event ProcessProposal(uint indexed proposal); // emits when proposal is processed and executed
@@ -42,12 +44,13 @@ contract Baal {
     
     struct Member {
         bool exists; // tracks `members` account registration for `memberAction()` and `submitProposal()`
+        uint highestIndexYesVote; // highest proposal index # on which the member voted YES
         mapping(uint => mapping(uint => bool)) voted; // maps votes on proposals by `members` account - gets votes cast and whether approved
     }
     
     struct Proposal {
-        address[] target; // account that receives low-level call `data` and ETH `value` - if `membership` flag (2) or `removal` (3), account that will receive or lose `value` votes, respectively
-        uint[] value; // ETH sent from Baal to execute approved proposal low-level call
+        address[] target; // account(s) that receives low-level call `data` and ETH `value` - if `membership` flag (2) or `removal` (3), account(s) that will receive or lose `value` votes, respectively
+        uint[] value; // ETH sent from Baal to execute approved proposal low-level call(s)
         uint yesVotes; // counter for `members` 'yes' votes to calculate approval on processing
         uint noVotes; // counter for `members` 'no' votes to calculate approval on processing
         uint votingEnds; // termination date for proposal in seconds since epoch - derived from `votingPeriod`
@@ -61,10 +64,11 @@ contract Baal {
     /// @param _banks External contracts approved for `memberAction()`.
     /// @param summoners Accounts to add as `members`.
     /// @param votes Voting weight among `members`.
-    /// @param _votingPeriod Voting period in seconds for `members` to cast votes on proposals.
+    /// @param _minVotingPeriod Min. voting period in seconds for `members` to cast votes on proposals.
+    /// @param _maxVotingPeriod Max. voting period in seconds for `members` to cast votes on proposals.
     /// @param _name Name for erc20 vote accounting.
     /// @param _symbol Symbol for erc20 vote accounting.
-    constructor(address[] memory _guildTokens, address[] memory _banks, address[] memory summoners, uint[] memory votes, uint _votingPeriod, string memory _name, string memory _symbol) {
+    constructor(address[] memory _guildTokens, address[] memory _banks, address[] memory summoners, uint[] memory votes, uint _minVotingPeriod,  uint _maxVotingPeriod, string memory _name, string memory _symbol) {
         for (uint i = 0; i < summoners.length; i++) {
              guildTokens.push(_guildTokens[i]); // update array of `guildTokens` for `ragequit()`
              memberList.push(summoners[i]); // update array of `members`
@@ -74,10 +78,12 @@ contract Baal {
              members[summoners[i]].exists = true; // record that summoning `members` `exists`
              emit Transfer(address(this), summoners[i], votes[i]); // event reflects mint of erc20 votes to summoning `members`
         }
-        votingPeriod = _votingPeriod; // set general voting period - can be updated with 'governance' (1) proposal
+        minVotingPeriod = _minVotingPeriod; 
+        maxVotingPeriod = _maxVotingPeriod; 
         name = _name; // Baal 'name' with erc20 accounting
         symbol = _symbol; // Baal 'symbol' with erc20 accounting
         proposals[0].flags[5] = true; // internal trick to save gas in validating proposals
+        emit SummonComplete(summoners, _guildTokens, votes, _minVotingPeriod, _maxVotingPeriod, _name, _symbol);
     }
     
     /// @notice Execute `members`' action to mint or burn votes against external contract.
@@ -85,8 +91,8 @@ contract Baal {
     /// @param amount Number of `members`' votes to submit in action.
     /// @param mint Confirm whether transaction involves mint - if `false,` perform balance-based burn.
     function memberAction(IBaalBank bank, uint amount, bool mint) external lock payable {
-        require(banks[address(bank)], "!bank"); // check bank is approved
-        require(members[msg.sender].exists, "!member"); // check membership
+        require(banks[address(bank)], '!bank'); // check bank is approved
+        require(members[msg.sender].exists, '!member'); // check membership
         if (mint) {
             uint256 minted = bank.memberMint{value: msg.value}(msg.sender); // mint from `bank` `msg.value` return based on member
             totalSupply += minted; // add to total `members`' votes with erc20 accounting
@@ -108,14 +114,14 @@ contract Baal {
     /// @param value ETH sent from Baal to execute approved proposal low-level call.
     /// @param data Raw data sent to `target` account for low-level call.
     /// @param details Context for proposal - could be IPFS hash, plaintext, or JSON.
-    function submitProposal(address[] calldata target, uint8 flag, uint[] calldata value, bytes[] calldata data, string calldata details) external lock returns (uint proposal) {
-        require(members[msg.sender].exists, "!member"); // check membership
-        require(flag <= 5, "!flag"); // check flag is not out of bounds
+    function submitProposal(address[] calldata target, uint8 flag, uint votingLength, uint[] calldata value, bytes[] calldata data, string calldata details) external lock returns (uint proposal) {
+        require(votingLength >= minVotingPeriod && votingLength <= maxVotingPeriod, 'Baal:: Voting period too long or short');
+        require(flag <= 5, '!flag'); // check flag is not out of bounds
         proposalCount++; // increment proposals
         proposal = proposalCount; // set proposal number from count
         bool[6] memory flags; // stage flags - [governance, membership, removal, passed, processed]
         flags[flag] = true; // flag proposal type 
-        proposals[proposal] = Proposal(target, value, 0, 0, block.timestamp + votingPeriod, data, flags, details); // push params into proposal struct - start vote timer
+        proposals[proposal] = Proposal(target, value, 0, 0, block.timestamp + votingLength, data, flags, details); // push params into proposal struct - start vote timer
         emit SubmitProposal(target, flag, proposal, value, data, details);
     }
     
@@ -125,7 +131,7 @@ contract Baal {
     function submitVote(uint proposal, bool approve) external lock {
         Proposal storage prop = proposals[proposal];
         uint balance = balanceOf[msg.sender]; // gas-optimize variable
-        require(prop.votingEnds >= block.timestamp, "ended"); // check voting period has not ended
+        require(prop.votingEnds >= block.timestamp, 'ended'); // check voting period has not ended
         if (approve) {prop.yesVotes += balance;} // cast 'yes' votes per member balance to proposal
         else {prop.noVotes += balance;} // cast 'no' votes per member balance to proposal
         members[msg.sender].voted[proposal][balance] = approve; // record vote to member struct per account
@@ -138,11 +144,10 @@ contract Baal {
     /// @notice Process 'action' proposal (0) and execute low-level call(s) - proposal must be counted, unprocessed, and in voting period.
     /// @param proposal Number of proposal in `proposals` mapping to process for execution.
     function processActionProposal(uint proposal) external lock returns (bool[] memory successes, bytes[] memory results) {
-        _validateProposalForProcessing(proposal); // validate basic processing requirements
+        processingReady(proposal); // validate basic processing requirements
         Proposal storage prop = proposals[proposal];
-        require(prop.flags[0], "!action"); // check proposal type and whether already processed
-        if (prop.yesVotes > prop.noVotes) { // check if proposal approved by simple majority of `members`
-            prop.flags[4] = true; // flag that vote passed
+        require(prop.flags[0], '!action'); // check proposal type and whether already processed
+        if (didPass(proposal)) { // check if proposal approved by simple majority of `members`
             for (uint i = 0; i < prop.target.length; i++) {
                 (bool success, bytes memory result) = prop.target[i].call{value:prop.value[i]}(prop.data[i]); // execute low-level call
                 successes[i] = success;
@@ -154,35 +159,32 @@ contract Baal {
     /// @notice Process 'governance' proposal (1) - proposal must be counted, unprocessed, and in voting period.
     /// @param proposal Number of proposal in `proposals` mapping to process for execution.
     function processGovernanceProposal(uint proposal) external lock {
-        _validateProposalForProcessing(proposal); // validate basic processing requirements
+        processingReady(proposal); // validate basic processing requirements
         Proposal storage prop = proposals[proposal];
-        require(prop.flags[1], "!governance"); // check proposal type and whether already processed
-        if (prop.yesVotes > prop.noVotes) { // check if proposal approved by simple majority of members
-            prop.flags[4] = true; // flag that vote passed
+        require(prop.flags[1], '!governance'); // check proposal type and whether already processed
+        if (didPass(proposal)) { // check if proposal approved by simple majority of members
             for (uint i = 0; i < prop.target.length; i++) {
                 if (prop.value[i] > 0) { // crib `value` to toggle between approving or removing bank
                     banks[prop.target[i]] = true; // approve bank
                 } else {
                     banks[prop.target[i]] = false;}} // remove bank
-                if (prop.value[0] > 0) {votingPeriod = prop.value[0];}} // reset voting period to first `value`
+                if (prop.value[0] > 0) {maxVotingPeriod = prop.value[0];}} // reset voting period to first `value`
         prop.flags[5] = true; // flag that proposal processed
         emit ProcessProposal(proposal);
-        
     }
     
     /// @notice Process 'membership' proposal (2) - proposal must be counted, unprocessed, and in voting period.
     /// @param proposal Number of proposal in `proposals` mapping to process for execution.
     function processMemberProposal(uint proposal) external lock {
-        _validateProposalForProcessing(proposal); // validate basic processing requirements
+        processingReady(proposal); // validate basic processing requirements
         Proposal storage prop = proposals[proposal];
-        require(prop.flags[2], "!member"); // check proposal type and whether already processed
-        if (prop.yesVotes > prop.noVotes) { // check if proposal approved by simple majority of members
-            prop.flags[4] = true; // flag that vote passed
+        require(prop.flags[2], '!member'); // check proposal type and whether already processed
+        if (didPass(proposal)) { // check if proposal approved by simple majority of members
             for (uint i = 0; i < prop.target.length; i++) {
                 if (!members[prop.target[i]].exists) {memberList.push(prop.target[i]);} // update list of member accounts if new
-                totalSupply += prop.value[i]; // add to total member votes
-                balanceOf[prop.target[i]] += prop.value[i]; // add to `target` member votes
-                emit Transfer(address(this), prop.target[i], prop.value[i]);}} // event reflects mint of erc20 votes
+                    totalSupply += prop.value[i]; // add to total member votes
+                    balanceOf[prop.target[i]] += prop.value[i]; // add to `target` member votes
+                    emit Transfer(address(this), prop.target[i], prop.value[i]);}} // event reflects mint of erc20 votes
         prop.flags[5] = true; // flag that proposal processed
         emit ProcessProposal(proposal);
     }
@@ -190,17 +192,24 @@ contract Baal {
     /// @notice Process 'removal' proposal (3) - proposal must be counted, unprocessed, and in voting period.
     /// @param proposal Number of proposal in `proposals` mapping to process for execution.
     function processRemovalProposal(uint proposal) external lock {
-        _validateProposalForProcessing(proposal); // validate basic processing requirements
+        processingReady(proposal); // validate basic processing requirements
         Proposal storage prop = proposals[proposal];
-        require(prop.flags[3], "!removal"); // check proposal type and whether already processed
-        if (prop.yesVotes > prop.noVotes) { // check if proposal approved by simple majority of members
-            prop.flags[4] = true; // flag that vote passed
+        require(prop.flags[3], '!removal'); // check proposal type and whether already processed
+        if (didPass(proposal)) { // check if proposal approved by simple majority of members
             for (uint i = 0; i < prop.target.length; i++) {
                 totalSupply -= prop.value[i]; // subtract `balance` from total member votes
                 balanceOf[prop.target[i]] -= prop.value[i]; // subtract member votes
                 emit Transfer(address(this), address(0), prop.value[i]);}} // event reflects burn of erc20 votes
         prop.flags[5] = true; // flag that proposal processed
         emit ProcessProposal(proposal);
+    }
+    
+    function ragequit(address memberAddress, uint256 sharesToBurn) external {
+        require(balanceOf[memberAddress] >= sharesToBurn, 'insufficient shares');
+        //require(members[memberAddress].highestIndexYesVote, 'ragequit until highest index proposal member voted YES on is processed');
+        uint256 initialTS = totalSupply;
+        totalSupply -= sharesToBurn; // add to total member votes
+        balanceOf[memberAddress] -= sharesToBurn; // add to member votes
     }
     
     /***************
@@ -227,11 +236,37 @@ contract Baal {
     /// @notice Deposit ETH.
     receive() external payable {}
     
+    /// @notice Checks if proposal passed.
+    function didPass(uint256 proposal) internal returns (bool passed) {
+        Proposal storage prop = proposals[proposal];
+        passed = prop.yesVotes > prop.noVotes;
+        prop.flags[4] = true; // flag that vote passed
+    }
+    
+    /// @dev Internal calculation for member fair share of `guildTokens`.
+    function fairShare(uint256 balance, uint256 shares, uint256 total) private pure returns (uint256 amount) {
+        require(total != 0);
+        if (balance == 0) {amount = 0;}
+        uint prod = balance * shares;
+        if (prod / balance == shares) { // no overflow in multiplication above?
+            amount = prod / total;
+        }
+        amount = (balance / total) * shares;
+    }
+    
     /// @dev Internal checks to validate basic proposal processing requirements. 
-    function _validateProposalForProcessing(uint proposal) private view {
-        require(proposal <= proposalCount, "!exist"); // check proposal exists
-        require(proposals[proposal - 1].flags[5], "prev!processed"); // check previous proposal has processed
-        require(!proposals[proposal].flags[5], "processed"); // check proposal has not processed
-        require(proposals[proposal].votingEnds <= block.timestamp, "!ended"); // check voting period has ended
+    function processingReady(uint proposal) private view returns (bool) {
+        require(proposal <= proposalCount, '!exist'); // check proposal exists
+        require(proposals[proposal - 1].flags[5], 'prev!processed'); // check previous proposal has processed
+        require(!proposals[proposal].flags[5], 'processed'); // check given proposal has not yet processed
+        require(proposals[proposal].votingEnds <= block.timestamp, '!ended'); // check voting period has ended
+        uint halfShares = totalSupply / 2;
+        if (proposals[proposal].votingEnds >= block.timestamp) { // voting period done
+            return true;
+        } else if (proposals[proposal].yesVotes > halfShares ) { // early execution b/c of 50%+
+            return true;
+        } else {
+            return false; // not ready
+        }
     }
 }
