@@ -272,6 +272,7 @@ contract Baal {
         require(proposal <= proposalCount, '!exist'); // check proposal exists
         require(proposals[proposal - 1].flags[5], 'prev!processed'); // check previous proposal has processed
         require(!proposals[proposal].flags[5], 'processed'); // check given proposal has not yet processed
+        if (memberList.length == 1) ready = true;
         require(proposals[proposal].votingEnds <= block.timestamp, '!ended'); // check voting period has ended
         uint halfShares = totalSupply / 2;
         if (proposals[proposal].yesVotes > halfShares) { // early execution b/c of 50%+
