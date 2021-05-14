@@ -1,10 +1,10 @@
 /// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.4;
 
-/// @notice Interface for Baal membership and banking extensions.
+/// @notice Interface for Baal membership and banking minions.
 interface IBaalBank {
     function balanceOf(address account) external view returns (uint); // erc20 token helper for balance checks
-    function memberAction(address account, uint amount) external payable returns (uint); // execute membership action to mint or burn votes via whitelisted extensions
+    function memberAction(address account, uint amount) external payable returns (uint); // execute membership action to mint or burn votes via whitelisted minions
 }
 
 /// @title Baal
@@ -24,10 +24,10 @@ contract Baal {
     Proposal[] public proposals; // array list of Baal proposal structs per order proposed
     
     mapping(address => uint) public balanceOf; // maps `members` accounts to votes with erc20 accounting
-    mapping(address => bool) public extensions; // maps contracts approved in 'governance' (1) proposals for `memberAction()` that burns or mints votes
+    mapping(address => bool) public minions; // maps contracts approved in 'governance' (1) proposals for `memberAction()` that burns or mints votes
     mapping(address => Member) public members; // maps `members` accounts to struct details
     
-    event SummonComplete(address[] extensions, address[] guildTokens, address[] summoners, uint[] votes, uint minVotingPeriod, uint maxVotingPeriod, string name, string symbol);
+    event SummonComplete(address[] minions, address[] guildTokens, address[] summoners, uint[] votes, uint minVotingPeriod, uint maxVotingPeriod, string name, string symbol);
     event SubmitProposal(address[] to, uint[] value, uint votingLength, uint indexed proposal, uint8 indexed flag, bytes[] data, string details); // emits when `members` submit proposal 
     event SubmitVote(address indexed member, uint balance, uint indexed proposal, uint8 indexed vote); // emits when `members` submit vote on proposal
     event ProcessProposal(uint indexed proposal); // emits when proposal is processed and executed
@@ -68,20 +68,20 @@ contract Baal {
     
     /// @notice Deploy Baal and create initial array of `members` accounts with specific voting weights.
     /// @param _guildTokens Tokens approved for internal accounting - `ragequit()` of votes.
-    /// @param _extensions External contracts approved for `memberAction()`.
+    /// @param _minions External contracts approved for `memberAction()`.
     /// @param summoners Accounts to add as `members`.
     /// @param votes Voting weight among `members`.
     /// @param _minVotingPeriod Min. voting period in seconds for `members` to cast votes on proposals.
     /// @param _maxVotingPeriod Max. voting period in seconds for `members` to cast votes on proposals.
     /// @param _name Name for erc20 vote accounting.
     /// @param _symbol Symbol for erc20 vote accounting.
-    constructor(address[] memory _extensions, address[] memory _guildTokens, address[] memory summoners, uint[] memory votes, uint _minVotingPeriod, uint _maxVotingPeriod, string memory _name, string memory _symbol) {
+    constructor(address[] memory _minions, address[] memory _guildTokens, address[] memory summoners, uint[] memory votes, uint _minVotingPeriod, uint _maxVotingPeriod, string memory _name, string memory _symbol) {
         for (uint i = 0; i < summoners.length; i++) {
              guildTokens.push(_guildTokens[i]); // update array of `guildTokens` for `ragequit()`
              memberList.push(summoners[i]); // update array of `members`
              totalSupply += votes[i]; // total votes incremented by summoning with erc20 accounting
              balanceOf[summoners[i]] = votes[i]; // vote weights granted to summoning `members` with erc20 accounting
-             extensions[_extensions[i]] = true; // update mapping of approved `banks`
+             minions[_minions[i]] = true; // update mapping of approved `banks`
              members[summoners[i]].exists = true; // record that summoning `members` `exists`
              emit Transfer(address(this), summoners[i], votes[i]); // event reflects mint of erc20 votes to summoning `members`
         }
@@ -89,15 +89,15 @@ contract Baal {
         maxVotingPeriod = _maxVotingPeriod; 
         name = _name; // Baal 'name' with erc20 accounting
         symbol = _symbol; // Baal 'symbol' with erc20 accounting
-        emit SummonComplete(_extensions, _guildTokens, summoners, votes, _minVotingPeriod, _maxVotingPeriod, _name, _symbol);
+        emit SummonComplete(_minions, _guildTokens, summoners, votes, _minVotingPeriod, _maxVotingPeriod, _name, _symbol);
     }
     
-    /// @notice Execute membership action to mint or burn votes against whitelisted `extensions` in consideration of `msg.sender` and given `amount`.
+    /// @notice Execute membership action to mint or burn votes against whitelisted `minions` in consideration of `msg.sender` and given `amount`.
     /// @param extension Whitelisted contract to trigger action.
     /// @param amount Number to submit in action - e.g., votes to mint for tribute or to burn in asset claim.
     /// @param mint Confirm whether action involves vote request - if `false`, perform burn.
     function memberAction(IBaalBank extension, uint amount, bool mint) external lock payable returns (uint reaction) {
-        require(extensions[address(extension)], 'Baal::!extension'); // check `extension` is approved
+        require(minions[address(extension)], 'Baal::!extension'); // check `extension` is approved
         if (mint) {
             reaction = extension.memberAction{value: msg.value}(msg.sender, amount); // mint per `msg.sender`, `amount` and `msg.value`
             if (!members[msg.sender].exists) memberList.push(msg.sender); // update membership list if new
@@ -170,9 +170,9 @@ contract Baal {
         if (didPass(proposal)) // check if proposal approved by simple majority of members
             for (uint i = 0; i < prop.to.length; i++) 
                 if (prop.value[i] > 0) { // check `value` to toggle between approving or removing 'extension'
-                    extensions[prop.to[i]] = true; // approve 'extension'
+                    minions[prop.to[i]] = true; // approve 'extension'
                 } else {
-                    extensions[prop.to[i]] = false;} // remove 'extension'
+                    minions[prop.to[i]] = false;} // remove 'extension'
                 if (prop.value[0] > 0) maxVotingPeriod = prop.value[0]; // reset voting period to first `value`
         prop.flags[5] = true; // flag that proposal processed
         emit ProcessProposal(proposal);
