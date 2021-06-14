@@ -36,7 +36,7 @@ contract Baal{
     event Ragequit(address indexed memberAddress,address to,uint96 lootToBurn,uint96 sharesToBurn);/*emits when callers burn Baal shares and/or loot for a given `to` account*/
     
     /// @dev Reentrancy guard via OpenZeppelin.
-    uint          _status;
+    uint _status;
     modifier nonReentrant(){
         require(_status==1,'reentrant');
         _status=2;_;_status=1;}
@@ -56,9 +56,9 @@ contract Baal{
         bytes[]data;/*raw data sent to `target` account for low-level call*/
         bytes32 details;}/*context for proposal*/
     
-    /// @notice Summon Baal & create initial array of `members` accounts with specific voting weights.
-    /// @param _guildTokens Tokens approved for internal accounting - {ragequit} of shares or loot.
+    /// @notice Summon Baal & create initial array of `members` accounts with voting & loot weights.
     /// @param _minions External contracts approved for {memberAction}.
+    /// @param _guildTokens Tokens approved for internal accounting-{ragequit} of shares and/or loot.
     /// @param summoners Accounts to add as `members`.
     /// @param loot Economic weight among `members`.
     /// @param shares Voting weight among `members` (shares also have economic weight).
@@ -96,20 +96,21 @@ contract Baal{
         emit SummonComplete(_minions,_guildTokens,summoners,loot,shares,_minVotingPeriod,_maxVotingPeriod,_name,_symbol);}/*emit event reflecting Baal summoning completed*/
 
     /// @notice Execute membership action to mint or burn shares or loot against whitelisted `minions` in consideration of `msg.sender` & given `amount`.
-    /// @param extension Whitelisted contract to trigger action.
+    /// @param minion Whitelisted contract to trigger action.
     /// @param loot Loot involved in external call.
     /// @param shares Shares involved in external call.
-    /// @param mint Confirm whether action involves shares or loot request - if `false`, perform burn.
-    function memberAction(address extension,uint loot,uint shares,bool mint)external nonReentrant payable returns(uint96 lootReaction,uint96 sharesReaction){
-        require(minions[address(extension)],'!extension');/*check `extension` is approved*/
+    /// @param mint Confirm whether action involves shares or loot request-if `false`, perform burn.
+    /// @return lootReaction sharesReaction Loot and/or shares derived from action.
+    function memberAction(address minion,uint loot,uint shares,bool mint)external nonReentrant payable returns(uint96 lootReaction,uint96 sharesReaction){
+        require(minions[address(minion)],'!extension');/*check `extension` is approved*/
         if(mint){
-            (,bytes memory reactionData)=extension.call{value:msg.value}(abi.encodeWithSelector(0xff4c9884,msg.sender,loot,shares)); /*fetch 'reaction' mint per inputs*/
+            (,bytes memory reactionData)=minion.call{value:msg.value}(abi.encodeWithSelector(0xff4c9884,msg.sender,loot,shares)); /*fetch 'reaction' mint per inputs*/
             (lootReaction,sharesReaction)=abi.decode(reactionData,(uint96, uint96));
             if(lootReaction!=0)members[msg.sender].loot+=lootReaction;totalLoot+=lootReaction;/*add loot to `msg.sender` account & Baal total*/
             if(sharesReaction!=0)balanceOf[msg.sender]+=sharesReaction;totalSupply+=sharesReaction;/*add shares to `msg.sender` account & Baal total with erc20 accounting*/
             emit Transfer(address(0),msg.sender,sharesReaction);/*emit event reflecting mint of shares or loot with erc20 accounting*/
         }else{
-            (,bytes memory reactionData)=extension.call{value:msg.value}(abi.encodeWithSelector(0xff4c9884,msg.sender,loot,shares)); // fetch 'reaction' burn per inputs
+            (,bytes memory reactionData)=minion.call{value:msg.value}(abi.encodeWithSelector(0xff4c9884,msg.sender,loot,shares)); // fetch 'reaction' burn per inputs
             (lootReaction,sharesReaction)=abi.decode(reactionData,(uint96,uint96));
             if(lootReaction!=0)members[msg.sender].loot==lootReaction;totalLoot-=lootReaction;/*subtract loot from `msg.sender` account & Baal total*/
             if(sharesReaction!=0)balanceOf[msg.sender]-=sharesReaction;totalSupply-=sharesReaction;/*subtract shares from `msg.sender` account & Baal total with erc20 accounting*/
@@ -123,6 +124,7 @@ contract Baal{
     /// @param value ETH sent from Baal to execute approved proposal low-level call.
     /// @param data Raw data sent to `target` account for low-level call.
     /// @param details Context for proposal.
+    /// @return proposal Count for submitted proposal.
     function submitProposal(address[]calldata to,uint96[]calldata value,uint32 votingPeriod,uint8 flag,bytes[]calldata data,bytes32 details)external nonReentrant returns (uint proposal){
         require(votingPeriod>=minVotingPeriod&&votingPeriod<=maxVotingPeriod,'!votingPeriod');
         require(to.length==value.length&&value.length==data.length,'!arrays');
@@ -168,7 +170,7 @@ contract Baal{
     function processActionProposal(Proposal memory prop)private{
         unchecked{for(uint8 i;i<prop.to.length;i++){prop.to[i].call{value:prop.value[i]}(prop.data[i]);}}}/*execute low-level call(s)*/
     
-    /// @notice Process 'membership'[2] proposal.
+    /// @notice Process 'membership'[1] proposal.
     function processMemberProposal(Proposal memory prop)private{
         unchecked{for(uint i;i<prop.to.length;i++){
                     if(prop.data.length==0){
@@ -185,11 +187,11 @@ contract Baal{
                            members[prop.to[i]].loot+=uint96(removedBalance);/*add loot per removed share balance*/
                            emit Transfer(prop.to[i],address(0),prop.value[i]);}}}}/*event reflects burn of erc20 votes*/
     
-    /// @notice Process 'governance'[1] proposal.
+    /// @notice Process 'period'[2] proposal.
     function processPeriodProposal(Proposal memory prop)private{
         if(prop.value[0]!=0)minVotingPeriod=uint32(prop.value[0]);if(prop.value[1]!=0)maxVotingPeriod=uint32(prop.value[1]);}/*reset voting periods to first two positive `value`s*/
         
-    /// @notice Process 'governance'[1] proposal.
+    /// @notice Process 'whitelist'[3] proposal.
     function processWhitelistProposal(Proposal memory prop)private{
         unchecked{for(uint8 i;i<prop.to.length;i++) 
                     if(prop.value[i]==0&&prop.data.length==0){minions[prop.to[i]]=true;}/*add account to 'minions' extensions*/
@@ -229,7 +231,7 @@ contract Baal{
     /// @notice Returns <uint8> 'vote' by a given `voter` account on Baal `proposal`.
     function getProposalVoteByAccount(address account,uint32 proposal)external view returns(Vote vote){vote=members[account].voted[proposal];}
 
-    /// @notice Returns 'flags' for given Baal `proposal` describing type ('action'[0],'governance'[1],'membership'[2]).
+    /// @notice Returns 'flags' for given Baal `proposal` describing type ('action'[0],'membership'[1],'period'[2],'whitelist'[3]).
     function getProposalFlags(uint proposal)external view returns(bool[3] memory flags){flags=proposals[proposal].flags;}
     
     /***************
