@@ -30,8 +30,6 @@ contract Baal {
     bytes32 public constant DELEGATION_TYPEHASH = keccak256("Delegation(address delegatee,uint256 nonce,uint256 expiry)");/*EIP-712 typehash for delegation struct*/
     bytes32 public constant PERMIT_TYPEHASH = keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");/*EIP-712 typehash for EIP-2612 {permit}*/
 
-    /*placeholders - sponsor mapping stuff
-    */
     mapping(address=>mapping(address=>uint))      public allowance;/*maps approved pulls of shares with erc20 accounting*/
     mapping(address=>uint)                        public balanceOf;/*maps `members` accounts to shares with erc20 accounting*/
     mapping(address=>mapping(uint32=>Checkpoint)) public checkpoints;/*maps record of vote checkpoints for each account by index*/
@@ -305,6 +303,7 @@ contract Baal {
     function transfer(address to, uint amount) external returns (bool){
         require(sharesPaused,"!transferable");
         balanceOf[msg.sender] -= amount;
+        moveDelegates(msg.sender, to, uint96(amount));
         unchecked{balanceOf[to] += amount;}
         emit Transfer(msg.sender, to, amount);
         return true;
@@ -330,6 +329,7 @@ contract Baal {
         if (allowance[from][msg.sender] != type(uint).max) allowance[from][msg.sender] -= amount;
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
+        moveDelegates(from, to, uint96(amount));
         emit Transfer(from, to, amount);
         return true;
     }
