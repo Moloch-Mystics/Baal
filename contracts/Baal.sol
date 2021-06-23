@@ -7,7 +7,7 @@
 ███      █    █     ▀ 
         █    █        
        ▀    ▀*/
-pragma solidity 0.8.5;
+pragma solidity 0.8.6;
 /// @title Baal
 /// @notice Maximalized minimalist guild contract inspired by Moloch DAO framework.
 contract Baal {
@@ -107,7 +107,7 @@ contract Baal {
             initialTotalSharesAndLoot += (loot[i] + shares[i]);/*set reasonable limit for Baal loot & shares via uint96 max.*/
             _delegate(summoners[i], summoners[i]);/*delegate votes to summoning members by default*/
             emit Transfer(address(0), summoners[i], shares[i]);}}/*event reflects mint of erc20 shares to summoning `members`*/
-        minVotingPeriod = minVotingPeriod;/*set minimum voting period-adjustable via 'governance'[1] proposal*/
+        minVotingPeriod = _minVotingPeriod;/*set minimum voting period-adjustable via 'governance'[1] proposal*/
         maxVotingPeriod =_maxVotingPeriod;/*set maximum voting period-adjustable via 'governance'[1] proposal*/
         name = _name;/*set Baal 'name' with erc20 accounting*/
         symbol = _symbol;/*set Baal 'symbol' with erc20 accounting*/
@@ -151,7 +151,7 @@ contract Baal {
         require(to.length == value.length && value.length == data.length,'!arrays');
         require(to.length <= 10,'array max');/*limit executable actions to help avoid block gas limit errors on processing*/
         require(flag <= 5,'!flag');/*check flag is in bounds*/
-        bool[3] memory flags;/*plant flags-[action, governance, membership]*/
+        bool[3] memory flags;/*plant flags - [action, governance, membership]*/
         flags[flag] = true;/*flag proposal type for struct storage*/ 
         proposalCount++;/*increment total proposal counter*/
         unchecked{proposals[proposalCount] = Proposal(uint32(block.number), uint32(block.timestamp) + votingPeriod, 0, 0, flags, to, value, data, details);}/*push params into proposal struct - start voting period timer*/
@@ -242,6 +242,7 @@ contract Baal {
             totalLoot -= lootToBurn;/*subtract from total Baal loot*/
         if(sharesToBurn != 0)/*gas optimization*/ 
             balanceOf[msg.sender] -= sharesToBurn;/*subtract shares from caller account with erc20 accounting*/
+            _moveDelegates(msg.sender, address(0), sharesToBurn);
             totalSupply -= sharesToBurn;/*subtract from total Baal shares with erc20 accounting*/
         emit Ragequit(msg.sender, to, lootToBurn, sharesToBurn);}/*event reflects claims made against Baal*/
     
