@@ -173,9 +173,9 @@ contract Baal {
         members[summoners[i]].loot = loot[i]; /*add loot to summoning `members` account*/
         initialTotalSharesAndLoot += (loot[i] + shares[i]); /*set reasonable limit for Baal loot & shares via uint96 max.*/
         _delegate(summoners[i], summoners[i]); /*delegate votes to summoning members by default*/
-        emit Transfer(address(0), summoners[i], shares[i]);
+        emit Transfer(address(0), summoners[i], shares[i]); /*event reflects mint of erc20 shares to summoning `members`*/
       }
-    } /*event reflects mint of erc20 shares to summoning `members`*/
+    }
     minVotingPeriod = _minVotingPeriod; /*set minimum voting period-adjustable via 'governance'[1] proposal*/
     maxVotingPeriod = _maxVotingPeriod; /*set maximum voting period-adjustable via 'governance'[1] proposal*/
     name = _name; /*set Baal 'name' with erc20 accounting*/
@@ -195,8 +195,8 @@ contract Baal {
       _symbol,
       _lootPaused,
       _sharesPaused
-    );
-  } /*emit event reflecting Baal summoning completed*/
+    ); /*emit event reflecting Baal summoning completed*/
+  }
 
   /// @notice Execute membership action to mint or burn shares or loot against whitelisted `minions` in consideration of `msg.sender` & given `amount`.
   /// @param minion Whitelisted contract to trigger action.
@@ -218,27 +218,27 @@ contract Baal {
     require(minions[address(minion)], "!extension"); /*check `extension` is approved*/
     if (mint) {
       (, bytes memory reactionData) = minion.call{ value: msg.value }(
-        abi.encodeWithSelector(0xff4c9884, msg.sender, loot, shares)
-      ); /*fetch 'reaction' mint per inputs*/
+        abi.encodeWithSelector(0xff4c9884, msg.sender, loot, shares) /*fetch 'reaction' mint per inputs*/
+      );
       (lootReaction, sharesReaction) = abi.decode(
         reactionData,
-        (uint96, uint96)
-      ); /*decode reactive data*/
+        (uint96, uint96) /*decode reactive data*/
+      );
       if (lootReaction != 0) {
         unchecked {
           members[msg.sender].loot += lootReaction;
           totalLoot += lootReaction;
         }
-        totalSharesAndLoot += lootReaction;
-      } /*add loot to `msg.sender` account & Baal totals*/
+        totalSharesAndLoot += lootReaction; /*add loot to `msg.sender` account & Baal totals*/
+      }
       if (sharesReaction != 0) {
         unchecked {
           balanceOf[msg.sender] += sharesReaction;
           _moveDelegates(address(0), msg.sender, sharesReaction);
           totalSupply += sharesReaction;
         }
-        totalSharesAndLoot += sharesReaction;
-      } /*add shares to `msg.sender` account & Baal total with erc20 accounting*/
+        totalSharesAndLoot += sharesReaction; /*add shares to `msg.sender` account & Baal total with erc20 accounting*/
+      }
       emit Transfer(address(0), msg.sender, sharesReaction); /*emit event reflecting mint of shares or loot with erc20 accounting*/
     } else {
       (, bytes memory reactionData) = minion.call{ value: msg.value }(
@@ -263,9 +263,9 @@ contract Baal {
         }
         totalSharesAndLoot -= sharesReaction;
       } /*subtract shares from `msg.sender` account & Baal total with erc20 accounting*/
-      emit Transfer(msg.sender, address(0), sharesReaction);
+      emit Transfer(msg.sender, address(0), sharesReaction); /*emit event reflecting burn of shares or loot with erc20 accounting*/
     }
-  } /*emit event reflecting burn of shares or loot with erc20 accounting*/
+  }
 
   /*****************
     PROPOSAL FUNCTIONS
@@ -307,8 +307,8 @@ contract Baal {
         0,
         flags,
         details
-      );
-    } /*push params into proposal struct - start voting period timer*/
+      ); /*push params into proposal struct - start voting period timer*/
+    }
     emit SubmitProposal(
       id,
       to,
@@ -318,8 +318,8 @@ contract Baal {
       flag,
       data,
       details
-    );
-  } /*emit event reflecting proposal submission*/
+    ); /*emit event reflecting proposal submission*/
+  }
 
   /// @notice Submit vote-proposal must exist & voting period must not have ended-non-member can cast `0` vote to signal.
   /// @param proposal Number of proposal in `proposals` mapping to cast vote on.
@@ -334,8 +334,8 @@ contract Baal {
     members[msg.sender].highestIndexYesVote = proposal; /*cast delegated balance 'yes' votes to proposal*/
     if (vote == Vote.No) prop.noVotes += uint96(balance); /*cast delegated balance 'no' votes to proposal*/
     members[msg.sender].voted[proposal] = vote; /*record vote to member struct per account*/
-    emit SubmitVote(msg.sender, balance, proposal, uintVote);
-  } /*emit event reflecting proposal vote submission*/
+    emit SubmitVote(msg.sender, balance, proposal, uintVote); /*emit event reflecting proposal vote submission*/
+  }
 
   // ********************
   // PROCESSING FUNCTIONS
@@ -355,24 +355,18 @@ contract Baal {
     if (prop.yesVotes > prop.noVotes) {
       /*check if `proposal` approved by simple majority of members*/
       if (prop.flags[0]) {
-        processActionProposal(to, value, data);
+        processActionProposal(to, value, data); /*check 'flag', execute 'action'*/
+      } else if (prop.flags[1]) {
+        processMemberProposal(to, value, data); /*check 'flag', execute 'membership'*/
+      } else if (prop.flags[2]) {
+        processPeriodProposal(value); /*check 'flag', execute 'period'*/
+      } else {
+        processWhitelistProposal(to, value, data); /*otherwise, execute 'whitelist'*/
       }
-      /*check 'flag', execute 'action'*/
-      else if (prop.flags[1]) {
-        processMemberProposal(to, value, data);
-      }
-      /*check 'flag', execute 'membership'*/
-      else if (prop.flags[2]) {
-        processPeriodProposal(value);
-      }
-      /*check 'flag', execute 'period'*/
-      else {
-        processWhitelistProposal(to, value, data);
-      }
-    } /*otherwise, execute 'whitelist'*/
+    }
     delete proposals[proposal]; /*delete given proposal struct details for gas refund & the commons*/
-    emit ProcessProposal(proposal);
-  } /*emit event reflecting proposal processed*/
+    emit ProcessProposal(proposal); /*emit event reflecting proposal processed*/
+  }
 
   /// @notice Process 'action'[0] proposal.
   function processActionProposal(
@@ -382,10 +376,11 @@ contract Baal {
   ) private returns (bytes memory reactionData) {
     unchecked {
       for (uint256 i; i < to.length; i++) {
+        /*execute low-level call(s)*/
         (, reactionData) = to[i].call{ value: value[i] }(data[i]);
       }
     }
-  } /*execute low-level call(s)*/
+  }
 
   /// @notice Process 'membership'[1] proposal.
   function processMemberProposal(
@@ -399,8 +394,8 @@ contract Baal {
         unchecked {
           balanceOf[to[i]] += value[i]; /*add to `target` member votes*/
           _moveDelegates(address(0), to[i], value[i]);
-          totalSupply += value[i];
-        } /*add to total member votes*/
+          totalSupply += value[i]; /*add to total member votes*/
+        }
         totalSharesAndLoot += value[i]; /*add to Baal totals - uint96 max check included*/
         emit Transfer(address(0), to[i], value[i]); /*event reflects mint of erc20 votes*/
       } else {
@@ -410,15 +405,15 @@ contract Baal {
         _moveDelegates(address(0), to[i], uint96(removedBalance));
         unchecked {
           totalSupply -= removedBalance; /*subtract from total Baal shares with erc20 accounting*/
-          totalLoot += removedBalance;
-        } /*add to total Baal loot*/
+          totalLoot += removedBalance; /*add to total Baal loot*/
+        }
         totalSharesAndLoot -= uint96(removedBalance); /*subtract from Baal totals*/
         balanceOf[to[i]] -= value[i]; /*subtract member votes*/
         members[to[i]].loot += uint96(removedBalance); /*add loot per removed share balance*/
-        emit Transfer(to[i], address(0), value[i]);
+        emit Transfer(to[i], address(0), value[i]); /*event reflects burn of erc20 votes*/
       }
     }
-  } /*event reflects burn of erc20 votes*/
+  }
 
   /// @notice Process 'period'[2] proposal.
   function processPeriodProposal(uint96[] calldata value) private {
@@ -427,7 +422,8 @@ contract Baal {
     if (value[2] != 0) gracePeriod = uint32(value[2]); /*if positive, reset voting periods to relative `value`s*/
     value[3] == 0 ? lootPaused = false : lootPaused = true;
     value[4] == 0 ? sharesPaused = false : sharesPaused = true;
-  } /*if positive, pause loot &or shares transfers on fourth &or fifth `values`*/
+    /*if positive, pause loot &or shares transfers on fourth &or fifth `values`*/
+  }
 
   /// @notice Process 'whitelist'[3] proposal.
   function processWhitelistProposal(
@@ -438,23 +434,17 @@ contract Baal {
     unchecked {
       for (uint8 i; i < to.length; i++)
         if (value[i] == 0 && data.length == 0) {
-          minions[to[i]] = true;
-        }
-        /*add account to 'minions' extensions*/
-        else if (value[i] == 0 && data.length != 0) {
-          minions[to[i]] = false;
-        }
-        /*remove account from 'minions' extensions*/
-        else if (value[i] != 0 && data.length == 0) {
-          guildTokens.push(to[i]);
-        }
-        /*push account to `guildTokens` array*/
-        else {
+          minions[to[i]] = true; /*add account to 'minions' extensions*/
+        } else if (value[i] == 0 && data.length != 0) {
+          minions[to[i]] = false; /*remove account from 'minions' extensions*/
+        } else if (value[i] != 0 && data.length == 0) {
+          guildTokens.push(to[i]); /*push account to `guildTokens` array*/
+        } else {
           guildTokens[value[i]] = guildTokens[guildTokens.length - 1];
-          guildTokens.pop();
+          guildTokens.pop(); /*pop account from `guildTokens` array after swapping last value*/
         }
     }
-  } /*pop account from `guildTokens` array after swapping last value*/
+  }
 
   /// @notice Process member 'ragequit'.
   /// @param lootToBurn Baal pure economic weight to burn to claim 'fair share' of `guildTokens`.
@@ -493,8 +483,8 @@ contract Baal {
       balanceOf[msg.sender] -= sharesToBurn; /*subtract shares from caller account with erc20 accounting*/
     _moveDelegates(msg.sender, address(0), sharesToBurn);
     totalSupply -= sharesToBurn; /*subtract from total Baal shares with erc20 accounting*/
-    emit Ragequit(msg.sender, to, lootToBurn, sharesToBurn);
-  } /*event reflects claims made against Baal*/
+    emit Ragequit(msg.sender, to, lootToBurn, sharesToBurn); /*event reflects claims made against Baal*/
+  }
 
   /*******************
     GUILD ACCT FUNCTIONS
@@ -790,23 +780,19 @@ contract Baal {
     require(proposal <= proposalCount, "!exist"); /*check proposal exists*/
     unchecked {
       require(prop.votingEnds + gracePeriod <= block.timestamp, "!ended"); /*check voting period has ended*/
-      require(proposals[proposal - 1].votingEnds == 0, "prev!processed");
-    } /*check previous proposal has processed by deletion*/
+      require(proposals[proposal - 1].votingEnds == 0, "prev!processed"); /*check previous proposal has processed by deletion*/
+    }
     require(!prop.flags[2], "processed"); /*check given proposal has not yet processed*/
     if (memberList.length == 1) {
-      ready = true;
+      ready = true; /*if single membership, process early*/
+    } else if (prop.yesVotes > totalSupply / 2) {
+      ready = true; /* process early if majority member support*/
+    } else if (prop.votingEnds >= block.timestamp) {
+      ready = true; /*otherwise, process if voting period done*/
     }
-    /*if single membership, process early*/
-    else if (prop.yesVotes > totalSupply / 2) {
-      ready = true;
-    }
-    /* process early if majority member support*/
-    else if (prop.votingEnds >= block.timestamp) {
-      ready = true;
-    }
-  } /*otherwise, process if voting period done*/
+  }
 
-  //
+  // helper function to hash data
   function hashOperation(
     address[] calldata targets,
     uint96[] calldata values,
