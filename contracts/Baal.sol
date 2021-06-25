@@ -382,9 +382,7 @@ contract Baal {
   ) private returns (bytes memory reactionData) {
     unchecked {
       for (uint256 i; i < to.length; i++) {
-        {
-          (, reactionData) = to[i].call{ value: value[i] }(data[i]);
-        }
+        (, reactionData) = to[i].call{ value: value[i] }(data[i]);
       }
     }
   } /*execute low-level call(s)*/
