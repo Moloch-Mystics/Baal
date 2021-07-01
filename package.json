@@ -1,0 +1,22 @@
+{
+  "name": "baal",
+  "version": "1.0.0",
+  "description": "Baal, god of the harvests, plentiful communities, coodination between the earth and heavens",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Moloch-Mystics/Baal.git"
+  },
+  "author": "Moloch Mystics",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/Moloch-Mystics/Baal/issues"
+  },
+  "homepage": "https://github.com/Moloch-Mystics/Baal#readme",
+  "devDependencies": {
+    "hardhat": "^2.4.1"
+  }
+}
