@@ -7,14 +7,13 @@
 ███      █    █     ▀ 
         █    █        
        ▀    ▀*/
-pragma solidity 0.8.5;
+pragma solidity ^0.8.6;
 
-import './oz/IERC20.sol';
-import './oz/ERC20.sol';
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 
 /// @title Baal
 /// @notice Maximalized minimalist guild contract inspired by Moloch DAO framework.
-contract Baal is ERC20 {
+contract Baal is ERC20Votes {
     address[]      guildTokens;/*array list of erc20 tokens approved on summoning or by whitelist[3] `proposals` for {ragequit} claims*/
     address[]      memberList;/*array list of `members` summoned or added by membership[1] `proposals`*/
     uint    public proposalCount;/*counter for total `proposals` submitted*/
@@ -26,17 +25,9 @@ contract Baal is ERC20 {
     bool    public lootPaused;/*tracks transferability of loot economic weight - amendable through period[2] proposal*/
     bool    public sharesPaused; /*tracks transferability of erc20 shares - amendable through period[2] proposal*/
 
-    bytes32 public constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)");/*EIP-712 typehash for Baal domain*/
-    bytes32 public constant DELEGATION_TYPEHASH = keccak256("Delegation(address delegatee,uint256 nonce,uint256 expiry)");/*EIP-712 typehash for delegation struct*/
-    bytes32 public constant PERMIT_TYPEHASH = keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");/*EIP-712 typehash for EIP-2612 {permit}*/
-
-    mapping(address=>mapping(uint32=>Checkpoint)) public checkpoints;/*maps record of vote checkpoints for each account by index*/
-    mapping(address=>uint32)                      public numCheckpoints;/*maps number of checkpoints for each account*/
-    mapping(address=>address)                     public delegates;/*maps record of each account's delegate*/
-    mapping(address=>bool)                        public shamans;/*maps contracts approved in whitelist[3] proposals for {memberAction} that mints or burns shares*/
-    mapping(address=>Member)                      public members;/*maps `members` accounts to struct details*/
-    mapping(address=>uint)                        public nonces;/*maps record of states for signing & validating signatures*/
-    mapping(uint=>Proposal)                       public proposals;/*maps `proposalCount` to struct details*/
+    mapping(address=>bool)      public shamans;/*maps contracts approved in whitelist[3] proposals for {memberAction} that mints or burns shares*/
+    mapping(address=>Member)    public members;/*maps `members` accounts to struct details*/
+    mapping(uint=>Proposal)     public proposals;/*maps `proposalCount` to struct details*/
     
     event SummonComplete(address[] minions, address[] guildTokens, address[] summoners, uint96[] loot, uint96[] shares, uint minVotingPeriod, uint maxVotingPeriod, string name, string symbol, bool transferableLoot, bool transferableShares);/*emits after Baal summoning*/
     event SubmitProposal(address[] to, uint96[] value, uint32 votingPeriod, uint indexed proposal, uint8 indexed flag, bytes[] data, bytes32 details);/*emits after proposal submitted*/
@@ -44,8 +35,6 @@ contract Baal is ERC20 {
     event ProcessProposal(uint indexed proposal);/*emits when proposal is processed & executed*/
     event Ragequit(address indexed memberAddress, address to, uint96 lootToBurn, uint96 sharesToBurn);/*emits when callers burn Baal shares and/or loot for a given `to` account*/
     event TransferLoot(address indexed from, address indexed to, uint amount);/*emits when Baal loot is transferred*/
-    event DelegateChanged(address indexed delegator, address indexed fromDelegate, address indexed toDelegate);/*emits when an account changes its delegate*/
-    event DelegateVotesChanged(address indexed delegate, uint previousBalance, uint newBalance);/*emits when a delegate account's vote balance changes*/
     
     /// @dev Reentrancy guard via OpenZeppelin.
     modifier nonReentrant() {
@@ -58,10 +47,6 @@ contract Baal is ERC20 {
         
     /// @dev Voting & membership containers.
     enum   Vote               {Null, Yes, No}
-    struct Checkpoint {/*checkpoint for marking number of votes from a given block*/
-        uint32                fromBlock;
-        uint96                votes;
-    }
     struct Member {/*Baal membership details*/
         uint96                loot;/*amount of loot held by `members`-can be set on summoning & adjusted via {memberAction}*/
         uint32                highestIndexYesVote;/*highest proposal index # on which the member voted YES*/
@@ -273,74 +258,7 @@ contract Baal is ERC20 {
             _totalSupply -= sharesToBurn;/*subtract from total Baal shares with erc20 accounting*/
         emit Ragequit(msg.sender, to, lootToBurn, sharesToBurn);/*event reflects claims made against Baal*/
     }
-    
-    /*******************
-    GUILD ACCT FUNCTIONS
-    *******************/
-    /// @notice Delegate votes from `msg.sender` to `delegatee`.
-    /// @param delegatee The address to delegate votes to.
-    function delegate(address delegatee) external {
-        _delegate(msg.sender, delegatee);
-    }
-    
-    /// @notice Delegates votes from signatory to `delegatee`.
-    /// @param delegatee The address to delegate votes to.
-    /// @param nonce The contract state required to match the signature.
-    /// @param expiry The time at which to expire the signature.
-    /// @param v The recovery byte of the signature.
-    /// @param r Half of the ECDSA signature pair.
-    /// @param s Half of the ECDSA signature pair.
-    function delegateBySig(address delegatee, uint nonce, uint expiry, uint8 v, bytes32 r, bytes32 s) external {
-        bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(_name)), getChainId(), address(this)));
-        bytes32 structHash = keccak256(abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, expiry));
-        bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash));
-        address signatory = ecrecover(digest, v, r, s);
-        require(signatory != address(0),'!signature');
-        require(nonce == nonces[signatory]++,'!nonce');
-        require(block.timestamp <= expiry,'expired');
-        _delegate(signatory, delegatee);
-    }
-    
-    /// @notice Triggers an approval from owner to spends.
-    /// @param owner The address to approve from.
-    /// @param spender The address to be approved.
-    /// @param amount The number of tokens that are approved (2^256-1 means infinite).
-    /// @param deadline The time at which to expire the signature.
-    /// @param v The recovery byte of the signature.
-    /// @param r Half of the ECDSA signature pair.
-    /// @param s Half of the ECDSA signature pair.
-    function permit(address owner, address spender, uint amount, uint deadline, uint8 v, bytes32 r, bytes32 s) external {
-        bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(_name)), getChainId(), address(this)));
-        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, amount, nonces[owner]++, deadline));
-        bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash));
-        address signatory = ecrecover(digest, v, r, s);
-        require(signatory != address(0),'!signature');
-        require(signatory == owner,'!authorized');
-        require(block.timestamp <= deadline,'expired');
-        _allowances[owner][spender] = amount;
-        emit Approval(owner, spender, amount);
-    }
-    
-    /// @dev beforeTokenTransfer used to check that tokens aren't paused.
-    function _beforeTokenTransfer(
-        address from,
-        address to,
-        uint256 amount
-    ) internal override {
-        super._beforeTokenTransfer(from, to, amount);
-        require(!sharesPaused,'!transferable');
-    }  
-    
-    /// @dev beforeTokenTransfer used to check that tokens aren't paused.
-    function _afterTokenTransfer(
-        address from,
-        address to,
-        uint256 amount
-    ) internal override {
-        super._afterTokenTransfer(from, to, amount);
-        _moveDelegates(from, to, uint96(amount));
-    }
-    
+ 
     /// @notice Transfer `amount` loot from `msg.sender` to `to`.
     /// @param to The address of destination account.
     /// @param amount The number of loot units to transfer.
@@ -363,43 +281,7 @@ contract Baal is ERC20 {
     function getMemberList() external view returns (address[] memory membership) {
         membership = memberList;
     }
-    
-    /// @notice Internal function to return chain identifier per ERC-155.
-    function getChainId() private view returns (uint chainId){
-        assembly {
-            chainId := chainid()
-        }
-    }
-    
-    /// @notice Gets the current votes balance for `account`.
-    function getCurrentVotes(address account) external view returns (uint96) {
-        uint32 nCheckpoints = numCheckpoints[account];
-        return nCheckpoints > 0 ? checkpoints[account][nCheckpoints - 1].votes : 0;
-    }
-    
-    /// @notice Determine the prior number of votes for `account` as of `timestamp`.
-    function getPriorVotes(address account, uint timestamp) public view returns (uint96 priorVotes) {
-        require(timestamp < block.timestamp,'!determined');
-        uint32 nCheckpoints = numCheckpoints[account];
-        if (nCheckpoints == 0) return 0;
-        if (checkpoints[account][nCheckpoints - 1].fromBlock <= timestamp) return checkpoints[account][nCheckpoints - 1].votes;
-        if (checkpoints[account][0].fromBlock > timestamp) return 0;
-        uint32 lower = 0; 
-        uint32 upper = nCheckpoints - 1;
-        while (upper > lower) {
-            uint32 center = upper - (upper - lower) / 2;
-            Checkpoint memory cp = checkpoints[account][center];
-            if (cp.fromBlock == timestamp) {
-                return cp.votes;
-            } else if (cp.fromBlock < timestamp) {
-                lower = center;
-            } else {
-                upper = center - 1;
-            }
-        }
-        priorVotes = checkpoints[account][lower].votes;
-    }
-    
+
     /// @notice Returns 'flags' for given Baal `proposal` describing type ('action'[0], 'membership'[1], 'period'[2], 'whitelist'[3]).
     function getProposalFlags(uint proposal) external view returns (bool[3] memory flags) {
         flags = proposals[proposal].flags;
@@ -416,43 +298,16 @@ contract Baal is ERC20 {
     /// @notice Deposits ETH sent to Baal.
     receive() external payable {}
     
-    /// @notice Internal update for 'shares' delegation.
-    function _delegate(address delegator, address delegatee) private {
-        address currentDelegate = delegates[delegator];
-        delegates[delegator] = delegatee;
-        emit DelegateChanged(delegator, currentDelegate, delegatee);
-        _moveDelegates(currentDelegate, delegatee, uint96(_balances[delegator]));
-    }
-    
-    /// @notice Internal update for 'shares' holders.
-    function _moveDelegates(address srcRep, address dstRep, uint96 amount) private {
-        if (srcRep != dstRep && amount > 0) 
-            if (srcRep != address(0)) {
-                uint32 srcRepNum = numCheckpoints[srcRep];
-                uint96 srcRepOld = srcRepNum > 0 ? checkpoints[srcRep][srcRepNum - 1].votes : 0;
-                uint96 srcRepNew = srcRepOld - amount;
-                _writeCheckpoint(srcRep, srcRepNum, srcRepOld, srcRepNew);
-            }
-            if (dstRep != address(0)) {
-                uint32 dstRepNum = numCheckpoints[dstRep];
-                uint96 dstRepOld = dstRepNum > 0 ? checkpoints[dstRep][dstRepNum - 1].votes : 0;
-                uint96 dstRepNew = dstRepOld + amount;
-                _writeCheckpoint(dstRep, dstRepNum, dstRepOld, dstRepNew);
-            }
-    }
-    
-    /// @notice Internal update for 'shares' balance timeline.
-    function _writeCheckpoint(address delegatee, uint32 nCheckpoints, uint96 oldVotes, uint96 newVotes) private {
-        uint32 blockNumber = uint32(block.timestamp);
-        if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromBlock == blockNumber) {
-          checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
-        } else {
-          checkpoints[delegatee][nCheckpoints] = Checkpoint(blockNumber, newVotes);
-          numCheckpoints[delegatee] = nCheckpoints + 1;
-        }
-        emit DelegateVotesChanged(delegatee, oldVotes, newVotes);
-    }
-   
+    /// @dev {_beforeTokenTransfer} used to check that tokens aren't paused.
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 amount
+    ) private override {
+        super._beforeTokenTransfer(from, to, amount);
+        require(!sharesPaused,'!transferable');
+    }  
+
     /// @notice Internal check to validate basic proposal processing requirements. 
     function _processingReady(uint32 proposal, Proposal memory prop) private view returns (bool ready) {
         require(proposal <= proposalCount,'!exist');/*check proposal exists*/
