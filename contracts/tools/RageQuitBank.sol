@@ -1,21 +1,18 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity ^0.8.0;;
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.6;
 
-contract RageQuitBank {
+contract SimpleShaman {
     address public baal;
-    
-    event Receive(address indexed sender, uint256 value); // emits when ether (ETH) is received
-    
+    uint lootRate = 10;
+    uint shareRate = 5;
+
     constructor(address _baal) {
         baal = _baal;
     }
     
-    function memberBurn(address member, uint256 amount, uint256 total) external {
-        require(msg.sender == baal, "!baal");
-        (bool success, ) = member.call{value: address(this).balance * amount / total}("");
-        require(success, "!ethCall");
+    function memberBurn(uint loot, uint shares) external payable returns (uint96 lootReaction, uint96 sharesReaction) {
+        require(msg.sender == baal,'!baal');
+        lootReaction = uint96(loot * lootRate);
+        sharesReaction = uint96(shares * shareRate);
     }
-    
-    /// @dev fallback to collect received ether into bank
-    receive() external payable {emit Receive(msg.sender, msg.value);}
 }
