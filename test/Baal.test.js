@@ -129,10 +129,6 @@ describe('Baal contract', function () {
       expect(totalLoot).to.equal(500);
     });
   });
-
-  describe('memberAction', function () {
-
-  });
   
   describe('submitProposal', function () {
     it('happy case', async function () {
@@ -310,6 +306,58 @@ describe('Baal contract', function () {
       await baal.submitVote(1, no);
       await moveForwardPeriods(2);
       await baal.processProposal(1, [proposal.account], [proposal.value], [proposal.data]);
+    });
+
+    it('require fail - proposal does not exist', async function () {
+      await baal.submitProposal(
+        [proposal.account], 
+        [proposal.value],
+        proposal.votingPeriod,
+        proposal.flag,
+        [proposal.data],
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      await baal.processProposal(2, [proposal.account], [proposal.value], [2])
+        .should.be.rejectedWith('data does not match');
+    });
+
+    it('require fail - voting period has not ended', async function () {
+      await baal.submitProposal(
+        [proposal.account], 
+        [proposal.value],
+        proposal.votingPeriod,
+        proposal.flag,
+        [proposal.data],
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      await baal.processProposal(1, [proposal.account], [proposal.value], [proposal.data])
+        .should.be.rejectedWith('!ended');
+    });
+
+    it('require fail - voting period has not ended', async function () {
+      await baal.submitProposal(
+        [proposal.account], 
+        [proposal.value],
+        proposal.votingPeriod,
+        proposal.flag,
+        [proposal.data],
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      await baal.submitProposal(
+        [proposal.account], 
+        [proposal.value],
+        proposal.votingPeriod,
+        proposal.flag,
+        [proposal.data],
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(2, yes);
+      await moveForwardPeriods(2);
+      await baal.processProposal(2, [proposal.account], [proposal.value], [proposal.data])
+        .should.be.rejectedWith('prev!processed');
     });
   });
 });
