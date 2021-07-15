@@ -267,7 +267,7 @@ describe('Baal contract', function () {
       );
       await baal.submitVote(1, yes);
       await moveForwardPeriods(2);
-      await baal.processProposal(1);
+      await baal.processProposal(1, [proposal.account], [proposal.value], [proposal.data]);
     });
 
     it('happy case - flag[1] - yes wins', async function () {
@@ -281,7 +281,7 @@ describe('Baal contract', function () {
       );
       await baal.submitVote(1, yes);
       await moveForwardPeriods(2);
-      await baal.processProposal(1);
+      await baal.processProposal(1, [proposal.account], [proposal.value], [proposal.data]);
     });
 
     it('happy case - flag[0] - no wins', async function () {
@@ -295,7 +295,7 @@ describe('Baal contract', function () {
       );
       await baal.submitVote(1, no);
       await moveForwardPeriods(2);
-      await baal.processProposal(1);
+      await baal.processProposal(1, [proposal.account], [proposal.value], [proposal.data]);
     });
 
     it('happy case - flag[1] - no wins', async function () {
@@ -309,7 +309,7 @@ describe('Baal contract', function () {
       );
       await baal.submitVote(1, no);
       await moveForwardPeriods(2);
-      await baal.processProposal(1);
+      await baal.processProposal(1, [proposal.account], [proposal.value], [proposal.data]);
     });
   });
 });
