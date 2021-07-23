@@ -134,7 +134,7 @@ contract Baal {
     uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod`*/
     uint96 yesVotes; /*counter for `members` 'yes' votes to calculate approval on processing*/
     uint96 noVotes; /*counter for `members` 'no' votes to calculate approval on processing*/
-    bool[3] flags; /*flags for proposal type & status - [action, membership, period, whitelist]*/
+    bool[5] flags; /*flags for proposal type & status - [action, membership, period, whitelist]*/
     bytes32 details;
   } /*context for proposal*/
 
@@ -294,7 +294,7 @@ contract Baal {
     );
     require(to.length <= 10, "array max"); /*limit executable actions to help avoid block gas limit errors on processing*/
     require(flag <= 5, "!flag"); /*check flag is in bounds*/
-    bool[3] memory flags; /*plant flags - [action, governance, membership]*/
+    bool[5] memory flags; /*plant flags - [action, governance, membership]*/
     bytes32 id = hashOperation(to, value, data);
     flags[flag] = true; /*flag proposal type for struct storage*/
     proposalCount++; /*increment total proposal counter*/
@@ -700,7 +700,7 @@ contract Baal {
   function getProposalFlags(uint256 proposal)
     external
     view
-    returns (bool[3] memory flags)
+    returns (bool[5] memory flags)
   {
     flags = proposals[proposal].flags;
   }
@@ -782,7 +782,6 @@ contract Baal {
       require(prop.votingEnds + gracePeriod <= block.timestamp, "!ended"); /*check voting period has ended*/
       require(proposals[proposal - 1].votingEnds == 0, "prev!processed"); /*check previous proposal has processed by deletion*/
     }
-    require(!prop.flags[2], "processed"); /*check given proposal has not yet processed*/
     if (memberList.length == 1) {
       ready = true; /*if single membership, process early*/
     } else if (prop.yesVotes > totalSupply / 2) {
