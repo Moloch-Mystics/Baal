@@ -336,13 +336,13 @@ abstract contract Baal is ERC20Votes, IERC3156FlashBorrower, IERC3156FlashLender
 
     /// @notice Internal check to validate basic proposal processing requirements. 
     function _processingReady(uint256 proposal, Proposal memory prop) private view returns (bool ready) {
-        require(proposal <= proposalCount,'!exist');/*check proposal exists*/
-        require(prop.votingEnds + gracePeriod <= block.timestamp,'!ended');/*check voting period has ended*/
-        require(proposals[proposal - 1].votingEnds == 0,'prev!processed');/*check previous proposal has processed by deletion*/
-        require(!prop.flags[2],'processed');/*check given proposal has not yet processed*/
-        if (memberList.length == 1) ready = true;/*if single membership, process early*/
-        else if (prop.yesVotes > totalSupply() / 2) ready = true;/* process early if majority member support*/
-        else if (prop.votingEnds >= block.timestamp) ready = true;/*otherwise, process if voting period done*/
+        require(proposal <= proposalCount,'!exist'); /*check proposal exists*/
+        require(prop.votingEnds + gracePeriod <= block.timestamp,'!ended'); /*check voting period has ended*/
+        require(proposals[proposal - 1].votingEnds == 0,'prev!processed'); /*check previous proposal has processed by deletion*/
+        require(!prop.flags[2],'processed'); /*check given proposal has not yet processed*/
+        if (memberList.length == 1) ready = true; /*if single membership, process early*/
+        else if (prop.yesVotes > totalSupply() / 2) ready = true; /* process early if majority member support*/
+        else if (prop.votingEnds >= block.timestamp) ready = true; /*otherwise, process if voting period done*/
     }
     
     /// @dev The amount of currency available to be lent.
