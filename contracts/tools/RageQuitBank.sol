@@ -3,8 +3,8 @@ pragma solidity >=0.8.0;
 
 contract RageQuitBank {
     address public baal;
-    uint96 lootRate = 10;
-    uint96 shareRate = 5;
+    uint96 lootRate = 2;
+    uint96 shareRate = 2;
 
     function init(address _baal) external {
         baal = _baal;
