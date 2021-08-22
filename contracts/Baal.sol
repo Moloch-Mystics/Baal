@@ -35,9 +35,10 @@ contract Baal {
     uint8  public constant decimals = 18; /*unit scaling factor in erc20 shares accounting - '18' is default to match ETH & common erc20s*/
     uint16 constant MAX_GUILD_TOKEN_COUNT = 400; /*maximum number of whitelisted tokens*/
     
-    bytes32 public constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)");/*EIP-712 typehash for Baal domain*/
-    bytes32 public constant DELEGATION_TYPEHASH = keccak256("Delegation(address delegatee,uint256 nonce,uint256 expiry)");/*EIP-712 typehash for delegation struct*/
-    bytes32 public constant PERMIT_TYPEHASH = keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");/*EIP-712 typehash for EIP-2612 {permit}*/
+    bytes32 public constant DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,uint256 chainId,address verifyingContract)'); /*EIP-712 typehash for Baal domain*/
+    bytes32 public constant BALLOT_TYPEHASH = keccak256('Ballot(uint256 proposalId,bool support)'); /*EIP-712 typehash for ballot struct*/
+    bytes32 public constant DELEGATION_TYPEHASH = keccak256('Delegation(address delegatee,uint256 nonce,uint256 expiry)'); /*EIP-712 typehash for delegation struct*/
+    bytes32 public constant PERMIT_TYPEHASH = keccak256('Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)'); /*EIP-712 typehash for EIP-2612 {permit}*/
     
     address[] guildTokens; /*array list of erc20 tokens approved on summoning or by whitelist[3] `proposals` for {ragequit} claims*/
     
@@ -186,7 +187,7 @@ contract Baal {
         emit SubmitProposal(to, value, votingPeriod, proposal, flag, data, details); /*emit event reflecting proposal submission*/
     }
  
-    /// @notice Submit vote - proposal must exist & voting period must not have ended.
+    /// @notice Submit vote with EIP-712 signature - proposal must exist & voting period must not have ended.
     /// @param proposal Number of proposal in `proposals` mapping to cast vote on.
     /// @param approved If 'true', member will cast `yesVotes` onto proposal - if 'false', `noVotes` will be counted.
     function submitVote(uint256 proposal, bool approved) external nonReentrant {
@@ -199,6 +200,29 @@ contract Baal {
         }
         members[msg.sender].voted[proposal] = approved; /*record voting decision to `members` struct per account*/
         emit SubmitVote(msg.sender, balance, proposal, approved); /*emit event reflecting vote*/
+    }
+    
+    /// @notice Submit vote - proposal must exist & voting period must not have ended.
+    /// @param proposal Number of proposal in `proposals` mapping to cast vote on.
+    /// @param approved If 'true', member will cast `yesVotes` onto proposal - if 'false', `noVotes` will be counted.
+    /// @param v The recovery byte of the signature.
+    /// @param r Half of the ECDSA signature pair.
+    /// @param s Half of the ECDSA signature pair.
+    function submitVoteWithSig(uint256 proposal, bool approved, uint8 v, bytes32 r, bytes32 s) external nonReentrant {
+        Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
+        bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this)));
+        bytes32 structHash = keccak256(abi.encode(BALLOT_TYPEHASH, proposal, approved));
+        bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash));
+        address signatory = ecrecover(digest, v, r, s);
+        require(signatory != address(0),'!signatory');
+        uint96 balance = uint96(getPriorVotes(signatory, prop.votingStarts)); /*fetch & gas-optimize voting weight at proposal creation time*/
+        require(prop.votingEnds >= block.timestamp,'ended'); /*check voting period has not ended*/
+        unchecked {
+            if (approved) { prop.yesVotes += balance; members[signatory].highestIndexYesVote = proposal; /*if 'approve', cast delegated balance 'yes' votes to proposal*/
+            } else { prop.noVotes += balance;} /*otherwise, cast delegated balance 'no' votes to proposal*/
+        }
+        members[signatory].voted[proposal] = approved; /*record voting decision to `members` struct per account*/
+        emit SubmitVote(signatory, balance, proposal, approved); /*emit event reflecting vote*/
     }
         
     // ********************
@@ -302,7 +326,7 @@ contract Baal {
     /// @param v The recovery byte of the signature.
     /// @param r Half of the ECDSA signature pair.
     /// @param s Half of the ECDSA signature pair.
-    function permit(address owner, address spender, uint amount, uint deadline, uint8 v, bytes32 r, bytes32 s) external {
+    function permit(address owner, address spender, uint96 amount, uint deadline, uint8 v, bytes32 r, bytes32 s) external {
         bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this)));
         unchecked{bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, amount, nonces[owner]++, deadline));
         bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash));
@@ -317,27 +341,29 @@ contract Baal {
     /// @param to The address of destination account.
     /// @param amount The number of tokens to transfer.
     /// @return Whether or not the transfer succeeded.
-    function transfer(address to, uint amount) external returns (bool){
-        require(!sharesPaused,"!transferable");
+    function transfer(address to, uint96 amount) external returns (bool){
+        require(!sharesPaused,'!transferable');
         balanceOf[msg.sender] -= amount;
-        _moveDelegates(msg.sender, to, uint96(amount));
+        _moveDelegates(msg.sender, to, amount);
         unchecked{balanceOf[to] += amount;}
         emit Transfer(msg.sender, to, amount);
-        return true;}
+        return true;
+    }
         
     /// @notice Transfer `amount` tokens from `src` to `dst`.
     /// @param from The address of the source account.
     /// @param to The address of the destination account.
     /// @param amount The number of tokens to transfer.
     /// @return Whether or not the transfer succeeded.
-    function transferFrom(address from, address to, uint amount) external returns (bool){
-        require(sharesPaused,"!transferable");
-        if(allowance[from][msg.sender] != type(uint).max) allowance[from][msg.sender] -= amount;
+    function transferFrom(address from, address to, uint96 amount) external returns (bool){
+        require(!sharesPaused,'!transferable');
+        if (allowance[from][msg.sender] != type(uint).max) allowance[from][msg.sender] -= amount;
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
-        _moveDelegates(from, to, uint96(amount));
+        _moveDelegates(from, to, amount);
         emit Transfer(from, to, amount);
-        return true;}
+        return true;
+    }
     
     /// @notice Transfer `amount` `loot` from `msg.sender` to `to`.
     /// @param to The address of destination account.
