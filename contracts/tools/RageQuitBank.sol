@@ -6,7 +6,7 @@ contract SimpleShaman {
     uint lootRate = 10;
     uint shareRate = 5;
 
-    constructor(address _baal) {
+    function init(address _baal) external {
         baal = _baal;
     }
     
