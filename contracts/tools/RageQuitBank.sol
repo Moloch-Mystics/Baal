@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.6;
+pragma solidity >=0.8.0;
 
-contract SimpleShaman {
+contract RageQuitBank {
     address public baal;
-    uint lootRate = 10;
-    uint shareRate = 5;
+    uint96 lootRate = 10;
+    uint96 shareRate = 5;
 
     function init(address _baal) external {
         baal = _baal;
     }
     
-    function memberBurn(uint loot, uint shares) external payable returns (uint96 lootReaction, uint96 sharesReaction) {
+    function memberAction(address, uint96 loot, uint96 shares) external payable returns (uint96 lootOut, uint96 sharesOut) {
         require(msg.sender == baal,'!baal');
-        lootReaction = uint96(loot * lootRate);
-        sharesReaction = uint96(shares * shareRate);
+        lootOut = loot * lootRate;
+        sharesOut = shares * shareRate;
     }
 }
