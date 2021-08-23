@@ -44,8 +44,8 @@ contract Baal {
     
     mapping(address => mapping(address => uint))      public allowance; /*maps approved pulls of shares with erc20 accounting*/
     mapping(address => uint)                          public balanceOf; /*maps `members` accounts to shares with erc20 accounting*/
-    mapping(address => mapping(uint32 => Checkpoint)) public checkpoints; /*maps record of vote checkpoints for each account by index*/
-    mapping(address => uint32)                        public numCheckpoints; /*maps number of checkpoints for each account*/
+    mapping(address => mapping(uint => Checkpoint)) public checkpoints; /*maps record of vote checkpoints for each account by index*/
+    mapping(address => uint)                          public numCheckpoints; /*maps number of checkpoints for each account*/
     mapping(address => address)                       public delegates; /*maps record of each account's delegate*/
     mapping(address => uint)                          public nonces; /*maps record of states for signing & validating signatures*/
     
@@ -150,11 +150,11 @@ contract Baal {
         require(shamans[shaman],'!shaman'); /*check `shaman` is approved*/
         if (mint) { /*execute `mint` action*/
             (lootOut, sharesOut) = IShaman(shaman).memberAction{value: msg.value}(msg.sender, loot, shares); /*fetch 'reaction' mint per inputs*/
-            if (lootOut != 0) _mintLoot(msg.sender, lootOut); emit TransferLoot(address(0), msg.sender, lootOut); /*add loot to `msg.sender` account & Baal totals*/
+            if (lootOut != 0) _mintLoot(msg.sender, lootOut); emit TransferLoot(address(0), msg.sender, lootOut); /*add loot to `msg.sender` account & Baal total*/
             if (sharesOut != 0) _mintShares(msg.sender, sharesOut); /*add shares to `msg.sender` account & Baal total with erc20 accounting*/
         } else { /*otherwise, execute burn action*/
             (lootOut, sharesOut) = IShaman(shaman).memberAction{value: msg.value}(msg.sender, loot, shares); /*fetch 'reaction' burn per inputs*/
-            if (lootOut != 0) _burnLoot(msg.sender, lootOut); emit TransferLoot(msg.sender, address(0), lootOut); /*subtract loot from `msg.sender` account & Baal totals*/
+            if (lootOut != 0) _burnLoot(msg.sender, lootOut); emit TransferLoot(msg.sender, address(0), lootOut); /*subtract loot from `msg.sender` account & Baal total*/
             if (sharesOut != 0) _burnShares(msg.sender, sharesOut); /*subtract shares from `msg.sender` account & Baal total with erc20 accounting*/
         }
     }
@@ -169,7 +169,7 @@ contract Baal {
     /// @param details Context for proposal.
     /// @return proposal Count for submitted proposal.
     function submitProposal(address[] calldata to, uint96[] calldata value, uint32 votingPeriod, uint8 flag, bytes[] calldata data, string calldata details) external nonReentrant returns (uint256 proposal) {
-        require(balanceOf[msg.sender] != 0,'!member'); /*check membership - required to submit proposal*/
+        //require(balanceOf[msg.sender] != 0,'!member'); /*check membership - required to submit proposal*/
         require(minVotingPeriod <= votingPeriod && votingPeriod <= maxVotingPeriod,'!votingPeriod'); /*check voting period is within bounds*/
         require(to.length <= 10,'array max'); /*limit executable actions to help avoid block gas limit errors on processing*/
         require(flag <= 3,'!flag'); /*check flag is in bounds*/
@@ -218,8 +218,11 @@ contract Baal {
         uint96 balance = uint96(getPriorVotes(signatory, prop.votingStarts)); /*fetch & gas-optimize voting weight at proposal creation time*/
         require(prop.votingEnds >= block.timestamp,'ended'); /*check voting period has not ended*/
         unchecked {
-            if (approved) { prop.yesVotes += balance; members[signatory].highestIndexYesVote = proposal; /*if 'approve', cast delegated balance 'yes' votes to proposal*/
-            } else { prop.noVotes += balance;} /*otherwise, cast delegated balance 'no' votes to proposal*/
+            if (approved) { /*if 'approve', cast delegated balance 'yes' votes to proposal*/
+                prop.yesVotes += balance; members[signatory].highestIndexYesVote = proposal;
+            } else { /*otherwise, cast delegated balance 'no' votes to proposal*/
+                prop.noVotes += balance;
+            }
         }
         members[signatory].voted[proposal] = approved; /*record voting decision to `members` struct per account*/
         emit SubmitVote(signatory, balance, proposal, approved); /*emit event reflecting vote*/
@@ -426,21 +429,21 @@ contract Baal {
     }
     
     /// @notice Gets the current votes balance for `account`.
-    function getCurrentVotes(address account) external view returns (uint96) {
-        uint32 nCheckpoints = numCheckpoints[account];
+    function getCurrentVotes(address account) external view returns (uint) {
+        uint nCheckpoints = numCheckpoints[account];
         return nCheckpoints > 0 ? checkpoints[account][nCheckpoints - 1].shares : 0;
     }
     
     /// @notice Determine the prior number of votes for `account` as of `blockNumber`.
     function getPriorVotes(address account, uint blockNumber) public view returns (uint96) {
         require(blockNumber < block.number,'!determined');
-        uint32 nCheckpoints = numCheckpoints[account];
+        uint nCheckpoints = numCheckpoints[account];
         if(nCheckpoints == 0){return 0;}
         if(checkpoints[account][nCheckpoints - 1].fromBlock <= blockNumber){return checkpoints[account][nCheckpoints - 1].shares;}
         if(checkpoints[account][0].fromBlock > blockNumber){return 0;}
-        uint32 lower = 0; uint32 upper = nCheckpoints - 1;
+        uint lower = 0; uint upper = nCheckpoints - 1;
         while(upper > lower){
-            uint32 center = upper - (upper - lower) / 2;
+            uint center = upper - (upper - lower) / 2;
             Checkpoint memory cp = checkpoints[account][center];
             if(cp.fromBlock == blockNumber) {return cp.shares;} 
             else if(cp.fromBlock < blockNumber){lower = center;
@@ -459,7 +462,7 @@ contract Baal {
     }
     
     /// @notice Returns true/false 'vote' by a given `account` on Baal `proposal` to indicate approval.
-    function getProposalVotes(address account, uint32 proposal) external view returns (bool vote) {
+    function getProposalVotes(address account, uint proposal) external view returns (bool vote) {
         vote = members[account].voted[proposal];
     }
     
@@ -509,12 +512,13 @@ contract Baal {
     function _moveDelegates(address srcRep, address dstRep, uint96 amount) private {
         if (srcRep != dstRep && amount > 0) {
             if (srcRep != address(0)) {
-                uint32 srcRepNum = numCheckpoints[srcRep];
+                uint srcRepNum = numCheckpoints[srcRep];
                 uint96 srcRepOld = srcRepNum > 0 ? checkpoints[srcRep][srcRepNum - 1].shares : 0;
                 uint96 srcRepNew = srcRepOld - amount;
-                _writeCheckpoint(srcRep, srcRepNum, srcRepOld, srcRepNew);}
+                _writeCheckpoint(srcRep, srcRepNum, srcRepOld, srcRepNew);
+            }
             if (dstRep != address(0)) {
-                uint32 dstRepNum = numCheckpoints[dstRep];
+                uint dstRepNum = numCheckpoints[dstRep];
                 uint96 dstRepOld = dstRepNum > 0 ? checkpoints[dstRep][dstRepNum - 1].shares : 0;
                 uint96 dstRepNew = dstRepOld + amount;
                 _writeCheckpoint(dstRep, dstRepNum, dstRepOld, dstRepNew);
@@ -522,7 +526,7 @@ contract Baal {
         }
     }
 
-    function _writeCheckpoint(address delegatee, uint32 nCheckpoints, uint96 oldVotes, uint96 newVotes) private {
+    function _writeCheckpoint(address delegatee, uint nCheckpoints, uint96 oldVotes, uint96 newVotes) private {
         uint32 blockNumber = uint32(block.number);
         if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromBlock == blockNumber) {
           checkpoints[delegatee][nCheckpoints - 1].shares = newVotes;
