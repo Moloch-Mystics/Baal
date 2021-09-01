@@ -1,22 +1,29 @@
 {
   "name": "baal",
   "version": "1.0.0",
-  "description": "Baal, god of the harvests, plentiful communities, coodination between the earth and heavens",
+  "description": "Lo, also it is the time of His rain.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Moloch-Mystics/Baal.git"
+    "url": "git+https://github.com/HausDAO/Baal.git"
   },
-  "author": "Moloch Mystics",
-  "license": "UNLICENSED",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "bugs": {
-    "url": "https://github.com/Moloch-Mystics/Baal/issues"
+    "url": "https://github.com/HausDAO/Baal/issues"
   },
-  "homepage": "https://github.com/Moloch-Mystics/Baal#readme",
+  "homepage": "https://github.com/HausDAO/Baal#readme",
   "devDependencies": {
+    "@nomiclabs/hardhat-ethers": "^2.0.2",
+    "@nomiclabs/hardhat-waffle": "^2.0.1",
+    "chai": "^4.3.4",
+    "chai-as-promised": "^7.1.1",
+    "ethereum-waffle": "^3.4.0",
+    "ethers": "^5.3.1",
     "hardhat": "^2.4.1"
   }
 }

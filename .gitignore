@@ -1,2 +1,5 @@
-node_modules
-.env
+node_modules/
+artifacts/
+cache/
+.DS_Store
+*.swp
