@@ -307,7 +307,7 @@ contract Baal {
         success = true; /*confirm approval with ERC-20 accounting*/
     }
     
-    /// @notice Delegate votes from caller to `delegatee`.
+    /// @notice Delegate votes from user to `delegatee`.
     /// @param delegatee The address to delegate votes to.
     function delegate(address delegatee) external {
         _delegate(msg.sender, delegatee);
@@ -355,7 +355,7 @@ contract Baal {
         emit Approval(owner, spender, amount); /*emit event reflecting approval*/
     }
     
-    /// @notice Transfer `amount` tokens from caller to `to`.
+    /// @notice Transfer `amount` tokens from user to `to`.
     /// @param to The address of destination account.
     /// @param amount The number of tokens to transfer.
     /// @return success Whether or not the transfer succeeded.
@@ -387,7 +387,7 @@ contract Baal {
         success = true;
     }
     
-    /// @notice Transfer `amount` `loot` from caller to `to`.
+    /// @notice Transfer `amount` `loot` from user to `to`.
     /// @param to The address of destination account.
     /// @param amount The sum of loot to transfer.
     function transferLoot(address to, uint96 amount) external {
@@ -434,9 +434,9 @@ contract Baal {
             }
         }
         if (lootToBurn != 0) /*gas optimization*/ 
-            _burnLoot(msg.sender, lootToBurn); /*subtract `loot` from caller account & Baal totals*/
+            _burnLoot(msg.sender, lootToBurn); /*subtract `loot` from user account & Baal totals*/
         if (sharesToBurn != 0) /*gas optimization*/ 
-            _burnShares(msg.sender, sharesToBurn);  /*subtract `shares` from caller account with erc20 accounting*/
+            _burnShares(msg.sender, sharesToBurn);  /*subtract `shares` from user account with erc20 accounting*/
         emit Ragequit(msg.sender, to, lootToBurn, sharesToBurn); /*event reflects claims made against Baal*/
     }
 
