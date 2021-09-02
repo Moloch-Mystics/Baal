@@ -9,7 +9,7 @@
        ▀    ▀*/
 pragma solidity >=0.8.0;
 
-/// @notice Interface for Baal {memberAction} that adjusts membership `shares` & `loot`.
+/// @notice Interface for Baal {memberAction} that adjusts member `shares` & `loot`.
 interface IShaman {
     function memberAction(address member, uint96 loot, uint96 shares) external payable returns (uint96 lootOut, uint96 sharesOut);
 }
@@ -79,7 +79,7 @@ contract Baal {
     }
  
     struct Member { /*Baal membership details*/
-        uint96 loot; /*economic weight held by `members` - combined with `shares` on {ragequit} - can be set on summoning & adjusted via {memberAction} or 'membership'[1] proposal*/
+        uint96 loot; /*economic weight held by `members` - combined with `shares` on {ragequit} - can be set on summoning & adjusted via {memberAction} or 'member'[1] proposal*/
         uint highestIndexYesVote; /*highest proposal index on which a member `approved`*/
         mapping(uint => bool) voted; /*maps voting decisions on proposals by `members` account*/
     }
@@ -89,7 +89,7 @@ contract Baal {
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
         uint96 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
         uint96 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
-        bool[4] flags; /*flags for proposal type & status - [action, membership, period, whitelist]*/
+        bool[4] flags; /*flags for proposal type & status - [action, member, period, whitelist]*/
         address[] to; /*account(s) that receive(s) Baal state updates*/
         uint96[] value; /*value(s) associated with Baal state updates (also used to toggle)*/
         bytes[] data; /*raw data associated with Baal state updates (also used to toggle)*/
@@ -176,7 +176,7 @@ contract Baal {
         require(minVotingPeriod <= votingPeriod && votingPeriod <= maxVotingPeriod,'!votingPeriod'); /*check voting period is within Baal bounds*/
         require(to.length <= 10,'array max'); /*limit executable actions to help avoid block gas limit errors on processing*/
         require(flag <= 3,'!flag'); /*check 'flag' is in bounds*/
-        bool[4] memory flags; /*plant `flags` - [action, membership, period, whitelist]*/
+        bool[4] memory flags; /*plant `flags` - [action, member, period, whitelist]*/
         flags[flag] = true; /*flag proposal type for struct storage*/ 
         if (flag == 2) {
             require(value.length == 6,'unpacked'); /*check that `value` is packed for `period`[2] proposal*/
@@ -244,7 +244,7 @@ contract Baal {
         _processingReady(proposal, prop); /*validate `proposal` processing requirements*/
         if (prop.yesVotes > prop.noVotes) /*check if `proposal` approved by simple majority of members*/
             if (prop.flags[0]) processActionProposal(prop); /*check `flag`, execute 'action'*/
-            else if (prop.flags[1]) processMembershipProposal(prop); /*check `flag`, execute 'membership'*/
+            else if (prop.flags[1]) processMemberProposal(prop); /*check `flag`, execute 'member'*/
             else if (prop.flags[2]) processPeriodProposal(prop); /*check `flag`, execute 'period'*/
             else processWhitelistProposal(prop); /*otherwise, execute 'whitelist'*/
         delete proposals[proposal]; /*delete given proposal struct details for gas refund & the commons*/
@@ -258,8 +258,8 @@ contract Baal {
             (prop.data[i]); /*execute low-level call(s)*/
     }
     
-    /// @notice Internal function to process 'membership'[1] proposal.
-    function processMembershipProposal(Proposal memory prop) private {
+    /// @notice Internal function to process 'member'[1] proposal.
+    function processMemberProposal(Proposal memory prop) private {
         for (uint i; i < prop.to.length; i++) {
             if (prop.data[i].length == 0) {
                 _mintShares(prop.to[i], prop.value[i]); /*grant `to` `value` `shares`*/
@@ -486,7 +486,7 @@ contract Baal {
         tokens = guildTokens;
     }
 
-    /// @notice Returns `flags` for given Baal `proposal` describing type ('action'[0], 'membership'[1], 'period'[2], 'whitelist'[3]).
+    /// @notice Returns `flags` for given Baal `proposal` describing type ('action'[0], 'member'[1], 'period'[2], 'whitelist'[3]).
     /// @param proposal The index to check `flags` for.
     /// @return flags The flag index describing `proposal` type.
     function getProposalFlags(uint proposal) external view returns (bool[4] memory flags) {
@@ -624,7 +624,7 @@ contract Baal {
             require(prop.votingEnds + gracePeriod <= block.timestamp,'!ended'); /*check voting period has ended*/
             require(proposals[proposal - 1].votingEnds == 0,'prev!processed'); /*check previous proposal has processed by deletion*/
             require(proposals[proposal].votingEnds != 0,'processed'); /*check given proposal has not yet processed by deletion*/
-            if (summonerCount == 1) ready = true; /*if single membership, process early*/
+            if (summonerCount == 1) ready = true; /*if single member, process early*/
             else if (prop.yesVotes > totalSupply / 2) ready = true; /*process early if majority member support*/
             else if (prop.votingEnds >= block.timestamp) ready = true; /*otherwise, process if voting period done*/
         }
