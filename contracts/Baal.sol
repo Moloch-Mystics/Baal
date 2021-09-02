@@ -14,57 +14,58 @@ interface IShaman {
     function memberAction(address member, uint96 loot, uint96 shares) external payable returns (uint96 lootOut, uint96 sharesOut);
 }
 
-/// @title Baal *;_;*.
-/// @notice Guild contract inspired by Moloch DAO framework.
+/// @title Baal';_;'.
+/// @notice Flexible guild contract inspired by Moloch DAO framework.
 contract Baal {
     bool public lootPaused; /*tracks transferability of `loot` economic weight - amendable through 'period'[2] proposal*/
     bool public sharesPaused; /*tracks transferability of erc20 `shares` - amendable through 'period'[2] proposal*/
     
-    uint public flashFeeNumerator; /*tracks 'fee' for {flashLoan} - e.g., '1 = 0.0001%'*/
+    uint8  constant public decimals = 18; /*unit scaling factor in erc20 `shares` accounting - '18' is default to match ETH & common erc20s*/
+    uint16 constant MAX_GUILD_TOKEN_COUNT = 400; /*maximum number of whitelistable tokens*/
+    
+    uint96 public totalLoot; /*counter for total `loot` economic weight held by `members`*/  
+    uint96 public totalSupply; /*counter for total `members` voting `shares` with erc20 accounting*/
+    
+    uint public flashFeeNumerator; /*tracks 'fee' numerator for {flashLoan} in {flashFee} - e.g., '1 = 0.0001%'*/
     uint public gracePeriod; /*time delay after proposal voting period for processing*/
     uint public minVotingPeriod; /*minimum period for voting in seconds - amendable through 'period'[2] proposal*/
     uint public maxVotingPeriod; /*maximum period for voting in seconds - amendable through 'period'[2] proposal*/
     uint public proposalCount; /*counter for total `proposals` submitted*/
-    uint summonerCount; /*initial summoner counter to gauge speedy processing*/
+    uint status; /*reentrancy tracking value*/
+    uint summonerCount; /*initial summoner count to gauge speedy proposal processing*/
     
-    uint96 public totalLoot; /*counter for total `loot` economic weight held by `members`*/  
-    uint96 public totalSupply; /*counter for total `members` voting `shares` with erc20 accounting*/
-
     string public name; /*'name' for erc20 `shares` accounting*/
     string public symbol; /*'symbol' for erc20 `shares` accounting*/
-    uint8  public constant decimals = 18; /*unit scaling factor in erc20 `shares` accounting - '18' is default to match ETH & common erc20s*/
-    uint16 constant MAX_GUILD_TOKEN_COUNT = 400; /*maximum number of whitelisted tokens*/
     
-    bytes32 public constant DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,uint chainId,address verifyingContract)'); /*EIP-712 typehash for Baal domain*/
-    bytes32 public constant BALLOT_TYPEHASH = keccak256('Ballot(uint proposalId,bool support)'); /*EIP-712 typehash for ballot struct*/
-    bytes32 public constant DELEGATION_TYPEHASH = keccak256('Delegation(address delegatee,uint nonce,uint expiry)'); /*EIP-712 typehash for delegation struct*/
-    bytes32 public constant PERMIT_TYPEHASH = keccak256('Permit(address owner,address spender,uint value,uint nonce,uint deadline)'); /*EIP-712 typehash for EIP-2612 {permit}*/
+    bytes32 constant DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,uint chainId,address verifyingContract)'); /*EIP-712 typehash for Baal domain*/
+    bytes32 constant DELEGATION_TYPEHASH = keccak256('Delegation(address delegatee,uint nonce,uint expiry)'); /*EIP-712 typehash for Baal delegation*/
+    bytes32 constant PERMIT_TYPEHASH = keccak256('Permit(address owner,address spender,uint value,uint nonce,uint deadline)'); /*EIP-712 typehash for EIP-2612 {permit}*/
+    bytes32 constant VOTE_TYPEHASH = keccak256('Vote(uint proposalId,bool support)'); /*EIP-712 typehash for Baal proposal vote*/
     
     address[] guildTokens; /*array list of erc20 tokens approved on summoning or by 'whitelist'[3] `proposals` for {ragequit} claims*/
     
-    mapping(address => mapping(address => uint))      public allowance; /*maps approved pulls of `shares` with erc20 accounting*/
-    mapping(address => uint)                          public balanceOf; /*maps `members` accounts to `shares` with erc20 accounting*/
-    mapping(address => mapping(uint => Checkpoint))   public checkpoints; /*maps record of vote `checkpoints` for each account by index*/
-    mapping(address => uint)                          public numCheckpoints; /*maps number of `checkpoints` for each account*/
-    mapping(address => address)                       public delegates; /*maps record of each account's `shares` delegate*/
-    mapping(address => uint)                          public nonces; /*maps record of states for signing & validating `shares` signatures*/
+    mapping(address => mapping(address => uint))    public allowance; /*maps approved pulls of `shares` with erc20 accounting*/
+    mapping(address => uint)                        public balanceOf; /*maps `members` accounts to `shares` with erc20 accounting*/
+    mapping(address => mapping(uint => Checkpoint)) public checkpoints; /*maps record of vote `checkpoints` for each account by index*/
+    mapping(address => uint)                        public numCheckpoints; /*maps number of `checkpoints` for each account*/
+    mapping(address => address)                     public delegates; /*maps record of each account's `shares` delegate*/
+    mapping(address => uint)                        public nonces; /*maps tx record for signing & validating `shares` signatures*/
     
-    mapping(address => bool)     public shamans; /*maps contracts approved in 'whitelist'[3] proposals for {memberAction} that mint or burn `shares`*/
-    mapping(address => Member)   public members; /*maps `members` accounts to struct details*/
-    mapping(uint => Proposal)    public proposals; /*maps `proposalCount` to struct details*/
+    mapping(address => Member) public members; /*maps `members` accounts to struct details*/
+    mapping(uint => Proposal)  public proposals; /*maps `proposalCount` to struct details*/
+    mapping(address => bool)   public shamans; /*maps contracts approved in 'whitelist'[3] proposals for {memberAction} that mint or burn `shares`*/
     
-    event SummonComplete(address[] shamans, address[] guildTokens, address[] summoners, uint96[] loot, uint96[] shares, uint gracePeriod, uint minVotingPeriod, uint maxVotingPeriod, string name, string symbol, bool lootPaused, bool sharesPaused); /*emits after Baal summoning*/
-    event SubmitProposal(address[] to, uint96[] value, uint votingPeriod, uint indexed proposal, uint8 indexed flag, bytes[] data, string details); /*emits after proposal is submitted*/
+    event SummonComplete(bool lootPaused, bool sharesPaused, uint gracePeriod, uint minVotingPeriod, uint maxVotingPeriod, string name, string symbol, address[] guildTokens, address[] shamans, address[] summoners, uint96[] loot, uint96[] shares); /*emits after Baal summoning*/
+    event SubmitProposal(uint8 indexed flag, uint indexed proposal, uint votingPeriod, address[] to, uint96[] value, bytes[] data, string details); /*emits after proposal is submitted*/
     event SubmitVote(address indexed member, uint balance, uint indexed proposal, bool indexed approved); /*emits after vote is submitted on proposal*/
     event ProcessProposal(uint indexed proposal); /*emits when proposal is processed & executed*/
-    event Ragequit(address indexed memberAddress, address to, uint96 lootToBurn, uint96 sharesToBurn); /*emits when callers burn Baal `shares` and/or `loot` for a given `to` account*/
+    event Ragequit(address indexed member, address to, uint96 lootToBurn, uint96 sharesToBurn); /*emits when users burn Baal `shares` and/or `loot` for given `to` account*/
     event Approval(address indexed owner, address indexed spender, uint amount); /*emits when Baal `shares` are approved for pulls with erc20 accounting*/
     event Transfer(address indexed from, address indexed to, uint amount); /*emits when Baal `shares` are minted, burned or transferred with erc20 accounting*/
     event TransferLoot(address indexed from, address indexed to, uint96 amount); /*emits when Baal `loot` is minted, burned or transferred*/
     event DelegateChanged(address indexed delegator, address indexed fromDelegate, address indexed toDelegate); /*emits when an account changes its voting delegate*/
     event DelegateVotesChanged(address indexed delegate, uint previousBalance, uint newBalance); /*emits when a delegate account's voting balance changes*/
     
-    uint status;
     modifier nonReentrant() { /*reentrancy guard*/
         require(status == 1,'reentrant'); 
         status = 2; 
@@ -72,14 +73,14 @@ contract Baal {
         status = 1;
     }
     
-    struct Checkpoint { /*Baal checkpoint for marking number of delegated votes from a given block*/
+    struct Checkpoint { /*Baal checkpoint for marking number of delegated votes from given block*/
         uint32 fromBlock; /*block number for referencing voting balance*/
         uint96 votes; /*votes at given block number*/
     }
  
     struct Member { /*Baal membership details*/
-        uint highestIndexYesVote; /*highest proposal index on which a member `approved`*/
         uint96 loot; /*economic weight held by `members` - combined with `shares` on {ragequit} - can be set on summoning & adjusted via {memberAction} or 'membership'[1] proposal*/
+        uint highestIndexYesVote; /*highest proposal index on which a member `approved`*/
         mapping(uint => bool) voted; /*maps voting decisions on proposals by `members` account*/
     }
     
@@ -90,34 +91,35 @@ contract Baal {
         uint96 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
         bool[4] flags; /*flags for proposal type & status - [action, membership, period, whitelist]*/
         address[] to; /*account(s) that receive(s) Baal state updates*/
-        uint96[] value; /*value associated with Baal state updates (also used to toggle)*/
+        uint96[] value; /*value(s) associated with Baal state updates (also used to toggle)*/
         bytes[] data; /*raw data associated with Baal state updates (also used to toggle)*/
         string details; /*human-readable context for proposal*/
     }
-    
-    /// @notice Summon Baal with voting configuration & create initial array of `members` accounts with `shares` & `loot` weights.
-    /// @param _shamans External contracts approved for {memberAction} that adjust `shares` & `loot`.
-    /// @param _guildTokens Tokens approved for internal accounting - {ragequit} of `shares` &/or `loot`.
-    /// @param _summoners Accounts to add as `members`.
-    /// @param _loot Economic weight among `members`.
-    /// @param _shares Voting weight among `members` (`shares` also have economic weight & are erc20 tokens).
+
+    /// @notice Summon Baal with voting configuration & initial array of `members` accounts with `shares` & `loot` weights.
+    /// @param _sharesPaused Sets transferability of Baal voting shares on initialization - if 'paused', `loot` will also be 'paused'.
     /// @param _gracePeriod Time delay in seconds after voting period before proposal can be processed.
     /// @param _minVotingPeriod Minimum voting period in seconds for `members` to cast votes on proposals.
     /// @param _maxVotingPeriod Maximum voting period in seconds for `members` to cast votes on proposals.
     /// @param _name Name for erc20 `shares` accounting.
     /// @param _symbol Symbol for erc20 `shares` accounting.
+    /// @param _guildTokens Tokens approved for internal accounting - {ragequit} of `shares` &/or `loot`.
+    /// @param _shamans External contracts approved for {memberAction} that adjust `shares` & `loot`.
+    /// @param _summoners Accounts to add as `members`.
+    /// @param _loot Economic weight among `members`.
+    /// @param _shares Voting weight among `members` (`shares` also have economic weight & are erc20 tokens).
     constructor(
-        address[] memory _shamans, 
-        address[] memory _guildTokens, 
-        address[] memory _summoners, 
-        uint96[]  memory _loot, 
-        uint96[]  memory _shares, 
+        bool             _sharesPaused,
         uint             _gracePeriod,
         uint             _minVotingPeriod, 
-        uint             _maxVotingPeriod, 
+        uint             _maxVotingPeriod,
         string    memory _name, 
         string    memory _symbol,
-        bool             _sharesPaused) {
+        address[] memory _guildTokens,
+        address[] memory _shamans, 
+        address[] memory _summoners, 
+        uint96[]  memory _loot, 
+        uint96[]  memory _shares) {
         require(_summoners.length == _loot.length && _loot.length == _shares.length,'!matched member arrays'); /*check `members`-related array lengths match*/
         unchecked {
             for (uint i; i < _shamans.length; i++) shamans[_shamans[i]] = true; /*update mapping of approved `shamans` in Baal*/
@@ -137,10 +139,10 @@ contract Baal {
         name = _name; /*initialize Baal `name` with erc20 accounting*/
         symbol = _symbol; /*initialize Baal `symbol` with erc20 accounting*/
         status = 1; /*initialize 'reentrancy guard' status*/
-        emit SummonComplete(_shamans, _guildTokens, _summoners, _loot, _shares, _gracePeriod, _minVotingPeriod, _maxVotingPeriod, _name, _symbol, lootPaused, _sharesPaused); /*emit event reflecting Baal summoning completed*/
+        emit SummonComplete(lootPaused, _sharesPaused, _gracePeriod, _minVotingPeriod, _maxVotingPeriod, _name, _symbol, _guildTokens, _shamans, _summoners, _loot, _shares); /*emit event reflecting Baal summoning completed*/
     }
 
-    /// @notice Execute membership action to mint or burn `shares` and/or `loot` against whitelisted `shamans` in consideration of caller & given amounts.
+    /// @notice Execute membership action to mint or burn `shares` and/or `loot` against whitelisted `shamans` in consideration of user & given amounts.
     /// @param shaman Whitelisted contract to trigger action.
     /// @param loot Economic weight involved in external call.
     /// @param shares Voting weight involved in external call.
@@ -150,42 +152,44 @@ contract Baal {
         require(shamans[shaman],'!shaman'); /*check `shaman` is approved*/
         (lootOut, sharesOut) = IShaman(shaman).memberAction{value: msg.value}(msg.sender, loot, shares); /*fetch 'reaction' per inputs*/
         if (mint) { /*execute `mint` actions*/
-            if (lootOut != 0) _mintLoot(msg.sender, lootOut); emit TransferLoot(address(0), msg.sender, lootOut); /*add `loot` to caller account & Baal total*/
-            if (sharesOut != 0) _mintShares(msg.sender, sharesOut); /*add `shares` to caller account & Baal total with erc20 accounting*/
+            if (lootOut != 0) _mintLoot(msg.sender, lootOut); emit TransferLoot(address(0), msg.sender, lootOut); /*add `loot` to user account & Baal total*/
+            if (sharesOut != 0) _mintShares(msg.sender, sharesOut); /*add `shares` to user account & Baal total with erc20 accounting*/
         } else { /*otherwise, execute `burn` actions*/
-            if (lootOut != 0) _burnLoot(msg.sender, lootOut); emit TransferLoot(msg.sender, address(0), lootOut); /*subtract `loot` from caller account & Baal total*/
-            if (sharesOut != 0) _burnShares(msg.sender, sharesOut); /*subtract `shares` from caller account & Baal total with erc20 accounting*/
+            if (lootOut != 0) _burnLoot(msg.sender, lootOut); emit TransferLoot(msg.sender, address(0), lootOut); /*subtract `loot` from user account & Baal total*/
+            if (sharesOut != 0) _burnShares(msg.sender, sharesOut); /*subtract `shares` from user account & Baal total with erc20 accounting*/
         }
     }
     
     /*****************
     PROPOSAL FUNCTIONS
     *****************/
-    /// @notice Submit proposal to Baal `members` for approval within a given voting period.
+    /// @notice Submit proposal to Baal `members` for approval within given voting period.
+    /// @param flag Index to assign proposal type '[0...3]'.
+    /// @param votingPeriod Voting period in seconds.
     /// @param to Account to target for proposal.
     /// @param value Numerical value to bind to proposal.
     /// @param data Data to bind to proposal.
     /// @param details Context for proposal.
     /// @return proposal Count for submitted proposal.
-    function submitProposal(address[] calldata to, uint96[] calldata value, uint32 votingPeriod, uint8 flag, bytes[] calldata data, string calldata details) external nonReentrant returns (uint proposal) {
-        //require(balanceOf[msg.sender] != 0,'!member'); /*check 'membership' - required to submit proposal*/
-        require(minVotingPeriod <= votingPeriod && votingPeriod <= maxVotingPeriod,'!votingPeriod'); /*check voting period is within bounds*/
+    function submitProposal(uint8 flag, uint32 votingPeriod, address[] calldata to, uint96[] calldata value, bytes[] calldata data, string calldata details) external nonReentrant returns (uint proposal) {
+        require(balanceOf[msg.sender] != 0,'!member'); /*check 'membership' - required to submit proposal*/
+        require(minVotingPeriod <= votingPeriod && votingPeriod <= maxVotingPeriod,'!votingPeriod'); /*check voting period is within Baal bounds*/
         require(to.length <= 10,'array max'); /*limit executable actions to help avoid block gas limit errors on processing*/
         require(flag <= 3,'!flag'); /*check 'flag' is in bounds*/
-        bool[4] memory flags; /*plant flags - [action, membership, period, whitelist]*/
+        bool[4] memory flags; /*plant `flags` - [action, membership, period, whitelist]*/
         flags[flag] = true; /*flag proposal type for struct storage*/ 
         if (flag == 2) {
             require(value.length == 6,'unpacked'); /*check that `value` is packed for `period`[2] proposal*/
         } else {
-            require(to.length == value.length && value.length == data.length,'!matched arrays'); /*check array lengths match*/
+            require(to.length == value.length && value.length == data.length,'!array parity'); /*check array lengths match*/
         }
         unchecked {
-            proposalCount++; /*increment total proposal counter*/
+            proposalCount++; /*increment proposal counter*/
             proposals[proposalCount] = Proposal(uint32(block.number), uint32(block.timestamp) + votingPeriod, 0, 0, flags, to, value, data, details); /*push params into proposal struct - start voting period timer*/
         }
-        emit SubmitProposal(to, value, votingPeriod, proposal, flag, data, details); /*emit event reflecting proposal submission*/
+        emit SubmitProposal(flag, proposal, votingPeriod, to, value, data, details); /*emit event reflecting proposal submission*/
     }
- 
+
     /// @notice Submit vote - proposal must exist & voting period must not have ended.
     /// @param proposal Number of proposal in `proposals` mapping to cast vote on.
     /// @param approved If 'true', member will cast `yesVotes` onto proposal - if 'false', `noVotes` will be counted.
@@ -200,7 +204,7 @@ contract Baal {
                 prop.noVotes += balance; /*otherwise, cast delegated balance `noVotes` to proposal*/
             }
         }
-        members[msg.sender].voted[proposal] = approved; /*record voting decision to `members` struct per caller account*/
+        members[msg.sender].voted[proposal] = approved; /*record voting decision to `members` struct per user account*/
         emit SubmitVote(msg.sender, balance, proposal, approved); /*emit event reflecting vote*/
     }
     
@@ -213,7 +217,7 @@ contract Baal {
     function submitVoteWithSig(uint proposal, bool approved, uint8 v, bytes32 r, bytes32 s) external nonReentrant {
         Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
         bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this))); /*calculate EIP-712 domain hash*/
-        bytes32 structHash = keccak256(abi.encode(BALLOT_TYPEHASH, proposal, approved)); /*calculate EIP-712 struct hash*/
+        bytes32 structHash = keccak256(abi.encode(VOTE_TYPEHASH, proposal, approved)); /*calculate EIP-712 struct hash*/
         bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash)); /*calculate EIP-712 digest for signature*/
         address signatory = ecrecover(digest, v, r, s); /*recover signer from hash data*/
         require(signatory != address(0),'!signatory'); /*check signer is not null*/
@@ -247,14 +251,14 @@ contract Baal {
         emit ProcessProposal(proposal); /*emit event reflecting that given proposal processed*/
     }
     
-    /// @notice Process 'action'[0] proposal.
+    /// @notice Internal function to process 'action'[0] proposal.
     function processActionProposal(Proposal memory prop) private returns (bytes memory returnData) {
         for (uint i; i < prop.to.length; i++) 
             (,returnData) = prop.to[i].call{value:prop.value[i]} /*pass ETH value(s), if any*/
             (prop.data[i]); /*execute low-level call(s)*/
     }
     
-    /// @notice Process 'membership'[1] proposal.
+    /// @notice Internal function to process 'membership'[1] proposal.
     function processMembershipProposal(Proposal memory prop) private {
         for (uint i; i < prop.to.length; i++) {
             if (prop.data[i].length == 0) {
@@ -267,7 +271,7 @@ contract Baal {
         }
     }
     
-    /// @notice Process 'period'[2] proposal.
+    /// @notice Internal function to process 'period'[2] proposal.
     function processPeriodProposal(Proposal memory prop) private {
         if (prop.value[0] != 0) minVotingPeriod = uint32(prop.value[0]); /*if positive, reset min. voting periods to first `value`*/ 
         if (prop.value[1] != 0) maxVotingPeriod = uint32(prop.value[1]); /*if positive, reset max. voting periods to second `value`*/
@@ -277,7 +281,7 @@ contract Baal {
         prop.value[5] == 0 ? sharesPaused = false : sharesPaused = true; /*if positive, pause `shares` transfers on sixth `value`*/
     }  
         
-    /// @notice Process 'whitelist'[3] proposal.
+    /// @notice Internal function to process 'whitelist'[3] proposal.
     function processWhitelistProposal(Proposal memory prop) private {
         for (uint i; i < prop.to.length; i++) 
             if (prop.value[i] == 0 && prop.data.length == 0) { /*if `value` & `data` are null, approve `shamans`*/
@@ -296,11 +300,11 @@ contract Baal {
     GUILD MGMT FUNCTIONS
     *******************/
     /// @notice Approve `to` to transfer up to `amount`.
-    /// @return Whether or not the approval succeeded.
-    function approve(address to, uint amount) external returns (bool){
+    /// @return success Whether or not the approval succeeded.
+    function approve(address to, uint amount) external returns (bool success) {
         allowance[msg.sender][to] = amount; /*adjust `allowance`*/
         emit Approval(msg.sender, to, amount); /*emit event reflecting approval*/
-        return true; /*confirm approval with ERC-20 accounting*/
+        success = true; /*confirm approval with ERC-20 accounting*/
     }
     
     /// @notice Delegate votes from caller to `delegatee`.
@@ -312,19 +316,21 @@ contract Baal {
     /// @notice Delegates votes from `signatory` to `delegatee`.
     /// @param delegatee The address to delegate 'votes' to.
     /// @param nonce The contract state required to match the signature.
-    /// @param expiry The time at which to expire the signature.
+    /// @param deadline The time at which to expire the signature.
     /// @param v The recovery byte of the signature.
     /// @param r Half of the ECDSA signature pair.
     /// @param s Half of the ECDSA signature pair.
-    function delegateBySig(address delegatee, uint nonce, uint expiry, uint8 v, bytes32 r, bytes32 s) external {
+    function delegateBySig(address delegatee, uint nonce, uint deadline, uint8 v, bytes32 r, bytes32 s) external {
         bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this))); /*calculate EIP-712 domain hash*/
-        unchecked{bytes32 structHash = keccak256(abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, expiry)); /*calculate EIP-712 struct hash*/
-        bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash)); /*calculate EIP-712 digest for signature*/
-        address signatory = ecrecover(digest, v, r, s); /*recover signer from hash data*/
-        require(signatory != address(0),'!signature'); /*check signer is not null*/
-        require(nonce == nonces[signatory]++,'!nonce'); /*check given `nonce` is next in `nonces`*/
-        require(block.timestamp <= expiry,'expired'); /*check signature is not expired*/
-        _delegate(signatory, delegatee);} /*execute delegation*/
+        unchecked {
+            bytes32 structHash = keccak256(abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, deadline)); /*calculate EIP-712 struct hash*/
+            bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash)); /*calculate EIP-712 digest for signature*/
+            address signatory = ecrecover(digest, v, r, s); /*recover signer from hash data*/
+            require(signatory != address(0),'!signature'); /*check signer is not null*/
+            require(nonce == nonces[signatory]++,'!nonce'); /*check given `nonce` is next in `nonces`*/
+            require(block.timestamp <= deadline,'expired'); /*check signature is not expired*/
+            _delegate(signatory, delegatee); /*execute delegation*/
+        }
     }
 
     /// @notice Triggers an approval from owner to spends.
@@ -337,11 +343,13 @@ contract Baal {
     /// @param s Half of the ECDSA signature pair.
     function permit(address owner, address spender, uint96 amount, uint deadline, uint8 v, bytes32 r, bytes32 s) external {
         bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this))); /*calculate EIP-712 domain hash*/
-        unchecked{bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, amount, nonces[owner]++, deadline)); /*calculate EIP-712 struct hash*/
-        bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash)); /*calculate EIP-712 digest for signature*/
-        address signatory = ecrecover(digest, v, r, s); /*recover signer from hash data*/
-        require(signatory != address(0),'!signature'); /*check signer is not null*/
-        require(signatory == owner,'!authorized');} /*check signer is `owner`*/
+        unchecked {
+            bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, amount, nonces[owner]++, deadline)); /*calculate EIP-712 struct hash*/
+            bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash)); /*calculate EIP-712 digest for signature*/
+            address signatory = ecrecover(digest, v, r, s); /*recover signer from hash data*/
+            require(signatory != address(0),'!signature'); /*check signer is not null*/
+            require(signatory == owner,'!authorized'); /*check signer is `owner`*/
+        }
         require(block.timestamp <= deadline,'expired'); /*check signature is not expired*/
         allowance[owner][spender] = amount; /*adjust `allowance`*/
         emit Approval(owner, spender, amount); /*emit event reflecting approval*/
@@ -350,29 +358,33 @@ contract Baal {
     /// @notice Transfer `amount` tokens from caller to `to`.
     /// @param to The address of destination account.
     /// @param amount The number of tokens to transfer.
-    /// @return Whether or not the transfer succeeded.
-    function transfer(address to, uint96 amount) external returns (bool) {
+    /// @return success Whether or not the transfer succeeded.
+    function transfer(address to, uint96 amount) external returns (bool success) {
         require(!sharesPaused,'!transferable');
         balanceOf[msg.sender] -= amount;
-        unchecked{balanceOf[to] += amount;}
+        unchecked {
+            balanceOf[to] += amount;
+        }
         _moveDelegates(msg.sender, to, amount);
         emit Transfer(msg.sender, to, amount);
-        return true;
+        success = true;
     }
         
     /// @notice Transfer `amount` tokens from `from` to `to`.
     /// @param from The address of the source account.
     /// @param to The address of the destination account.
     /// @param amount The number of tokens to transfer.
-    /// @return Whether or not the transfer succeeded.
-    function transferFrom(address from, address to, uint96 amount) external returns (bool) {
+    /// @return success Whether or not the transfer succeeded.
+    function transferFrom(address from, address to, uint96 amount) external returns (bool success) {
         require(!sharesPaused,'!transferable');
         if (allowance[from][msg.sender] != type(uint).max) allowance[from][msg.sender] -= amount;
         balanceOf[from] -= amount;
-        unchecked{balanceOf[to] += amount;}
+        unchecked {
+            balanceOf[to] += amount;
+        }
         _moveDelegates(from, to, amount);
         emit Transfer(from, to, amount);
-        return true;
+        success = true;
     }
     
     /// @notice Transfer `amount` `loot` from caller to `to`.
@@ -381,11 +393,13 @@ contract Baal {
     function transferLoot(address to, uint96 amount) external {
         require(!lootPaused,'!transferable');
         members[msg.sender].loot -= amount;
-        unchecked{members[to].loot += amount;}
+        unchecked {
+            members[to].loot += amount;
+        }
         emit TransferLoot(msg.sender, to, amount);
     }
     
-    /// @notice Flashloan ability that conforms to `IERC3156FlashLender`, as defined in 'https://eips.ethereum.org/EIPS/eip-3156[ERC-3156]'.
+    /// @notice Flashloan ability that conforms to `IERC3156FlashLender`, as defined in 'https://eips.ethereum.org/EIPS/eip-3156'.
     /// @param receiver Address of token receiver that conforms to `IERC3156FlashBorrower` & handles flashloan.
     /// @param token The loan currency.
     /// @param amount The amount of tokens lent.
@@ -397,12 +411,13 @@ contract Baal {
         bytes calldata data
     ) external returns (bool success) {
         uint fee = flashFee(token, amount);
+        require(fee != 0,'uninitialized');
         _safeTransfer(token, receiver, amount);
-        (,bytes memory returnData) = receiver.call(abi.encodeWithSelector(0x23e30c8b, msg.sender, token, amount, fee, data)); /*'onFlashLoan(address,address,uint,uint,bytes)'*/
-        bytes32 flashData = abi.decode(returnData, (bytes32));
+        (,bytes memory _flashData) = receiver.call(abi.encodeWithSelector(0x23e30c8b, msg.sender, token, amount, fee, data)); /*'onFlashLoan(address,address,uint,uint,bytes)'*/
+        bytes32 flashData = abi.decode(_flashData, (bytes32));
         require(flashData == keccak256('ERC3156FlashBorrower.onFlashLoan'),'Callback failed'); /*checks flash loan success*/
         _safeTransferFrom(token, receiver, address(this), amount + fee);
-        return true;
+        success = true;
     }
     
     /// @notice Process member burn of `shares` and/or `loot` to claim 'fair share' of `guildTokens`.
@@ -428,94 +443,123 @@ contract Baal {
     /***************
     GETTER FUNCTIONS
     ***************/
-    /// @notice Internal function to return chain identifier per ERC-155.
+    /// @notice Returns chain identifier per ERC-155.
+    /// @return chainId Index of chain.
     function getChainId() private view returns (uint chainId) {
-        assembly {
-            chainId := chainid()
+        assembly { chainId := chainid() }
+    }
+    
+    /// @notice Returns the current delegated `vote` balance for `account`.
+    /// @param account The user to check delegated `votes` for.
+    /// @return votes Current `votes` delegated to `account`.
+    function getCurrentVotes(address account) external view returns (uint96 votes) {
+        uint nCheckpoints = numCheckpoints[account];
+        unchecked { votes = nCheckpoints != 0 ? checkpoints[account][nCheckpoints - 1].votes : 0; }
+    }
+    
+    /// @notice Returns the prior number of `votes` for `account` as of `blockNumber`.
+    /// @param account The user to check `votes` for.
+    /// @param blockNumber The block to check `votes` for.
+    /// @return votes Prior `votes` delegated to `account`.
+    function getPriorVotes(address account, uint blockNumber) public view returns (uint96 votes) {
+        require(blockNumber < block.number,'!determined');
+        uint nCheckpoints = numCheckpoints[account];
+        if (nCheckpoints == 0) { votes = 0; }
+        unchecked {
+            if (checkpoints[account][nCheckpoints - 1].fromBlock <= blockNumber) { votes = checkpoints[account][nCheckpoints - 1].votes; }
+            if (checkpoints[account][0].fromBlock > blockNumber) { votes = 0; }
+            uint lower = 0; uint upper = nCheckpoints - 1;
+            while (upper > lower) {
+                uint center = upper - (upper - lower) / 2;
+                Checkpoint memory cp = checkpoints[account][center];
+                if (cp.fromBlock == blockNumber) { votes = cp.votes; } 
+                else if (cp.fromBlock < blockNumber) { lower = center; } 
+                else { upper = center - 1; }
+            }
+            votes = checkpoints[account][lower].votes;
         }
     }
     
-    /// @notice Gets the current delegated 'vote' balance for `account`.
-    function getCurrentVotes(address account) external view returns (uint96) {
-        uint nCheckpoints = numCheckpoints[account];
-        return nCheckpoints > 0 ? checkpoints[account][nCheckpoints - 1].votes : 0;
-    }
-    
-    /// @notice Determine the prior number of votes for `account` as of `blockNumber`.
-    function getPriorVotes(address account, uint blockNumber) public view returns (uint96) {
-        require(blockNumber < block.number,'!determined');
-        uint nCheckpoints = numCheckpoints[account];
-        if (nCheckpoints == 0) {return 0;}
-        if (checkpoints[account][nCheckpoints - 1].fromBlock <= blockNumber) {return checkpoints[account][nCheckpoints - 1].votes;}
-        if (checkpoints[account][0].fromBlock > blockNumber) {return 0;}
-        uint lower = 0; uint upper = nCheckpoints - 1;
-        while (upper > lower){
-            uint center = upper - (upper - lower) / 2;
-            Checkpoint memory cp = checkpoints[account][center];
-            if (cp.fromBlock == blockNumber) {return cp.votes;} 
-            else if (cp.fromBlock < blockNumber) {lower = center;
-            } else {upper = center - 1;}}
-        return checkpoints[account][lower].votes;
-    }
-    
     /// @notice Returns array list of approved `guildTokens` in Baal for {ragequit}.
+    /// @return tokens ERC-20 approved for {ragequit}.
     function getGuildTokens() external view returns (address[] memory tokens) {
         tokens = guildTokens;
     }
 
-    /// @notice Returns 'flags' for given Baal `proposal` describing type ('action'[0], 'membership'[1], 'period'[2], 'whitelist'[3]).
+    /// @notice Returns `flags` for given Baal `proposal` describing type ('action'[0], 'membership'[1], 'period'[2], 'whitelist'[3]).
+    /// @param proposal The index to check `flags` for.
+    /// @return flags The flag index describing `proposal` type.
     function getProposalFlags(uint proposal) external view returns (bool[4] memory flags) {
         flags = proposals[proposal].flags;
     }
     
-    /// @notice Returns true/false 'vote' by a given `account` on Baal `proposal` to indicate whether `approved`.
+    /// @notice Returns 'true/false' 'vote' by given `account` on Baal `proposal` to indicate whether `approved`.
+    /// @param account The user to check votes for.
+    /// @param proposal The index to check votes for.
+    /// @return vote If 'true', user voted to approve `proposal`.
     function getProposalVotes(address account, uint proposal) external view returns (bool vote) {
         vote = members[account].voted[proposal];
     }
     
-    /// @dev The fee to be charged for a given loan.
-    /// @param amount The amount of tokens lent.
-    /// @return fee The `fee` amount of 'token' to be charged for the loan, on top of the returned principal.
+    /// @notice Returns the `fee` to be charged for a flash loan.
+    /// @param amount The sum of tokens lent.
+    /// @return fee The `fee` amount of 'token' to be charged for the loan, on top of the returned principal - uniform in Baal.
     function flashFee(address, uint amount) public view returns (uint fee) {
-        fee = amount * flashFeeNumerator / 10000; /*Calculate fee - precision factor `10000` derived from ERC-3156 'Flash Loan Reference'*/
+        fee = amount * flashFeeNumerator / 10000; /*Calculate `fee` - precision factor '10000' derived from ERC-3156 'Flash Loan Reference'*/
     }
     
-    /// @dev The amount of currency available to be lent.
+    /// @notice Returns the `max` amount of `token` available to be lent.
     /// @param token The loan currency.
-    /// @return amount The `amount` of `token` that can be borrowed.
-    function maxFlashLoan(address token) external view returns (uint amount) {
+    /// @return max The `amount` of `token` that can be borrowed.
+    function maxFlashLoan(address token) external view returns (uint max) {
         (,bytes memory balanceData) = token.staticcall(abi.encodeWithSelector(0x70a08231, address(this))); /*get Baal token balance - 'balanceOf(address)'*/
-        amount = abi.decode(balanceData, (uint)); /*decode Baal token balance for calculation*/
+        max = abi.decode(balanceData, (uint)); /*decode Baal token balance for calculation*/
     }
 
     /***************
     HELPER FUNCTIONS
     ***************/
-    /// @notice Deposits ETH sent to Baal.
-    receive() external payable {}
-    
-    /// @notice Provides confirmation for 'safe' ERC-721 (NFT) transfers to Baal.
+    /// @notice Allows batched calls to Baal.
+    /// @param calls An array of payloads for each call.
+    /// @param revertOnFail If 'true', batch reverts after a failed call and stops further calls.
+    function batchCall(bytes[] calldata calls, bool revertOnFail) external returns (string memory revertMsg) {
+        for (uint256 i = 0; i < calls.length; i++) {
+            (bool success, bytes memory result) = address(this).delegatecall(calls[i]);
+            if (!success && revertOnFail) 
+                if (result.length < 68) revertMsg = 'silent';
+                    assembly { result := add(result, 0x04) }
+                    revertMsg = abi.decode(result, (string)); 
+        }
+    }
+
+    /// @notice Returns confirmation for 'safe' ERC-721 (NFT) transfers to Baal.
     function onERC721Received(address, address, uint, bytes calldata) external pure returns (bytes4 sig) {
         sig = 0x150b7a02; /*'onERC721Received(address,address,uint,bytes)'*/
     }
     
-    /// @notice Provides confirmation for 'safe' ERC-1155 transfers to Baal.
+    /// @notice Returns confirmation for 'safe' ERC-1155 transfers to Baal.
     function onERC1155Received(address, address, uint, uint, bytes calldata) external pure returns (bytes4 sig) {
         sig = 0xf23a6e61; /*'onERC1155Received(address,address,uint,uint,bytes)'*/
     }
     
-    /// @notice Provides confirmation for 'safe' batch ERC-1155 transfers to Baal.
+    /// @notice Returns confirmation for 'safe' batch ERC-1155 transfers to Baal.
     function onERC1155BatchReceived(address, address, uint[] calldata, uint[] calldata, bytes calldata) external pure returns (bytes4 sig) {
         sig = 0xbc197c81; /*'onERC1155BatchReceived(address,address,uint[],uint[],bytes)'*/
     }
     
+    /// @notice Deposits ETH sent to Baal.
+    receive() external payable {}
+
+    /// @notice Delegates Baal voting weight.
     function _delegate(address delegator, address delegatee) private {
         address currentDelegate = delegates[delegator];
-        delegates[delegator] = delegatee;
-        emit DelegateChanged(delegator, currentDelegate, delegatee);
-        _moveDelegates(currentDelegate, delegatee, uint96(balanceOf[delegator]));
+        if (currentDelegate != delegatee)
+            delegates[delegator] = delegatee;
+            _moveDelegates(currentDelegate, delegatee, uint96(balanceOf[delegator]));
+            emit DelegateChanged(delegator, currentDelegate, delegatee);
     }
     
+    /// @notice Elaborates delegate update - cf., 'Compound Governance'.
     function _moveDelegates(address srcRep, address dstRep, uint96 amount) private {
         if (srcRep != dstRep && amount != 0) {
             if (srcRep != address(0)) {
@@ -532,7 +576,8 @@ contract Baal {
             }
         }
     }
-
+    
+    /// @notice Elaborates delegate update - cf., 'Compound Governance'.
     function _writeCheckpoint(address delegatee, uint nCheckpoints, uint96 oldVotes, uint96 newVotes) private {
         uint32 blockNumber = uint32(block.number);
         if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromBlock == blockNumber) {
@@ -544,35 +589,35 @@ contract Baal {
         emit DelegateVotesChanged(delegatee, oldVotes, newVotes);
     }
     
-    /// @notice Internal burn function for Baal `loot`.
+    /// @notice Burn function for Baal `loot`.
     function _burnLoot(address from, uint96 loot) private {
         members[from].loot -= loot; /*subtract `loot` for `from` account*/
         totalLoot -= loot; /*subtract from total Baal `loot`*/
         emit TransferLoot(from, address(0), loot); /*emit event reflecting burn of `loot`*/
     }
     
-    /// @notice Internal burn function for Baal `shares`.
+    /// @notice Burn function for Baal `shares`.
     function _burnShares(address from, uint96 shares) private {
         balanceOf[from] -= shares; /*subtract `shares` for `from` account*/
         totalSupply -= shares; /*subtract from total Baal `shares`*/
         emit Transfer(from, address(0), shares); /*emit event reflecting burn of `shares` with erc20 accounting*/
     }
     
-    /// @notice Internal minting function for Baal `loot`.
+    /// @notice Minting function for Baal `loot`.
     function _mintLoot(address to, uint96 loot) private {
         members[to].loot += loot; /*add `loot` for `to` account*/
         totalLoot += loot; /*add to total Baal `loot`*/
         emit TransferLoot(address(0), to, loot); /*emit event reflecting mint of `loot`*/
     }
     
-    /// @notice Internal minting function for Baal `shares`.
+    /// @notice Minting function for Baal `shares`.
     function _mintShares(address to, uint96 shares) private {
         balanceOf[to] += shares; /*add `shares` for `to` account*/
         totalSupply += shares; /*add to total Baal `shares`*/
         emit Transfer(address(0), to, shares); /*emit event reflecting mint of `shares` with erc20 accounting*/
     }
  
-    /// @notice Internal check to validate proposal processing requirements. 
+    /// @notice Check to validate proposal processing requirements. 
     function _processingReady(uint proposal, Proposal memory prop) private view returns (bool ready) {
         unchecked {
             require(proposal <= proposalCount,'!exist'); /*check proposal exists*/
@@ -585,20 +630,13 @@ contract Baal {
         }
     }
     
-    /// @notice Provides 'safe' {transfer} for tokens that do not consistently return true/false.
-    /// @param token Address of ERC-20 token.
-    /// @param to The address of destination account.
-    /// @param amount The number of tokens to transfer.
+    /// @notice Provides 'safe' {transfer} for tokens that do not consistently return 'true/false'.
     function _safeTransfer(address token, address to, uint amount) private {
         (bool success, bytes memory data) = token.call(abi.encodeWithSelector(0xa9059cbb, to, amount)); /*'transfer(address,uint)'*/
         require(success && (data.length == 0 || abi.decode(data, (bool))),'transfer failed'); /*checks success & allows non-conforming transfers*/
     }
 
-    /// @notice Provides 'safe' {transferFrom} for tokens that do not consistently return true/false.
-    /// @param token Address of ERC-20 token.
-    /// @param from The address of the source account.
-    /// @param to The address of destination account.
-    /// @param amount The number of tokens to transfer.
+    /// @notice Provides 'safe' {transferFrom} for tokens that do not consistently return 'true/false'.
     function _safeTransferFrom(address token, address from, address to, uint amount) private {
         (bool success, bytes memory data) = token.call(abi.encodeWithSelector(0x23b872dd, from, to, amount)); /*'transferFrom(address,address,uint)'*/
         require(success && (data.length == 0 || abi.decode(data, (bool))),'transferFrom failed'); /*checks success & allows non-conforming transfers*/
