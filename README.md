@@ -10,7 +10,7 @@ Baal is a minimal yet composable DAO template continuing work from the [`Moloch`
 
 ### Tokenized Shares
 
-Baal voting shares are tokenized under the [OpenZeppelin ERC20 template](https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/ERC20.sol). Voting weight can be delegated and balances are checkpointed using the [Compound governance token template](https://github.com/compound-finance/compound-protocol/blob/master/contracts/Governance/Comp.sol). This therefore allows for shares to be exchanged and staked into DeFi positions, but always at the will of the underlying DAO, as they can be burned into loot ('ragekick') through a *Membership Proposal (1)* and paused through a *Period Proposal (2)*.
+Baal voting shares are fungibles tokenized under [ERC-20](https://eips.ethereum.org/EIPS/eip-20). Voting weight can be delegated and balances are checkpointed using the [Compound governance token template](https://github.com/compound-finance/compound-protocol/blob/master/contracts/Governance/Comp.sol). This therefore allows for shares to be exchanged and staked into DeFi positions, but always at the will of the underlying DAO, as they can be burned into loot ('ragekick') through a *Membership Proposal (1)* and paused through a *Period Proposal (2)*.
 
 ### Gas-less MetaTXs
 
@@ -29,12 +29,6 @@ By incorporating this functionality into the Baal base, such actions can be stre
 Baal voting periods can be set within bounds on summoning with a `minVotingPeriod` and `maxVotingPeriod`, as well as amended through *Period (2) Proposals*. Further, if a Baal has a single member, or a proposal has already passed its consensus threshold, such periods are ignored to accelerate Baal operations. 
 
 ![image](https://user-images.githubusercontent.com/41117279/124337990-82f8d680-db73-11eb-8f04-f5a9013189bc.png)
-
-### Member Precision
-
-In addition to having membership rights accounted by ERC20 (above) for greater visibility, all Baal members are placed in an amendable `memberList` array to make it easier for helper contracts to complete airdrops and other perks. To extend Moloch DAO V2, such membership can also be set on summoning, with precise weights minted for `shares` and `loot`.
-
-![image](https://user-images.githubusercontent.com/41117279/124337767-3f519d00-db72-11eb-8107-5b617c9e0839.png)
 
 ### Member Automation
 

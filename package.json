@@ -1,15 +1,13 @@
 {
   "name": "baal",
   "version": "1.0.0",
-  "description": "Baal, god of the harvests, plentiful communities, coodination between the earth and heavens",
-
+  "description": "Lo, also it is the time of His rain.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-
     "url": "git+https://github.com/HausDAO/Baal.git"
   },
   "keywords": [],
