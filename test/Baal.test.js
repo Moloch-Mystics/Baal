@@ -75,17 +75,17 @@ describe('Baal contract', function () {
     shaman = await ShamanContract.deploy();
     
     baal = await BaalContract.deploy(
-      [shaman.address],
-      [weth.address],
-      [summoner.address],
-      [loot],
-      [shares],
+      sharesPaused,
       deploymentConfig.GRACE_PERIOD_IN_SECONDS,
       deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS,
       deploymentConfig.MAX_VOTING_PERIOD_IN_SECONDS,
       deploymentConfig.TOKEN_NAME,
       deploymentConfig.TOKEN_SYMBOL,
-      sharesPaused
+      [weth.address],
+      [shaman.address],
+      [summoner.address],
+      [loot],
+      [shares]
     );
 
     await shaman.init(
@@ -93,10 +93,10 @@ describe('Baal contract', function () {
     );
 
     proposal = {
+      flag: 0,
+      votingPeriod: 175000,
       account: summoner.address,
       value: 50,
-      votingPeriod: 175000,
-      flag: 0,
       data: 10,
       details: 'all hail baal'
     }
@@ -161,10 +161,10 @@ describe('Baal contract', function () {
       const countBefore = await baal.proposalCount();
 
       await baal.submitProposal(
+        proposal.flag,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -175,10 +175,10 @@ describe('Baal contract', function () {
 
     it('require fail - voting period too low', async function() { 
       await baal.submitProposal(
+        proposal.flag,
+        deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS - 100,
         [proposal.account], 
         [proposal.value],
-        deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS - 100,
-        proposal.flag,
         [proposal.data],
         ethers.utils.id(proposal.details)
       ).should.be.rejectedWith(revertMessages.submitProposalVotingPeriod);
@@ -186,10 +186,10 @@ describe('Baal contract', function () {
 
     it('require fail - voting period too high', async function() { 
       await baal.submitProposal(
+        proposal.flag,
+        deploymentConfig.MAX_VOTING_PERIOD_IN_SECONDS + 100,
         [proposal.account], 
         [proposal.value],
-        deploymentConfig.MAX_VOTING_PERIOD_IN_SECONDS + 100,
-        proposal.flag,
         [proposal.data],
         ethers.utils.id(proposal.details)
       ).should.be.rejectedWith(revertMessages.submitProposalVotingPeriod);
@@ -197,10 +197,10 @@ describe('Baal contract', function () {
 
     it('require fail - to array does not match', async function() { 
       await baal.submitProposal(
+        proposal.flag,
+        deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS + 100,
         [proposal.account, summoner.address], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag,
         [proposal.data],
         ethers.utils.id(proposal.details)
       ).should.be.rejectedWith(revertMessages.submitProposalArray);
@@ -208,10 +208,10 @@ describe('Baal contract', function () {
 
     it('require fail - value array does not match', async function() { 
       await baal.submitProposal(
-        [proposal.account], 
-        [proposal.value, 20],
-        proposal.votingPeriod,
         proposal.flag,
+        deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS + 100,
+        [proposal.account, summoner.address], 
+        [proposal.value, 20],
         [proposal.data],
         ethers.utils.id(proposal.details)
       ).should.be.rejectedWith(revertMessages.submitProposalArray);
@@ -219,10 +219,10 @@ describe('Baal contract', function () {
 
     it('require fail - data array does not match', async function() { 
       await baal.submitProposal(
-        [proposal.account], 
-        [proposal.value],
-        proposal.votingPeriod,
         proposal.flag,
+        deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS + 100,
+        [proposal.account, summoner.address], 
+        [proposal.value],
         [proposal.data, 15],
         ethers.utils.id(proposal.details)
       ).should.be.rejectedWith(revertMessages.submitProposalArray);
@@ -230,10 +230,10 @@ describe('Baal contract', function () {
 
     it('require fail - flag is out of bounds', async function() { 
       await baal.submitProposal(
-        [proposal.account], 
-        [proposal.value],
-        proposal.votingPeriod,
         6,
+        deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS + 100,
+        [proposal.account, summoner.address], 
+        [proposal.value],
         [proposal.data],
         ethers.utils.id(proposal.details)
       ).should.be.rejectedWith(revertMessages.submitProposalFlag);
@@ -243,10 +243,10 @@ describe('Baal contract', function () {
   describe('submitVote', function () {
     beforeEach(async function () {
       await baal.submitProposal(
+        proposal.flag,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -274,10 +274,10 @@ describe('Baal contract', function () {
   describe('processProposal', function () {
     it('happy case - flag[0] - yes wins', async function () {
       await baal.submitProposal(
+        proposal.flag,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -288,10 +288,10 @@ describe('Baal contract', function () {
 
     it('happy case - flag[1] - yes wins', async function () {
       await baal.submitProposal(
+        proposal.flag + 1,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag + 1,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -302,10 +302,10 @@ describe('Baal contract', function () {
 
     it('happy case - flag[2] - yes wins', async function () {
       await baal.submitProposal(
+        proposal.flag + 2,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value, 0, 0, 0, 0, 0],
-        proposal.votingPeriod,
-        proposal.flag + 2,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -316,10 +316,10 @@ describe('Baal contract', function () {
 
     it('happy case - flag[3] - yes wins', async function () {
       await baal.submitProposal(
+        proposal.flag + 3,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag + 3,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -330,10 +330,10 @@ describe('Baal contract', function () {
 
     it('happy case - flag[0] - no wins', async function () {
       await baal.submitProposal(
+        proposal.flag,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -344,10 +344,10 @@ describe('Baal contract', function () {
 
     it('happy case - flag[1] - no wins', async function () {
       await baal.submitProposal(
+        proposal.flag + 1,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag + 1,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -358,10 +358,10 @@ describe('Baal contract', function () {
 
     it('happy case - flag[2] - no wins', async function () {
       await baal.submitProposal(
+        proposal.flag + 2,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value, 0, 0, 0, 0, 0],
-        proposal.votingPeriod,
-        proposal.flag + 2,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -372,10 +372,10 @@ describe('Baal contract', function () {
 
     it('require fail - proposal does not exist', async function () {
       await baal.submitProposal(
+        proposal.flag,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -386,10 +386,10 @@ describe('Baal contract', function () {
 
     it('require fail - voting period has not ended', async function () {
       await baal.submitProposal(
+        proposal.flag,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -400,19 +400,19 @@ describe('Baal contract', function () {
 
     it('require fail - voting period has not ended', async function () {
       await baal.submitProposal(
+        proposal.flag,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
       await baal.submitVote(1, yes);
       await baal.submitProposal(
+        proposal.flag,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -441,10 +441,10 @@ describe('Baal contract', function () {
   describe('getPriorVotes', function () {
     beforeEach(async function () {
       await baal.submitProposal(
+        proposal.flag,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -460,10 +460,10 @@ describe('Baal contract', function () {
   describe('getProposalFlags', function () {
     it('happy case - action type', async function (){
       await baal.submitProposal(
+        proposal.flag,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -474,10 +474,10 @@ describe('Baal contract', function () {
 
     it('happy case - membership type', async function (){
       await baal.submitProposal(
+        proposal.flag + 1,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag + 1,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -488,10 +488,10 @@ describe('Baal contract', function () {
 
     it('happy case - period type', async function (){
       await baal.submitProposal(
+        proposal.flag + 2,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value, 0, 0, 0, 0, 0],
-        proposal.votingPeriod,
-        proposal.flag + 2,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -502,10 +502,10 @@ describe('Baal contract', function () {
 
     it('happy case - whitelist type', async function (){
       await baal.submitProposal(
+        proposal.flag + 3,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag + 3,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -518,10 +518,10 @@ describe('Baal contract', function () {
   describe('getProposalVotes', function () {
     beforeEach(async function () {
       await baal.submitProposal(
+        proposal.flag,
+        proposal.votingPeriod,
         [proposal.account], 
         [proposal.value],
-        proposal.votingPeriod,
-        proposal.flag,
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
