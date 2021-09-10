@@ -14,6 +14,10 @@ interface IShaman {
     function memberAction(address member, uint96 loot, uint96 shares) external payable returns (uint96 lootOut, uint96 sharesOut);
 }
 
+interface IERC20 {
+    function balanceOf(address who) external view returns (uint256);
+}
+
 /// @title Baal';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
 contract Baal {
@@ -26,13 +30,14 @@ contract Baal {
     uint96 public totalLoot; /*counter for total `loot` economic weight held by `members`*/  
     uint96 public totalSupply; /*counter for total `members` voting `shares` with erc20 accounting*/
     
-    uint public flashFeeNumerator; /*tracks 'fee' numerator for {flashLoan} in {flashFee} - e.g., '1 = 0.0001%'*/
     uint public gracePeriod; /*time delay after proposal voting period for processing*/
     uint public minVotingPeriod; /*minimum period for voting in seconds - amendable through 'period'[2] proposal*/
     uint public maxVotingPeriod; /*maximum period for voting in seconds - amendable through 'period'[2] proposal*/
     uint public proposalCount; /*counter for total `proposals` submitted*/
+    uint256[] public proposalQueue;
     uint status; /*reentrancy tracking value*/
     uint summonerCount; /*initial summoner count to gauge speedy proposal processing*/
+    
     
     string public name; /*'name' for erc20 `shares` accounting*/
     string public symbol; /*'symbol' for erc20 `shares` accounting*/
@@ -57,6 +62,7 @@ contract Baal {
     
     event SummonComplete(bool lootPaused, bool sharesPaused, uint gracePeriod, uint minVotingPeriod, uint maxVotingPeriod, string name, string symbol, address[] guildTokens, address[] shamans, address[] summoners, uint96[] loot, uint96[] shares); /*emits after Baal summoning*/
     event SubmitProposal(uint8 indexed flag, uint indexed proposal, uint votingPeriod, address[] to, uint96[] value, bytes[] data, string details); /*emits after proposal is submitted*/
+    event SponsorProposal(address indexed member, uint indexed proposal, uint indexed proposalQueue, uint votingPeriodStart); /*emits after member has sponsored proposal*/
     event SubmitVote(address indexed member, uint balance, uint indexed proposal, bool indexed approved); /*emits after vote is submitted on proposal*/
     event ProcessProposal(uint indexed proposal); /*emits when proposal is processed & executed*/
     event Ragequit(address indexed member, address to, uint96 lootToBurn, uint96 sharesToBurn); /*emits when users burn Baal `shares` and/or `loot` for given `to` account*/
@@ -85,11 +91,13 @@ contract Baal {
     }
     
     struct Proposal { /*Baal proposal details*/
+        address sponsor; /* member that sponsors prop*/ 
         uint32 votingStarts; /*starting time for proposal in seconds since unix epoch*/
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
+        uint32 votingPeriod; /*voting period length*/
         uint96 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
         uint96 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
-        bool[4] flags; /*flags for proposal type & status - [action, member, period, whitelist]*/
+        bool[5] flags; /*flags for proposal type & status - [action, member, period, whitelist, sponsored]*/
         address[] to; /*account(s) that receive(s) Baal state updates*/
         uint96[] value; /*value(s) associated with Baal state updates (also used to toggle)*/
         bytes[] data; /*raw data associated with Baal state updates (also used to toggle)*/
@@ -120,7 +128,9 @@ contract Baal {
         address[] memory _summoners, 
         uint96[]  memory _loot, 
         uint96[]  memory _shares) {
+        
         require(_summoners.length == _loot.length && _loot.length == _shares.length,'!matched member arrays'); /*check `members`-related array lengths match*/
+        
         unchecked {
             for (uint i; i < _shamans.length; i++) shamans[_shamans[i]] = true; /*update mapping of approved `shamans` in Baal*/
             for (uint i; i < _guildTokens.length; i++) guildTokens.push(_guildTokens[i]); /*update array of `guildTokens` approved for {ragequit}*/
@@ -148,14 +158,23 @@ contract Baal {
     /// @param shares Voting weight involved in external call.
     /// @param mint Confirm whether action involves 'mint' or 'burn' action - if `false`, perform burn.
     /// @return lootOut sharesOut Membership updates derived from action.
-    function memberAction(address shaman, uint96 loot, uint96 shares, bool mint) external nonReentrant payable returns (uint96 lootOut, uint96 sharesOut) {
+    function memberAction(
+        address shaman, 
+        uint96 loot, 
+        uint96 shares, 
+        bool mint
+        ) external nonReentrant payable returns (uint96 lootOut, uint96 sharesOut) {
+        
         require(shamans[shaman],'!shaman'); /*check `shaman` is approved*/
         (lootOut, sharesOut) = IShaman(shaman).memberAction{value: msg.value}(msg.sender, loot, shares); /*fetch 'reaction' per inputs*/
+        
         if (mint) { /*execute `mint` actions*/
-            if (lootOut != 0) _mintLoot(msg.sender, lootOut); emit TransferLoot(address(0), msg.sender, lootOut); /*add `loot` to user account & Baal total*/
+            if (lootOut != 0) _mintLoot(msg.sender, lootOut); 
+            emit TransferLoot(address(0), msg.sender, lootOut); /*add `loot` to user account & Baal total*/
             if (sharesOut != 0) _mintShares(msg.sender, sharesOut); /*add `shares` to user account & Baal total with erc20 accounting*/
         } else { /*otherwise, execute `burn` actions*/
-            if (lootOut != 0) _burnLoot(msg.sender, lootOut); emit TransferLoot(msg.sender, address(0), lootOut); /*subtract `loot` from user account & Baal total*/
+            if (lootOut != 0) _burnLoot(msg.sender, lootOut); 
+            emit TransferLoot(msg.sender, address(0), lootOut); /*subtract `loot` from user account & Baal total*/
             if (sharesOut != 0) _burnShares(msg.sender, sharesOut); /*subtract `shares` from user account & Baal total with erc20 accounting*/
         }
     }
@@ -171,13 +190,23 @@ contract Baal {
     /// @param data Data to bind to proposal.
     /// @param details Context for proposal.
     /// @return proposal Count for submitted proposal.
-    function submitProposal(uint8 flag, uint32 votingPeriod, address[] calldata to, uint96[] calldata value, bytes[] calldata data, string calldata details) external nonReentrant returns (uint proposal) {
-        require(balanceOf[msg.sender] != 0,'!member'); /*check 'membership' - required to submit proposal*/
+    function submitProposal(
+        uint8 flag, 
+        uint32 votingPeriod, 
+        address[] calldata to, 
+        uint96[] calldata value, 
+        bytes[] calldata data, 
+        string calldata details
+        ) external nonReentrant returns (uint proposal) {
+        
         require(minVotingPeriod <= votingPeriod && votingPeriod <= maxVotingPeriod,'!votingPeriod'); /*check voting period is within Baal bounds*/
         require(to.length <= 10,'array max'); /*limit executable actions to help avoid block gas limit errors on processing*/
-        require(flag <= 3,'!flag'); /*check 'flag' is in bounds*/
-        bool[4] memory flags; /*plant `flags` - [action, member, period, whitelist]*/
+        require(flag <= 4,'!flag'); /*check 'flag' is in bounds*/
+        
+        bool[5] memory flags; /*plant `flags` - [action, member, period, whitelist, sponsored]*/
         flags[flag] = true; /*flag proposal type for struct storage*/ 
+        flags[4] = false;
+
         if (flag == 2) {
             require(value.length == 6,'unpacked'); /*check that `value` is packed for `period`[2] proposal*/
         } else {
@@ -185,9 +214,34 @@ contract Baal {
         }
         unchecked {
             proposalCount++; /*increment proposal counter*/
-            proposals[proposalCount] = Proposal(uint32(block.number), uint32(block.timestamp) + votingPeriod, 0, 0, flags, to, value, data, details); /*push params into proposal struct - start voting period timer*/
+            proposals[proposalCount] = Proposal(address(0), 0, 0, votingPeriod, 0, 0, flags, to, value, data, details); /*push params into proposal struct - start voting period timer*/
         }
         emit SubmitProposal(flag, proposal, votingPeriod, to, value, data, details); /*emit event reflecting proposal submission*/
+    }
+
+    function sponsorProposal(uint proposal) external nonReentrant {
+        require(balanceOf[msg.sender] != 0,'!member'); /*check 'membership' - required to submit proposal*/
+        
+        Proposal storage prop = proposals[proposal];
+        require(!prop.flags[4], "already sponsored");
+
+        if(prop.flags[3]){
+            for (uint i; i < prop.to.length; i++){
+                if (prop.value[i] != 0 && prop.data.length == 0){
+                  require(guildTokens.length <= MAX_GUILD_TOKEN_COUNT, "!space");
+                  //require(!guildTokens[(prop.to[i])], "cannot already have whitelisted the token"); @Dev- need a way to not add dupes
+                }
+            }  
+        }
+
+        prop.flags[4] = true; 
+        prop.sponsor = msg.sender;
+        prop.votingStarts = uint32(block.number);
+        prop.votingEnds = uint32(block.timestamp) + prop.votingPeriod;
+
+        proposalQueue.push(proposal);
+        
+        emit SponsorProposal(msg.sender, proposal, proposalQueue.length -1, prop.votingStarts);
     }
 
     /// @notice Submit vote - proposal must exist & voting period must not have ended.
@@ -196,6 +250,7 @@ contract Baal {
     function submitVote(uint proposal, bool approved) external nonReentrant {
         Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
         uint96 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
+        require(prop.votingStarts >= block.timestamp,'!started'); /*check voting period has started*/
         require(prop.votingEnds >= block.timestamp,'ended'); /*check voting period has not ended*/
         unchecked {
             if (approved) { 
@@ -215,7 +270,9 @@ contract Baal {
     /// @param r Half of the ECDSA signature pair.
     /// @param s Half of the ECDSA signature pair.
     function submitVoteWithSig(uint proposal, bool approved, uint8 v, bytes32 r, bytes32 s) external nonReentrant {
+        
         Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
+        
         bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this))); /*calculate EIP-712 domain hash*/
         bytes32 structHash = keccak256(abi.encode(VOTE_TYPEHASH, proposal, approved)); /*calculate EIP-712 struct hash*/
         bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash)); /*calculate EIP-712 digest for signature*/
@@ -223,6 +280,8 @@ contract Baal {
         require(signatory != address(0),'!signatory'); /*check signer is not null*/
         uint96 balance = uint96(getPriorVotes(signatory, prop.votingStarts)); /*fetch & gas-optimize voting weight at proposal creation time*/
         require(prop.votingEnds >= block.timestamp,'ended'); /*check voting period has not ended*/
+        require(prop.votingStarts >= block.timestamp,'!started'); /*check voting period has started*/
+
         unchecked {
             if (approved) { /*if `approved`, cast delegated balance `yesVotes` to proposal*/
                 prop.yesVotes += balance; members[signatory].highestIndexYesVote = proposal;
@@ -238,17 +297,21 @@ contract Baal {
     // PROCESSING FUNCTIONS
     // ********************
     /// @notice Process `proposal` & execute internal functions based on `flag`[#].
-    /// @param proposal Number of proposal in `proposals` mapping to process for execution.
-    function processProposal(uint proposal) external nonReentrant {
-        Proposal storage prop = proposals[proposal]; /*alias `proposal` storage pointers*/
-        _processingReady(proposal, prop); /*validate `proposal` processing requirements*/
+    /// @param proposalIdx Number of proposal in `proposalQueue` mapping to process for execution.
+    function processProposal(uint proposalIdx) external nonReentrant {
+          
+        Proposal storage prop = proposals[proposalQueue[proposalIdx]]; /*alias `proposal` storage pointers*/
+
+        _processingReady(proposalIdx, prop); /*validate `proposal` processing requirements*/
+        
         if (prop.yesVotes > prop.noVotes) /*check if `proposal` approved by simple majority of members*/
             if (prop.flags[0]) processActionProposal(prop); /*check `flag`, execute 'action'*/
             else if (prop.flags[1]) processMemberProposal(prop); /*check `flag`, execute 'member'*/
             else if (prop.flags[2]) processPeriodProposal(prop); /*check `flag`, execute 'period'*/
             else processWhitelistProposal(prop); /*otherwise, execute 'whitelist'*/
-        delete proposals[proposal]; /*delete given proposal struct details for gas refund & the commons*/
-        emit ProcessProposal(proposal); /*emit event reflecting that given proposal processed*/
+        delete proposals[proposalQueue[proposalIdx]]; /*delete given proposal struct details for gas refund & the commons*/
+        
+        emit ProcessProposal(proposalIdx); /*emit event reflecting that given proposal processed*/
     }
     
     /// @notice Internal function to process 'action'[0] proposal.
@@ -276,9 +339,8 @@ contract Baal {
         if (prop.value[0] != 0) minVotingPeriod = uint32(prop.value[0]); /*if positive, reset min. voting periods to first `value`*/ 
         if (prop.value[1] != 0) maxVotingPeriod = uint32(prop.value[1]); /*if positive, reset max. voting periods to second `value`*/
         if (prop.value[2] != 0) gracePeriod = uint32(prop.value[2]); /*if positive, reset grace period to third `value`*/
-        if (prop.value[3] != 0) flashFeeNumerator = prop.value[3]; /*if positive, reset flash loan fee numerator to fourth `value`*/
-        prop.value[4] == 0 ? lootPaused = false : lootPaused = true; /*if positive, pause `loot` transfers on fifth `value`*/
-        prop.value[5] == 0 ? sharesPaused = false : sharesPaused = true; /*if positive, pause `shares` transfers on sixth `value`*/
+        prop.value[3] == 0 ? lootPaused = false : lootPaused = true; /*if positive, pause `loot` transfers on fifth `value`*/
+        prop.value[4] == 0 ? sharesPaused = false : sharesPaused = true; /*if positive, pause `shares` transfers on sixth `value`*/
     }  
         
     /// @notice Internal function to process 'whitelist'[3] proposal.
@@ -289,10 +351,11 @@ contract Baal {
                 } else if (prop.value[i] == 0 && prop.data.length != 0) { /*if `value` is null & `data` is populated, remove `shamans`*/
                     shamans[prop.to[i]] = false; /*remove account(s) from `shamans` extensions*/
                 } else if (prop.value[i] != 0 && prop.data.length == 0) { /*if `value` is positive & `data` is null, add `guildTokens`*/
-                    if (guildTokens.length != MAX_GUILD_TOKEN_COUNT) guildTokens.push(prop.to[i]); /*push account to `guildTokens` array if within 'MAX'*/
+                    guildTokens.push(prop.to[i]); /*push account to `guildTokens` array if within 'MAX'*/
                 } else { /*otherwise, remove `guildTokens`*/
+                    require(IERC20(address(this)).balanceOf(address(prop.to[i])) == 0, "!empty"); /*makes sure balance is 0*/
                     guildTokens[prop.value[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
-                    guildTokens.pop(); /*pop account from `guildTokens` array*/
+                    guildTokens.pop(); /*pop account from `guildTokens` array*/ 
                 }
     }
     
@@ -399,26 +462,6 @@ contract Baal {
         emit TransferLoot(msg.sender, to, amount);
     }
     
-    /// @notice Flashloan ability that conforms to `IERC3156FlashLender`, as defined in 'https://eips.ethereum.org/EIPS/eip-3156'.
-    /// @param receiver Address of token receiver that conforms to `IERC3156FlashBorrower` & handles flashloan.
-    /// @param token The loan currency.
-    /// @param amount The amount of tokens lent.
-    /// @param data Arbitrary data structure, intended to contain user-defined parameters.
-    function flashLoan(
-        address receiver,
-        address token,
-        uint amount,
-        bytes calldata data
-    ) external returns (bool success) {
-        uint fee = flashFee(token, amount);
-        require(fee != 0,'uninitialized');
-        _safeTransfer(token, receiver, amount);
-        (,bytes memory _flashData) = receiver.call(abi.encodeWithSelector(0x23e30c8b, msg.sender, token, amount, fee, data)); /*'onFlashLoan(address,address,uint,uint,bytes)'*/
-        bytes32 flashData = abi.decode(_flashData, (bytes32));
-        require(flashData == keccak256('ERC3156FlashBorrower.onFlashLoan'),'Callback failed'); /*checks flash loan success*/
-        _safeTransferFrom(token, receiver, address(this), amount + fee);
-        success = true;
-    }
     
     /// @notice Process member burn of `shares` and/or `loot` to claim 'fair share' of `guildTokens`.
     /// @param lootToBurn Baal pure economic weight to burn.
@@ -489,7 +532,7 @@ contract Baal {
     /// @notice Returns `flags` for given Baal `proposal` describing type ('action'[0], 'member'[1], 'period'[2], 'whitelist'[3]).
     /// @param proposal The index to check `flags` for.
     /// @return flags The flag index describing `proposal` type.
-    function getProposalFlags(uint proposal) external view returns (bool[4] memory flags) {
+    function getProposalFlags(uint proposal) external view returns (bool[5] memory flags) {
         flags = proposals[proposal].flags;
     }
     
@@ -501,20 +544,6 @@ contract Baal {
         vote = members[account].voted[proposal];
     }
     
-    /// @notice Returns the `fee` to be charged for a flash loan.
-    /// @param amount The sum of tokens lent.
-    /// @return fee The `fee` amount of 'token' to be charged for the loan, on top of the returned principal - uniform in Baal.
-    function flashFee(address, uint amount) public view returns (uint fee) {
-        fee = amount * flashFeeNumerator / 10000; /*Calculate `fee` - precision factor '10000' derived from ERC-3156 'Flash Loan Reference'*/
-    }
-    
-    /// @notice Returns the `max` amount of `token` available to be lent.
-    /// @param token The loan currency.
-    /// @return max The `amount` of `token` that can be borrowed.
-    function maxFlashLoan(address token) external view returns (uint max) {
-        (,bytes memory balanceData) = token.staticcall(abi.encodeWithSelector(0x70a08231, address(this))); /*get Baal token balance - 'balanceOf(address)'*/
-        max = abi.decode(balanceData, (uint)); /*decode Baal token balance for calculation*/
-    }
 
     /***************
     HELPER FUNCTIONS
@@ -618,12 +647,13 @@ contract Baal {
     }
  
     /// @notice Check to validate proposal processing requirements. 
-    function _processingReady(uint proposal, Proposal memory prop) private view returns (bool ready) {
+    function _processingReady(uint proposalIdx, Proposal memory prop) private view returns (bool ready) {
+        
         unchecked {
-            require(proposal <= proposalCount,'!exist'); /*check proposal exists*/
+            require(proposalIdx < proposalQueue.length, "proposal does not exist");
             require(prop.votingEnds + gracePeriod <= block.timestamp,'!ended'); /*check voting period has ended*/
-            require(proposals[proposal - 1].votingEnds == 0,'prev!processed'); /*check previous proposal has processed by deletion*/
-            require(proposals[proposal].votingEnds != 0,'processed'); /*check given proposal has not yet processed by deletion*/
+            require(proposals[proposalQueue[proposalIdx] - 1].votingEnds == 0,'prev!processed'); /*check previous proposal has processed by deletion*/
+            require(proposals[proposalQueue[proposalIdx]].votingEnds != 0,'processed'); /*check given proposal has not yet processed by deletion*/
             if (summonerCount == 1) ready = true; /*if single member, process early*/
             else if (prop.yesVotes > totalSupply / 2) ready = true; /*process early if majority member support*/
             else if (prop.votingEnds >= block.timestamp) ready = true; /*otherwise, process if voting period done*/
