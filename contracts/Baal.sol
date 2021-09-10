@@ -21,18 +21,17 @@ contract Baal {
     bool public sharesPaused; /*tracks transferability of erc20 `shares` - amendable through 'period'[2] proposal*/
     
     uint8  constant public decimals = 18; /*unit scaling factor in erc20 `shares` accounting - '18' is default to match ETH & common erc20s*/
-    uint16 constant MAX_GUILD_TOKEN_COUNT = 400; /*maximum number of whitelistable tokens*/
+    uint16 constant MAX_GUILD_TOKEN_COUNT = 400; /*maximum number of whitelistable tokens subject to {ragequit}*/
     
     uint96 public totalLoot; /*counter for total `loot` economic weight held by `members`*/  
     uint96 public totalSupply; /*counter for total `members` voting `shares` with erc20 accounting*/
     
-    uint public flashFeeNumerator; /*tracks 'fee' numerator for {flashLoan} in {flashFee} - e.g., '1 = 0.0001%'*/
     uint public gracePeriod; /*time delay after proposal voting period for processing*/
     uint public minVotingPeriod; /*minimum period for voting in seconds - amendable through 'period'[2] proposal*/
     uint public maxVotingPeriod; /*maximum period for voting in seconds - amendable through 'period'[2] proposal*/
     uint public proposalCount; /*counter for total `proposals` submitted*/
-    uint status; /*reentrancy tracking value*/
-    uint summonerCount; /*initial summoner count to gauge speedy proposal processing*/
+    uint status; /*internal reentrancy check tracking value*/
+    uint memberCount; /*internal membership counter to gauge speedy proposal processing*/
     
     string public name; /*'name' for erc20 `shares` accounting*/
     string public symbol; /*'symbol' for erc20 `shares` accounting*/
@@ -48,7 +47,7 @@ contract Baal {
     mapping(address => uint)                        public balanceOf; /*maps `members` accounts to `shares` with erc20 accounting*/
     mapping(address => mapping(uint => Checkpoint)) public checkpoints; /*maps record of vote `checkpoints` for each account by index*/
     mapping(address => uint)                        public numCheckpoints; /*maps number of `checkpoints` for each account*/
-    mapping(address => address)                     public delegates; /*maps record of each account's `shares` delegate*/
+    mapping(address => address)                     public _delegates; /*maps record of each account's `shares` delegate*/
     mapping(address => uint)                        public nonces; /*maps tx record for signing & validating `shares` signatures*/
     
     mapping(address => Member) public members; /*maps `members` accounts to struct details*/
@@ -125,10 +124,9 @@ contract Baal {
             for (uint i; i < _shamans.length; i++) shamans[_shamans[i]] = true; /*update mapping of approved `shamans` in Baal*/
             for (uint i; i < _guildTokens.length; i++) guildTokens.push(_guildTokens[i]); /*update array of `guildTokens` approved for {ragequit}*/
             for (uint i; i < _summoners.length; i++) {
-                _delegate(_summoners[i], _summoners[i]); /*delegate `summoners` voting weights to themselves - this saves a step before voting*/
                 _mintLoot(_summoners[i], _loot[i]); /*mint Baal `loot` to `summoners`*/
                 _mintShares(_summoners[i], _shares[i]); /*mint Baal `shares` to `summoners`*/ 
-                summonerCount++; /*increment `summoners` counter*/
+                memberCount++; /*increment `members` counter*/
             }
         }
         gracePeriod = _gracePeriod; /*sets delay for processing proposal*/
@@ -216,7 +214,7 @@ contract Baal {
     /// @param s Half of the ECDSA signature pair.
     function submitVoteWithSig(uint proposal, bool approved, uint8 v, bytes32 r, bytes32 s) external nonReentrant {
         Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
-        bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this))); /*calculate EIP-712 domain hash*/
+        bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), block.chainid, address(this))); /*calculate EIP-712 domain hash*/
         bytes32 structHash = keccak256(abi.encode(VOTE_TYPEHASH, proposal, approved)); /*calculate EIP-712 struct hash*/
         bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash)); /*calculate EIP-712 digest for signature*/
         address signatory = ecrecover(digest, v, r, s); /*recover signer from hash data*/
@@ -276,7 +274,6 @@ contract Baal {
         if (prop.value[0] != 0) minVotingPeriod = uint32(prop.value[0]); /*if positive, reset min. voting periods to first `value`*/ 
         if (prop.value[1] != 0) maxVotingPeriod = uint32(prop.value[1]); /*if positive, reset max. voting periods to second `value`*/
         if (prop.value[2] != 0) gracePeriod = uint32(prop.value[2]); /*if positive, reset grace period to third `value`*/
-        if (prop.value[3] != 0) flashFeeNumerator = prop.value[3]; /*if positive, reset flash loan fee numerator to fourth `value`*/
         prop.value[4] == 0 ? lootPaused = false : lootPaused = true; /*if positive, pause `loot` transfers on fifth `value`*/
         prop.value[5] == 0 ? sharesPaused = false : sharesPaused = true; /*if positive, pause `shares` transfers on sixth `value`*/
     }  
@@ -321,7 +318,7 @@ contract Baal {
     /// @param r Half of the ECDSA signature pair.
     /// @param s Half of the ECDSA signature pair.
     function delegateBySig(address delegatee, uint nonce, uint deadline, uint8 v, bytes32 r, bytes32 s) external {
-        bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this))); /*calculate EIP-712 domain hash*/
+        bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), block.chainid, address(this))); /*calculate EIP-712 domain hash*/
         unchecked {
             bytes32 structHash = keccak256(abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, deadline)); /*calculate EIP-712 struct hash*/
             bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash)); /*calculate EIP-712 digest for signature*/
@@ -342,7 +339,7 @@ contract Baal {
     /// @param r Half of the ECDSA signature pair.
     /// @param s Half of the ECDSA signature pair.
     function permit(address owner, address spender, uint96 amount, uint deadline, uint8 v, bytes32 r, bytes32 s) external {
-        bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this))); /*calculate EIP-712 domain hash*/
+        bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), block.chainid, address(this))); /*calculate EIP-712 domain hash*/
         unchecked {
             bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, amount, nonces[owner]++, deadline)); /*calculate EIP-712 struct hash*/
             bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash)); /*calculate EIP-712 digest for signature*/
@@ -398,28 +395,7 @@ contract Baal {
         }
         emit TransferLoot(msg.sender, to, amount);
     }
-    
-    /// @notice Flashloan ability that conforms to `IERC3156FlashLender`, as defined in 'https://eips.ethereum.org/EIPS/eip-3156'.
-    /// @param receiver Address of token receiver that conforms to `IERC3156FlashBorrower` & handles flashloan.
-    /// @param token The loan currency.
-    /// @param amount The amount of tokens lent.
-    /// @param data Arbitrary data structure, intended to contain user-defined parameters.
-    function flashLoan(
-        address receiver,
-        address token,
-        uint amount,
-        bytes calldata data
-    ) external returns (bool success) {
-        uint fee = flashFee(token, amount);
-        require(fee != 0,'uninitialized');
-        _safeTransfer(token, receiver, amount);
-        (,bytes memory _flashData) = receiver.call(abi.encodeWithSelector(0x23e30c8b, msg.sender, token, amount, fee, data)); /*'onFlashLoan(address,address,uint,uint,bytes)'*/
-        bytes32 flashData = abi.decode(_flashData, (bytes32));
-        require(flashData == keccak256('ERC3156FlashBorrower.onFlashLoan'),'Callback failed'); /*checks flash loan success*/
-        _safeTransferFrom(token, receiver, address(this), amount + fee);
-        success = true;
-    }
-    
+
     /// @notice Process member burn of `shares` and/or `loot` to claim 'fair share' of `guildTokens`.
     /// @param lootToBurn Baal pure economic weight to burn.
     /// @param sharesToBurn Baal voting weight to burn.
@@ -443,12 +419,13 @@ contract Baal {
     /***************
     GETTER FUNCTIONS
     ***************/
-    /// @notice Returns chain identifier per ERC-155.
-    /// @return chainId Index of chain.
-    function getChainId() private view returns (uint chainId) {
-        assembly { chainId := chainid() }
+    /// @notice Overrides standard 'Comp.sol' delegation mapping to return delegator's own address if they haven't delegated.
+    /// This avoids having to delegate to oneself. Adapted from 'NounsToken'.
+    /// @return deleg Account with delegated 'votes'.
+    function delegates(address delegator) external view returns (address deleg) {
+        deleg == address(0) ? delegator : _delegates[delegator];
     }
-    
+
     /// @notice Returns the current delegated `vote` balance for `account`.
     /// @param account The user to check delegated `votes` for.
     /// @return votes Current `votes` delegated to `account`.
@@ -500,21 +477,6 @@ contract Baal {
     function getProposalVotes(address account, uint proposal) external view returns (bool vote) {
         vote = members[account].voted[proposal];
     }
-    
-    /// @notice Returns the `fee` to be charged for a flash loan.
-    /// @param amount The sum of tokens lent.
-    /// @return fee The `fee` amount of 'token' to be charged for the loan, on top of the returned principal - uniform in Baal.
-    function flashFee(address, uint amount) public view returns (uint fee) {
-        fee = amount * flashFeeNumerator / 10000; /*Calculate `fee` - precision factor '10000' derived from ERC-3156 'Flash Loan Reference'*/
-    }
-    
-    /// @notice Returns the `max` amount of `token` available to be lent.
-    /// @param token The loan currency.
-    /// @return max The `amount` of `token` that can be borrowed.
-    function maxFlashLoan(address token) external view returns (uint max) {
-        (,bytes memory balanceData) = token.staticcall(abi.encodeWithSelector(0x70a08231, address(this))); /*get Baal token balance - 'balanceOf(address)'*/
-        max = abi.decode(balanceData, (uint)); /*decode Baal token balance for calculation*/
-    }
 
     /***************
     HELPER FUNCTIONS
@@ -552,9 +514,9 @@ contract Baal {
 
     /// @notice Delegates Baal voting weight.
     function _delegate(address delegator, address delegatee) private {
-        address currentDelegate = delegates[delegator];
+        address currentDelegate = _delegates[delegator];
         if (currentDelegate != delegatee)
-            delegates[delegator] = delegatee;
+            _delegates[delegator] = delegatee;
             _moveDelegates(currentDelegate, delegatee, uint96(balanceOf[delegator]));
             emit DelegateChanged(delegator, currentDelegate, delegatee);
     }
@@ -624,7 +586,7 @@ contract Baal {
             require(prop.votingEnds + gracePeriod <= block.timestamp,'!ended'); /*check voting period has ended*/
             require(proposals[proposal - 1].votingEnds == 0,'prev!processed'); /*check previous proposal has processed by deletion*/
             require(proposals[proposal].votingEnds != 0,'processed'); /*check given proposal has not yet processed by deletion*/
-            if (summonerCount == 1) ready = true; /*if single member, process early*/
+            if (memberCount == 1) ready = true; /*if single member, process early*/
             else if (prop.yesVotes > totalSupply / 2) ready = true; /*process early if majority member support*/
             else if (prop.votingEnds >= block.timestamp) ready = true; /*otherwise, process if voting period done*/
         }
