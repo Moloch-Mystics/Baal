@@ -9,14 +9,21 @@
        ▀    ▀*/
 pragma solidity >=0.8.0;
 
+import "@gnosis.pm/safe-contracts/contracts/libraries/MultiSend.sol";
+import "@gnosis.pm/safe-contracts/contracts/base/Executor.sol";
+import "./zodiac/core/Module.sol";
+import "./zodiac/factory/ModuleProxyFactory.sol";
+
 /// @notice Interface for Baal {memberAction} that adjusts member `shares` & `loot`.
 interface IShaman {
     function memberAction(address member, uint96 loot, uint96 shares) external payable returns (uint96 lootOut, uint96 sharesOut);
 }
 
+// contract Baal is Module, Executor, Enum {
+
 /// @title Baal';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
-contract Baal {
+contract Baal is Module, Executor, Enum {
     bool public lootPaused; /*tracks transferability of `loot` economic weight - amendable through 'period'[2] proposal*/
     bool public sharesPaused; /*tracks transferability of erc20 `shares` - amendable through 'period'[2] proposal*/
     
@@ -42,6 +49,8 @@ contract Baal {
     bytes32 constant VOTE_TYPEHASH = keccak256('Vote(uint proposalId,bool support)'); /*EIP-712 typehash for Baal proposal vote*/
     
     address[] guildTokens; /*array list of erc20 tokens approved on summoning or by 'whitelist'[3] `proposals` for {ragequit} claims*/
+
+    address public multisendLibrary; /*Library to execute multisend transactions*/
     
     mapping(address => mapping(address => uint))    public allowance; /*maps approved pulls of `shares` with erc20 accounting*/
     mapping(address => uint)                        public balanceOf; /*maps `members` accounts to `shares` with erc20 accounting*/
@@ -55,7 +64,7 @@ contract Baal {
     mapping(address => bool)   public shamans; /*maps contracts approved in 'whitelist'[3] proposals for {memberAction} that mint or burn `shares`*/
     
     event SummonComplete(bool lootPaused, bool sharesPaused, uint gracePeriod, uint minVotingPeriod, uint maxVotingPeriod, string name, string symbol, address[] guildTokens, address[] shamans, address[] summoners, uint96[] loot, uint96[] shares); /*emits after Baal summoning*/
-    event SubmitProposal(uint8 indexed flag, uint indexed proposal, uint votingPeriod, address[] to, uint96[] value, bytes[] data, string details); /*emits after proposal is submitted*/
+    event SubmitProposal(bool self, uint indexed proposal, uint votingPeriod, bytes proposalData, string details); /*emits after proposal is submitted*/
     event SubmitVote(address indexed member, uint balance, uint indexed proposal, bool indexed approved); /*emits after vote is submitted on proposal*/
     event ProcessProposal(uint indexed proposal); /*emits when proposal is processed & executed*/
     event Ragequit(address indexed member, address to, uint96 lootToBurn, uint96 sharesToBurn); /*emits when users burn Baal `shares` and/or `loot` for given `to` account*/
@@ -70,6 +79,11 @@ contract Baal {
         status = 2; 
         _;
         status = 1;
+    }
+    
+    modifier baalOnly() {
+        require(msg.sender == address(this), '!baal');
+        _;
     }
     
     struct Checkpoint { /*Baal checkpoint for marking number of delegated votes from given block*/
@@ -88,56 +102,42 @@ contract Baal {
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
         uint96 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
         uint96 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
-        bool[4] flags; /*flags for proposal type & status - [action, member, period, whitelist]*/
-        address[] to; /*account(s) that receive(s) Baal state updates*/
-        uint96[] value; /*value(s) associated with Baal state updates (also used to toggle)*/
-        bytes[] data; /*raw data associated with Baal state updates (also used to toggle)*/
+        bool self; /*execute proposal through Baal or through Safe*/
+        bytes proposalData; /*raw data associated with state updates*/
         string details; /*human-readable context for proposal*/
     }
-
+    
     /// @notice Summon Baal with voting configuration & initial array of `members` accounts with `shares` & `loot` weights.
-    /// @param _sharesPaused Sets transferability of Baal voting shares on initialization - if 'paused', `loot` will also be 'paused'.
-    /// @param _gracePeriod Time delay in seconds after voting period before proposal can be processed.
-    /// @param _minVotingPeriod Minimum voting period in seconds for `members` to cast votes on proposals.
-    /// @param _maxVotingPeriod Maximum voting period in seconds for `members` to cast votes on proposals.
-    /// @param _name Name for erc20 `shares` accounting.
-    /// @param _symbol Symbol for erc20 `shares` accounting.
-    /// @param _guildTokens Tokens approved for internal accounting - {ragequit} of `shares` &/or `loot`.
-    /// @param _shamans External contracts approved for {memberAction} that adjust `shares` & `loot`.
-    /// @param _summoners Accounts to add as `members`.
-    /// @param _loot Economic weight among `members`.
-    /// @param _shares Voting weight among `members` (`shares` also have economic weight & are erc20 tokens).
-    constructor(
-        bool             _sharesPaused,
-        uint             _gracePeriod,
-        uint             _minVotingPeriod, 
-        uint             _maxVotingPeriod,
-        string    memory _name, 
-        string    memory _symbol,
-        address[] memory _guildTokens,
-        address[] memory _shamans, 
-        address[] memory _summoners, 
-        uint96[]  memory _loot, 
-        uint96[]  memory _shares) {
-        require(_summoners.length == _loot.length && _loot.length == _shares.length,'!matched member arrays'); /*check `members`-related array lengths match*/
-        unchecked {
-            for (uint i; i < _shamans.length; i++) shamans[_shamans[i]] = true; /*update mapping of approved `shamans` in Baal*/
-            for (uint i; i < _guildTokens.length; i++) guildTokens.push(_guildTokens[i]); /*update array of `guildTokens` approved for {ragequit}*/
-            for (uint i; i < _summoners.length; i++) {
-                _mintLoot(_summoners[i], _loot[i]); /*mint Baal `loot` to `summoners`*/
-                _mintShares(_summoners[i], _shares[i]); /*mint Baal `shares` to `summoners`*/ 
-                memberCount++; /*increment `members` counter*/
-            }
-        }
-        gracePeriod = _gracePeriod; /*sets delay for processing proposal*/
-        minVotingPeriod = _minVotingPeriod; /*set minimum voting period - adjustable via 'period'[2] proposal*/
-        maxVotingPeriod = _maxVotingPeriod; /*set maximum voting period - adjustable via 'period'[2] proposal*/
-        if (_sharesPaused) lootPaused = true; /*set initial transferability for 'loot' - if `sharesPaused`, transfers are blocked*/
-        sharesPaused = _sharesPaused; /*set initial transferability for `shares` tokens - if 'true', transfers are blocked*/
+    /// @param _initializationParams Encoded setup information
+    function setUp(
+        bytes memory _initializationParams
+        ) public override {
+        (
+            string memory _name, // _name Name for erc20 `shares` accounting.
+            string memory _symbol, // _symbol Symbol for erc20 `shares` accounting.
+            address _avatar, 
+            address _multisendLibrary,
+            bytes memory _initializationMultisendData // here you call BaalOnly functions to set up initial shares, loot, shamans, periods, etc
+        ) = abi.decode(
+                _initializationParams,
+                (string, string, address, address, bytes)
+            );
         name = _name; /*initialize Baal `name` with erc20 accounting*/
         symbol = _symbol; /*initialize Baal `symbol` with erc20 accounting*/
+
+        multisendLibrary = _multisendLibrary;
+        avatar = _avatar;
+
+        // Execute all setups including
+        // * mint shares
+        // * convert shares to loot
+        // * set shamans
+        // * set periods
+        require(execute(multisendLibrary, 0, _initializationMultisendData, Operation.DelegateCall, gasleft()), 'call failure');
+
+        __Ownable_init();
+        initialized = true;
         status = 1; /*initialize 'reentrancy guard' status*/
-        emit SummonComplete(lootPaused, _sharesPaused, _gracePeriod, _minVotingPeriod, _maxVotingPeriod, _name, _symbol, _guildTokens, _shamans, _summoners, _loot, _shares); /*emit event reflecting Baal summoning completed*/
     }
 
     /// @notice Execute membership action to mint or burn `shares` and/or `loot` against whitelisted `shamans` in consideration of user & given amounts.
@@ -162,30 +162,19 @@ contract Baal {
     PROPOSAL FUNCTIONS
     *****************/
     /// @notice Submit proposal to Baal `members` for approval within given voting period.
-    /// @param flag Index to assign proposal type '[0...3]'.
+    /// @param self Execute on Baal or Safe
     /// @param votingPeriod Voting period in seconds.
-    /// @param to Account to target for proposal.
-    /// @param value Numerical value to bind to proposal.
-    /// @param data Data to bind to proposal.
+    /// @param proposalData Multisend encoded transactions or proposal data
     /// @param details Context for proposal.
     /// @return proposal Count for submitted proposal.
-    function submitProposal(uint8 flag, uint32 votingPeriod, address[] calldata to, uint96[] calldata value, bytes[] calldata data, string calldata details) external nonReentrant returns (uint proposal) {
+    function submitProposal(bool self, uint32 votingPeriod, bytes calldata proposalData, string calldata details) external nonReentrant returns (uint proposal) {
         require(balanceOf[msg.sender] != 0,'!member'); /*check 'membership' - required to submit proposal*/
         require(minVotingPeriod <= votingPeriod && votingPeriod <= maxVotingPeriod,'!votingPeriod'); /*check voting period is within Baal bounds*/
-        require(to.length <= 10,'array max'); /*limit executable actions to help avoid block gas limit errors on processing*/
-        require(flag <= 3,'!flag'); /*check 'flag' is in bounds*/
-        bool[4] memory flags; /*plant `flags` - [action, member, period, whitelist]*/
-        flags[flag] = true; /*flag proposal type for struct storage*/ 
-        if (flag == 2) {
-            require(value.length == 6,'unpacked'); /*check that `value` is packed for `period`[2] proposal*/
-        } else {
-            require(to.length == value.length && value.length == data.length,'!array parity'); /*check array lengths match*/
-        }
         unchecked {
             proposalCount++; /*increment proposal counter*/
-            proposals[proposalCount] = Proposal(uint32(block.number), uint32(block.timestamp) + votingPeriod, 0, 0, flags, to, value, data, details); /*push params into proposal struct - start voting period timer*/
+            proposals[proposalCount] = Proposal(uint32(block.number), uint32(block.timestamp) + votingPeriod, 0, 0, self, proposalData, details); /*push params into proposal struct - start voting period timer*/
         }
-        emit SubmitProposal(flag, proposal, votingPeriod, to, value, data, details); /*emit event reflecting proposal submission*/
+        emit SubmitProposal(self, proposal, votingPeriod, proposalData, details); /*emit event reflecting proposal submission*/
     }
 
     /// @notice Submit vote - proposal must exist & voting period must not have ended.
@@ -235,64 +224,75 @@ contract Baal {
     // ********************
     // PROCESSING FUNCTIONS
     // ********************
-    /// @notice Process `proposal` & execute internal functions based on `flag`[#].
+    /// @notice Process `proposal` & execute internal functions based on `self`.
     /// @param proposal Number of proposal in `proposals` mapping to process for execution.
     function processProposal(uint proposal) external nonReentrant {
         Proposal storage prop = proposals[proposal]; /*alias `proposal` storage pointers*/
         _processingReady(proposal, prop); /*validate `proposal` processing requirements*/
         if (prop.yesVotes > prop.noVotes) /*check if `proposal` approved by simple majority of members*/
-            if (prop.flags[0]) processActionProposal(prop); /*check `flag`, execute 'action'*/
-            else if (prop.flags[1]) processMemberProposal(prop); /*check `flag`, execute 'member'*/
-            else if (prop.flags[2]) processPeriodProposal(prop); /*check `flag`, execute 'period'*/
-            else processWhitelistProposal(prop); /*otherwise, execute 'whitelist'*/
+            if (prop.self) processActionProposal(prop); /*check `self`, execute 'action' on baal*/
+            else processSafeProposal(prop); /*otherwise, execute 'safe action' on safe*/
         delete proposals[proposal]; /*delete given proposal struct details for gas refund & the commons*/
         emit ProcessProposal(proposal); /*emit event reflecting that given proposal processed*/
     }
     
     /// @notice Internal function to process 'action'[0] proposal.
-    function processActionProposal(Proposal memory prop) private returns (bytes memory returnData) {
-        for (uint i; i < prop.to.length; i++) 
-            (,returnData) = prop.to[i].call{value:prop.value[i]} /*pass ETH value(s), if any*/
-            (prop.data[i]); /*execute low-level call(s)*/
+    function processActionProposal(Proposal memory prop) private {
+        require(execute(multisendLibrary, 0, prop.proposalData, Operation.DelegateCall, gasleft()), 'call failure');
     }
-    
-    /// @notice Internal function to process 'member'[1] proposal.
-    function processMemberProposal(Proposal memory prop) private {
-        for (uint i; i < prop.to.length; i++) {
-            if (prop.data[i].length == 0) {
-                _mintShares(prop.to[i], prop.value[i]); /*grant `to` `value` `shares`*/
-            } else {
-                uint96 removedBalance = uint96(balanceOf[prop.to[i]]); /*gas-optimize variable*/
-                _burnShares(prop.to[i], removedBalance); /*burn all of `to` `shares` & convert into `loot`*/
-                _mintLoot(prop.to[i], removedBalance); /*mint equivalent `loot`*/
-            }
+
+    /// @notice Internal function to process 'safe'[1] proposal.
+    function processSafeProposal(Proposal memory prop) private {
+        require(exec(multisendLibrary, 0, prop.proposalData, Operation.DelegateCall), 'call failure');
+    }
+
+    /// @notice Baal only function to mint shares
+    function mintShares (address[] calldata to, uint96[] calldata amount) external baalOnly {
+        require(to.length == amount.length,'!array parity'); /*check array lengths match*/
+        for (uint256 i = 0; i < to.length; i++) {
+            _mintShares(to[i], amount[i]); /*grant `to` `amount` `shares`*/
         }
     }
-    
-    /// @notice Internal function to process 'period'[2] proposal.
-    function processPeriodProposal(Proposal memory prop) private {
-        if (prop.value[0] != 0) minVotingPeriod = uint32(prop.value[0]); /*if positive, reset min. voting periods to first `value`*/ 
-        if (prop.value[1] != 0) maxVotingPeriod = uint32(prop.value[1]); /*if positive, reset max. voting periods to second `value`*/
-        if (prop.value[2] != 0) gracePeriod = uint32(prop.value[2]); /*if positive, reset grace period to third `value`*/
-        prop.value[4] == 0 ? lootPaused = false : lootPaused = true; /*if positive, pause `loot` transfers on fifth `value`*/
-        prop.value[5] == 0 ? sharesPaused = false : sharesPaused = true; /*if positive, pause `shares` transfers on sixth `value`*/
-    }  
-        
-    /// @notice Internal function to process 'whitelist'[3] proposal.
-    function processWhitelistProposal(Proposal memory prop) private {
-        for (uint i; i < prop.to.length; i++) 
-            if (prop.value[i] == 0 && prop.data.length == 0) { /*if `value` & `data` are null, approve `shamans`*/
-                shamans[prop.to[i]] = true; /*add account(s) to `shamans` extensions*/
-                } else if (prop.value[i] == 0 && prop.data.length != 0) { /*if `value` is null & `data` is populated, remove `shamans`*/
-                    shamans[prop.to[i]] = false; /*remove account(s) from `shamans` extensions*/
-                } else if (prop.value[i] != 0 && prop.data.length == 0) { /*if `value` is positive & `data` is null, add `guildTokens`*/
-                    if (guildTokens.length != MAX_GUILD_TOKEN_COUNT) guildTokens.push(prop.to[i]); /*push account to `guildTokens` array if within 'MAX'*/
-                } else { /*otherwise, remove `guildTokens`*/
-                    guildTokens[prop.value[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
-                    guildTokens.pop(); /*pop account from `guildTokens` array*/
-                }
+
+    /// @notice Baal only function to convert shares to loot
+    function convertSharesToLoot (address to) external baalOnly {
+            uint96 removedBalance = uint96(balanceOf[to]); /*gas-optimize variable*/
+            _burnShares(to, removedBalance); /*burn all of `to` `shares` & convert into `loot`*/
+            _mintLoot(to, removedBalance); /*mint equivalent `loot`*/
     }
-    
+
+    /// @notice Baal only function to change periods
+    function processPeriodProposal(bytes memory periodData) external baalOnly {
+        (uint32 min, uint32 max, uint32 grace, bool pauseLoot, bool pauseShares) = abi.decode(periodData, (uint32, uint32, uint32, bool, bool));
+        if (min != 0) minVotingPeriod = min; /*if positive, reset min. voting periods to first `value`*/ 
+        if (max != 0) maxVotingPeriod = max; /*if positive, reset max. voting periods to second `value`*/
+        if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to third `value`*/
+        lootPaused = pauseLoot; /*set pause `loot` transfers on fifth `value`*/
+        sharesPaused = pauseShares; /*set pause `shares` transfers on sixth `value`*/
+    }  
+
+    /// @notice Baal only function to set shaman status
+    function setShamans (address[] calldata _shamans, bool enabled) external baalOnly {
+        for (uint256 i; i < _shamans.length; i++) {
+            shamans[_shamans[i]] = enabled;
+        }
+    }
+
+    /// @notice Baal only function to whitelist guildToken
+    function setGuildTokens (address[] calldata _tokens) external baalOnly {
+        for (uint256 i; i < _tokens.length; i++) {
+            if (guildTokens.length != MAX_GUILD_TOKEN_COUNT) guildTokens.push(_tokens[i]); /*push account to `guildTokens` array if within 'MAX'*/
+        }
+    }
+
+    /// @notice Baal only function to remove guildToken
+    function unsetGuildTokens (uint256[] calldata _tokenIndexes) external baalOnly {
+        for (uint256 i; i < _tokenIndexes.length; i++) {
+            guildTokens[_tokenIndexes[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
+            guildTokens.pop(); /*pop account from `guildTokens` array*/
+        }
+    }
+        
     /*******************
     GUILD MGMT FUNCTIONS
     *******************/
@@ -463,11 +463,11 @@ contract Baal {
         tokens = guildTokens;
     }
 
-    /// @notice Returns `flags` for given Baal `proposal` describing type ('action'[0], 'member'[1], 'period'[2], 'whitelist'[3]).
-    /// @param proposal The index to check `flags` for.
-    /// @return flags The flag index describing `proposal` type.
-    function getProposalFlags(uint proposal) external view returns (bool[4] memory flags) {
-        flags = proposals[proposal].flags;
+    /// @notice Returns self for given Baal `proposal` describing type: true - Baal, false - Safe
+    /// @param proposal The index to check self for.
+    /// @return self
+    function getProposalType(uint proposal) external view returns (bool self) {
+        self = proposals[proposal].self;
     }
     
     /// @notice Returns 'true/false' 'vote' by given `account` on Baal `proposal` to indicate whether `approved`.
@@ -481,19 +481,6 @@ contract Baal {
     /***************
     HELPER FUNCTIONS
     ***************/
-    /// @notice Allows batched calls to Baal.
-    /// @param calls An array of payloads for each call.
-    /// @param revertOnFail If 'true', batch reverts after a failed call and stops further calls.
-    function batchCall(bytes[] calldata calls, bool revertOnFail) external returns (string memory revertMsg) {
-        for (uint256 i = 0; i < calls.length; i++) {
-            (bool success, bytes memory result) = address(this).delegatecall(calls[i]);
-            if (!success && revertOnFail) 
-                if (result.length < 68) revertMsg = 'silent';
-                    assembly { result := add(result, 0x04) }
-                    revertMsg = abi.decode(result, (string)); 
-        }
-    }
-
     /// @notice Returns confirmation for 'safe' ERC-721 (NFT) transfers to Baal.
     function onERC721Received(address, address, uint, bytes calldata) external pure returns (bytes4 sig) {
         sig = 0x150b7a02; /*'onERC721Received(address,address,uint,bytes)'*/
