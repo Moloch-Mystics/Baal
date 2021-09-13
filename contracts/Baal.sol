@@ -250,7 +250,7 @@ contract Baal {
     function submitVote(uint proposal, bool approved) external nonReentrant {
         Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
         uint96 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
-        require(prop.votingStarts >= block.timestamp,'!started'); /*check voting period has started*/
+        require(prop.votingStarts <= block.timestamp,'!started'); /*check voting period has started*/
         require(prop.votingEnds >= block.timestamp,'ended'); /*check voting period has not ended*/
         unchecked {
             if (approved) { 
