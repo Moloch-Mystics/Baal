@@ -73,7 +73,7 @@ contract Baal {
     }
     
     struct Checkpoint { /*Baal checkpoint for marking number of delegated votes from given block*/
-        uint32 fromBlock; /*block number for referencing voting balance*/
+        uint32 fromTimeStamp; /*unix time for referencing voting balance*/
         uint96 votes; /*votes at given block number*/
     }
  
@@ -178,19 +178,19 @@ contract Baal {
         bool[4] memory flags; /*plant `flags` - [action, member, period, whitelist]*/
         flags[flag] = true; /*flag proposal type for struct storage*/ 
         if (flag == 2) {
-            require(value.length == 6,'unpacked'); /*check that `value` is packed for `period`[2] proposal*/
+            require(value.length == 5,'unpacked'); /*check that `value` is packed for `period`[2] proposal*/
         } else {
             require(to.length == value.length && value.length == data.length,'!array parity'); /*check array lengths match*/
         }
         bool selfSponsor; /*plant sponsor flag*/
-        if (balanceOf[msg.sender] != 0) {
+        if (balanceOf[msg.sender] != 0) { /*if a member, self-sponsor*/
             selfSponsor = true;
         }
         unchecked {
             proposalCount++; /*increment proposal counter*/
             proposals[proposalCount] = Proposal( /*push params into proposal struct - start voting period timer if member submission*/
                 votingPeriod,
-                selfSponsor ? uint32(block.number) : 0, 
+                selfSponsor ? uint32(block.timestamp) : 0, 
                 selfSponsor ? uint32(block.timestamp) + votingPeriod : 0, 
                 0, 0, flags, to, value, data, details);
         }
@@ -203,7 +203,8 @@ contract Baal {
         Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
         require(balanceOf[msg.sender] != 0,'!member'); /*check 'membership' - required to sponsor proposal*/
         require(prop.votingPeriod != 0,'!exist'); /*check proposal existence*/
-        prop.votingStarts = uint32(block.number);
+        require(prop.votingStarts == 0,'sponsored');
+        prop.votingStarts = uint32(block.timestamp);
         prop.votingEnds = uint32(block.timestamp) + prop.votingPeriod;
     }
 
@@ -238,7 +239,7 @@ contract Baal {
         bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash)); /*calculate EIP-712 digest for signature*/
         address signatory = ecrecover(digest, v, r, s); /*recover signer from hash data*/
         require(signatory != address(0),'!signatory'); /*check signer is not null*/
-        uint96 balance = uint96(getPriorVotes(signatory, prop.votingStarts)); /*fetch & gas-optimize voting weight at proposal creation time*/
+        uint96 balance = getPriorVotes(signatory, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
         require(prop.votingEnds >= block.timestamp,'ended'); /*check voting period has not ended*/
         unchecked {
             if (approved) { /*if `approved`, cast delegated balance `yesVotes` to proposal*/
@@ -293,18 +294,18 @@ contract Baal {
         if (prop.value[0] != 0) minVotingPeriod = uint32(prop.value[0]); /*if positive, reset min. voting periods to first `value`*/ 
         if (prop.value[1] != 0) maxVotingPeriod = uint32(prop.value[1]); /*if positive, reset max. voting periods to second `value`*/
         if (prop.value[2] != 0) gracePeriod = uint32(prop.value[2]); /*if positive, reset grace period to third `value`*/
-        prop.value[4] == 0 ? lootPaused = false : lootPaused = true; /*if positive, pause `loot` transfers on fifth `value`*/
-        prop.value[5] == 0 ? sharesPaused = false : sharesPaused = true; /*if positive, pause `shares` transfers on sixth `value`*/
+        prop.value[3] == 0 ? lootPaused = false : lootPaused = true; /*if positive, pause `loot` transfers on fourth `value`*/
+        prop.value[4] == 0 ? sharesPaused = false : sharesPaused = true; /*if positive, pause `shares` transfers on fifth `value`*/
     }  
         
     /// @notice Internal function to process 'whitelist'[3] proposal.
     function processWhitelistProposal(Proposal memory prop) private {
         for (uint i; i < prop.to.length; i++) 
-            if (prop.value[i] == 0 && prop.data.length == 0) { /*if `value` & `data` are null, approve `shamans`*/
+            if (prop.value[i] == 0 && prop.data[i].length == 0) { /*if `value` & `data` are null, approve `shamans`*/
                 shamans[prop.to[i]] = true; /*add account(s) to `shamans` extensions*/
-                } else if (prop.value[i] == 0 && prop.data.length != 0) { /*if `value` is null & `data` is populated, remove `shamans`*/
+                } else if (prop.value[i] == 0 && prop.data[i].length != 0) { /*if `value` is null & `data` is populated, remove `shamans`*/
                     shamans[prop.to[i]] = false; /*remove account(s) from `shamans` extensions*/
-                } else if (prop.value[i] != 0 && prop.data.length == 0) { /*if `value` is positive & `data` is null, add `guildTokens`*/
+                } else if (prop.value[i] != 0 && prop.data[i].length == 0) { /*if `value` is positive & `data` is null, add `guildTokens`*/
                     if (guildTokens.length != MAX_GUILD_TOKEN_COUNT) guildTokens.push(prop.to[i]); /*push account to `guildTokens` array if within 'MAX'*/
                 } else { /*otherwise, remove `guildTokens`*/
                     guildTokens[prop.value[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
@@ -423,7 +424,7 @@ contract Baal {
         for (uint i; i < guildTokens.length; i++) {
             (,bytes memory balanceData) = guildTokens[i].staticcall(abi.encodeWithSelector(0x70a08231, address(this))); /*get Baal token balances - 'balanceOf(address)'*/
             uint balance = abi.decode(balanceData, (uint)); /*decode Baal token balances for calculation*/
-            uint amountToRagequit = ((lootToBurn + sharesToBurn) * balance) / totalSupply; /*calculate 'fair shair' claims*/
+            uint amountToRagequit = ((lootToBurn + sharesToBurn) * balance) / (totalSupply + totalLoot); /*calculate 'fair shair' claims*/
             if (amountToRagequit != 0) { /*gas optimization to allow higher maximum token limit*/
                 _safeTransfer(guildTokens[i], to, amountToRagequit); /*execute 'safe' token transfer*/
             }
@@ -448,21 +449,21 @@ contract Baal {
     
     /// @notice Returns the prior number of `votes` for `account` as of `blockNumber`.
     /// @param account The user to check `votes` for.
-    /// @param blockNumber The block to check `votes` for.
+    /// @param timeStamp The unix time to check `votes` for.
     /// @return votes Prior `votes` delegated to `account`.
-    function getPriorVotes(address account, uint blockNumber) public view returns (uint96 votes) {
-        require(blockNumber < block.number,'!determined');
+    function getPriorVotes(address account, uint timeStamp) public view returns (uint96 votes) {
+        require(timeStamp < block.timestamp,'!determined');
         uint nCheckpoints = numCheckpoints[account];
         if (nCheckpoints == 0) { votes = 0; }
         unchecked {
-            if (checkpoints[account][nCheckpoints - 1].fromBlock <= blockNumber) { votes = checkpoints[account][nCheckpoints - 1].votes; }
-            if (checkpoints[account][0].fromBlock > blockNumber) { votes = 0; }
+            if (checkpoints[account][nCheckpoints - 1].fromTimeStamp <= timeStamp) { votes = checkpoints[account][nCheckpoints - 1].votes; }
+            if (checkpoints[account][0].fromTimeStamp > timeStamp) { votes = 0; }
             uint lower = 0; uint upper = nCheckpoints - 1;
             while (upper > lower) {
                 uint center = upper - (upper - lower) / 2;
                 Checkpoint memory cp = checkpoints[account][center];
-                if (cp.fromBlock == blockNumber) { votes = cp.votes; } 
-                else if (cp.fromBlock < blockNumber) { lower = center; } 
+                if (cp.fromTimeStamp == timeStamp) { votes = cp.votes; } 
+                else if (cp.fromTimeStamp < timeStamp) { lower = center; } 
                 else { upper = center - 1; }
             }
             votes = checkpoints[account][lower].votes;
@@ -496,7 +497,7 @@ contract Baal {
     /// @notice Allows batched calls to Baal.
     /// @param calls An array of payloads for each call.
     /// @param revertOnFail If 'true', batch reverts after a failed call and stops further calls.
-    function batchCall(bytes[] calldata calls, bool revertOnFail) external returns (string memory revertMsg) {
+    function baalBatch(bytes[] calldata calls, bool revertOnFail) external returns (string memory revertMsg) {
         for (uint256 i = 0; i < calls.length; i++) {
             (bool success, bytes memory result) = address(this).delegatecall(calls[i]);
             if (!success && revertOnFail) 
@@ -553,11 +554,11 @@ contract Baal {
     
     /// @notice Elaborates delegate update - cf., 'Compound Governance'.
     function _writeCheckpoint(address delegatee, uint nCheckpoints, uint96 oldVotes, uint96 newVotes) private {
-        uint32 blockNumber = uint32(block.number);
-        if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromBlock == blockNumber) {
+        uint32 timeStamp = uint32(block.timestamp);
+        if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromTimeStamp == timeStamp) {
           checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
         } else {
-          checkpoints[delegatee][nCheckpoints] = Checkpoint(blockNumber, newVotes);
+          checkpoints[delegatee][nCheckpoints] = Checkpoint(timeStamp, newVotes);
           numCheckpoints[delegatee] = nCheckpoints + 1;
         }
         emit DelegateVotesChanged(delegatee, oldVotes, newVotes);
