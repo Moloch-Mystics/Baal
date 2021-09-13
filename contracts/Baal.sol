@@ -56,7 +56,7 @@ contract Baal is Module, Executor, Enum {
     mapping(address => uint)                        public balanceOf; /*maps `members` accounts to `shares` with erc20 accounting*/
     mapping(address => mapping(uint => Checkpoint)) public checkpoints; /*maps record of vote `checkpoints` for each account by index*/
     mapping(address => uint)                        public numCheckpoints; /*maps number of `checkpoints` for each account*/
-    mapping(address => address)                     public _delegates; /*maps record of each account's `shares` delegate*/
+    mapping(address => address)                     public delegates; /*maps record of each account's `shares` delegate*/
     mapping(address => uint)                        public nonces; /*maps tx record for signing & validating `shares` signatures*/
     
     mapping(address => Member) public members; /*maps `members` accounts to struct details*/
@@ -87,7 +87,7 @@ contract Baal is Module, Executor, Enum {
     }
     
     struct Checkpoint { /*Baal checkpoint for marking number of delegated votes from given block*/
-        uint32 fromBlock; /*block number for referencing voting balance*/
+        uint32 fromTimeStamp; /*unix time for referencing voting balance*/
         uint96 votes; /*votes at given block number*/
     }
  
@@ -98,6 +98,7 @@ contract Baal is Module, Executor, Enum {
     }
     
     struct Proposal { /*Baal proposal details*/
+        uint32 votingPeriod; /*time for voting in seconds*/
         uint32 votingStarts; /*starting time for proposal in seconds since unix epoch*/
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
         uint96 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
@@ -172,9 +173,20 @@ contract Baal is Module, Executor, Enum {
         require(minVotingPeriod <= votingPeriod && votingPeriod <= maxVotingPeriod,'!votingPeriod'); /*check voting period is within Baal bounds*/
         unchecked {
             proposalCount++; /*increment proposal counter*/
-            proposals[proposalCount] = Proposal(uint32(block.number), uint32(block.timestamp) + votingPeriod, 0, 0, self, proposalData, details); /*push params into proposal struct - start voting period timer*/
+            proposals[proposalCount] = Proposal(votingPeriod, uint32(block.number), uint32(block.timestamp) + votingPeriod, 0, 0, self, proposalData, details); /*push params into proposal struct - start voting period timer*/
         }
         emit SubmitProposal(self, proposal, votingPeriod, proposalData, details); /*emit event reflecting proposal submission*/
+    }
+    
+    /// @notice Sponsor proposal to Baal `members` for approval within voting period.
+    /// @param proposal Number of proposal in `proposals` mapping to sponsor.
+    function sponsorProposal(uint proposal) external nonReentrant {
+        Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
+        require(balanceOf[msg.sender] != 0,'!member'); /*check 'membership' - required to sponsor proposal*/
+        require(prop.votingPeriod != 0,'!exist'); /*check proposal existence*/
+        require(prop.votingStarts == 0,'sponsored');
+        prop.votingStarts = uint32(block.timestamp);
+        prop.votingEnds = uint32(block.timestamp) + prop.votingPeriod;
     }
 
     /// @notice Submit vote - proposal must exist & voting period must not have ended.
@@ -208,7 +220,7 @@ contract Baal is Module, Executor, Enum {
         bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash)); /*calculate EIP-712 digest for signature*/
         address signatory = ecrecover(digest, v, r, s); /*recover signer from hash data*/
         require(signatory != address(0),'!signatory'); /*check signer is not null*/
-        uint96 balance = uint96(getPriorVotes(signatory, prop.votingStarts)); /*fetch & gas-optimize voting weight at proposal creation time*/
+        uint96 balance = getPriorVotes(signatory, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
         require(prop.votingEnds >= block.timestamp,'ended'); /*check voting period has not ended*/
         unchecked {
             if (approved) { /*if `approved`, cast delegated balance `yesVotes` to proposal*/
@@ -404,7 +416,7 @@ contract Baal is Module, Executor, Enum {
         for (uint i; i < guildTokens.length; i++) {
             (,bytes memory balanceData) = guildTokens[i].staticcall(abi.encodeWithSelector(0x70a08231, address(this))); /*get Baal token balances - 'balanceOf(address)'*/
             uint balance = abi.decode(balanceData, (uint)); /*decode Baal token balances for calculation*/
-            uint amountToRagequit = ((lootToBurn + sharesToBurn) * balance) / totalSupply; /*calculate 'fair shair' claims*/
+            uint amountToRagequit = ((lootToBurn + sharesToBurn) * balance) / (totalSupply + totalLoot); /*calculate 'fair shair' claims*/
             if (amountToRagequit != 0) { /*gas optimization to allow higher maximum token limit*/
                 _safeTransfer(guildTokens[i], to, amountToRagequit); /*execute 'safe' token transfer*/
             }
@@ -419,13 +431,6 @@ contract Baal is Module, Executor, Enum {
     /***************
     GETTER FUNCTIONS
     ***************/
-    /// @notice Overrides standard 'Comp.sol' delegation mapping to return delegator's own address if they haven't delegated.
-    /// This avoids having to delegate to oneself. Adapted from 'NounsToken'.
-    /// @return deleg Account with delegated 'votes'.
-    function delegates(address delegator) external view returns (address deleg) {
-        deleg == address(0) ? delegator : _delegates[delegator];
-    }
-
     /// @notice Returns the current delegated `vote` balance for `account`.
     /// @param account The user to check delegated `votes` for.
     /// @return votes Current `votes` delegated to `account`.
@@ -436,21 +441,21 @@ contract Baal is Module, Executor, Enum {
     
     /// @notice Returns the prior number of `votes` for `account` as of `blockNumber`.
     /// @param account The user to check `votes` for.
-    /// @param blockNumber The block to check `votes` for.
+    /// @param timeStamp The unix time to check `votes` for.
     /// @return votes Prior `votes` delegated to `account`.
-    function getPriorVotes(address account, uint blockNumber) public view returns (uint96 votes) {
-        require(blockNumber < block.number,'!determined');
+    function getPriorVotes(address account, uint timeStamp) public view returns (uint96 votes) {
+        require(timeStamp < block.timestamp,'!determined');
         uint nCheckpoints = numCheckpoints[account];
         if (nCheckpoints == 0) { votes = 0; }
         unchecked {
-            if (checkpoints[account][nCheckpoints - 1].fromBlock <= blockNumber) { votes = checkpoints[account][nCheckpoints - 1].votes; }
-            if (checkpoints[account][0].fromBlock > blockNumber) { votes = 0; }
+            if (checkpoints[account][nCheckpoints - 1].fromTimeStamp <= timeStamp) { votes = checkpoints[account][nCheckpoints - 1].votes; }
+            if (checkpoints[account][0].fromTimeStamp > timeStamp) { votes = 0; }
             uint lower = 0; uint upper = nCheckpoints - 1;
             while (upper > lower) {
                 uint center = upper - (upper - lower) / 2;
                 Checkpoint memory cp = checkpoints[account][center];
-                if (cp.fromBlock == blockNumber) { votes = cp.votes; } 
-                else if (cp.fromBlock < blockNumber) { lower = center; } 
+                if (cp.fromTimeStamp == timeStamp) { votes = cp.votes; } 
+                else if (cp.fromTimeStamp < timeStamp) { lower = center; } 
                 else { upper = center - 1; }
             }
             votes = checkpoints[account][lower].votes;
@@ -501,9 +506,9 @@ contract Baal is Module, Executor, Enum {
 
     /// @notice Delegates Baal voting weight.
     function _delegate(address delegator, address delegatee) private {
-        address currentDelegate = _delegates[delegator];
+        address currentDelegate = delegates[delegator];
         if (currentDelegate != delegatee)
-            _delegates[delegator] = delegatee;
+            delegates[delegator] = delegatee;
             _moveDelegates(currentDelegate, delegatee, uint96(balanceOf[delegator]));
             emit DelegateChanged(delegator, currentDelegate, delegatee);
     }
@@ -528,11 +533,11 @@ contract Baal is Module, Executor, Enum {
     
     /// @notice Elaborates delegate update - cf., 'Compound Governance'.
     function _writeCheckpoint(address delegatee, uint nCheckpoints, uint96 oldVotes, uint96 newVotes) private {
-        uint32 blockNumber = uint32(block.number);
-        if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromBlock == blockNumber) {
+        uint32 timeStamp = uint32(block.timestamp);
+        if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromTimeStamp == timeStamp) {
           checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
         } else {
-          checkpoints[delegatee][nCheckpoints] = Checkpoint(blockNumber, newVotes);
+          checkpoints[delegatee][nCheckpoints] = Checkpoint(timeStamp, newVotes);
           numCheckpoints[delegatee] = nCheckpoints + 1;
         }
         emit DelegateVotesChanged(delegatee, oldVotes, newVotes);
@@ -572,7 +577,7 @@ contract Baal is Module, Executor, Enum {
             require(proposal <= proposalCount,'!exist'); /*check proposal exists*/
             require(prop.votingEnds + gracePeriod <= block.timestamp,'!ended'); /*check voting period has ended*/
             require(proposals[proposal - 1].votingEnds == 0,'prev!processed'); /*check previous proposal has processed by deletion*/
-            require(proposals[proposal].votingEnds != 0,'processed'); /*check given proposal has not yet processed by deletion*/
+            require(proposals[proposal].votingEnds != 0,'processed'); /*check given proposal has been sponsored & not yet processed by deletion*/
             if (memberCount == 1) ready = true; /*if single member, process early*/
             else if (prop.yesVotes > totalSupply / 2) ready = true; /*process early if majority member support*/
             else if (prop.votingEnds >= block.timestamp) ready = true; /*otherwise, process if voting period done*/
