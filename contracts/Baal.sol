@@ -47,7 +47,7 @@ contract Baal {
     mapping(address => uint)                        public balanceOf; /*maps `members` accounts to `shares` with erc20 accounting*/
     mapping(address => mapping(uint => Checkpoint)) public checkpoints; /*maps record of vote `checkpoints` for each account by index*/
     mapping(address => uint)                        public numCheckpoints; /*maps number of `checkpoints` for each account*/
-    mapping(address => address)                     public _delegates; /*maps record of each account's `shares` delegate*/
+    mapping(address => address)                     public delegates; /*maps record of each account's `shares` delegate*/
     mapping(address => uint)                        public nonces; /*maps tx record for signing & validating `shares` signatures*/
     
     mapping(address => Member) public members; /*maps `members` accounts to struct details*/
@@ -84,6 +84,7 @@ contract Baal {
     }
     
     struct Proposal { /*Baal proposal details*/
+        uint32 votingPeriod; /*time for voting in seconds*/
         uint32 votingStarts; /*starting time for proposal in seconds since unix epoch*/
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
         uint96 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
@@ -126,6 +127,7 @@ contract Baal {
             for (uint i; i < _summoners.length; i++) {
                 _mintLoot(_summoners[i], _loot[i]); /*mint Baal `loot` to `summoners`*/
                 _mintShares(_summoners[i], _shares[i]); /*mint Baal `shares` to `summoners`*/ 
+                _delegate(_summoners[i], _summoners[i]); /*delegate `summoners` voting weights to themselves - this saves a step before voting*/
                 memberCount++; /*increment `members` counter*/
             }
         }
@@ -170,7 +172,6 @@ contract Baal {
     /// @param details Context for proposal.
     /// @return proposal Count for submitted proposal.
     function submitProposal(uint8 flag, uint32 votingPeriod, address[] calldata to, uint96[] calldata value, bytes[] calldata data, string calldata details) external nonReentrant returns (uint proposal) {
-        require(balanceOf[msg.sender] != 0,'!member'); /*check 'membership' - required to submit proposal*/
         require(minVotingPeriod <= votingPeriod && votingPeriod <= maxVotingPeriod,'!votingPeriod'); /*check voting period is within Baal bounds*/
         require(to.length <= 10,'array max'); /*limit executable actions to help avoid block gas limit errors on processing*/
         require(flag <= 3,'!flag'); /*check 'flag' is in bounds*/
@@ -181,11 +182,29 @@ contract Baal {
         } else {
             require(to.length == value.length && value.length == data.length,'!array parity'); /*check array lengths match*/
         }
+        bool selfSponsor; /*plant sponsor flag*/
+        if (balanceOf[msg.sender] != 0) {
+            selfSponsor = true;
+        }
         unchecked {
             proposalCount++; /*increment proposal counter*/
-            proposals[proposalCount] = Proposal(uint32(block.number), uint32(block.timestamp) + votingPeriod, 0, 0, flags, to, value, data, details); /*push params into proposal struct - start voting period timer*/
+            proposals[proposalCount] = Proposal( /*push params into proposal struct - start voting period timer if member submission*/
+                votingPeriod,
+                selfSponsor ? uint32(block.number) : 0, 
+                selfSponsor ? uint32(block.timestamp) + votingPeriod : 0, 
+                0, 0, flags, to, value, data, details);
         }
         emit SubmitProposal(flag, proposal, votingPeriod, to, value, data, details); /*emit event reflecting proposal submission*/
+    }
+    
+    /// @notice Sponsor proposal to Baal `members` for approval within voting period.
+    /// @param proposal Number of proposal in `proposals` mapping to sponsor.
+    function sponsorProposal(uint proposal) external nonReentrant {
+        Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
+        require(balanceOf[msg.sender] != 0,'!member'); /*check 'membership' - required to sponsor proposal*/
+        require(prop.votingPeriod != 0,'!exist'); /*check proposal existence*/
+        prop.votingStarts = uint32(block.number);
+        prop.votingEnds = uint32(block.timestamp) + prop.votingPeriod;
     }
 
     /// @notice Submit vote - proposal must exist & voting period must not have ended.
@@ -419,13 +438,6 @@ contract Baal {
     /***************
     GETTER FUNCTIONS
     ***************/
-    /// @notice Overrides standard 'Comp.sol' delegation mapping to return delegator's own address if they haven't delegated.
-    /// This avoids having to delegate to oneself. Adapted from 'NounsToken'.
-    /// @return deleg Account with delegated 'votes'.
-    function delegates(address delegator) external view returns (address deleg) {
-        deleg == address(0) ? delegator : _delegates[delegator];
-    }
-
     /// @notice Returns the current delegated `vote` balance for `account`.
     /// @param account The user to check delegated `votes` for.
     /// @return votes Current `votes` delegated to `account`.
@@ -514,9 +526,9 @@ contract Baal {
 
     /// @notice Delegates Baal voting weight.
     function _delegate(address delegator, address delegatee) private {
-        address currentDelegate = _delegates[delegator];
+        address currentDelegate = delegates[delegator];
         if (currentDelegate != delegatee)
-            _delegates[delegator] = delegatee;
+            delegates[delegator] = delegatee;
             _moveDelegates(currentDelegate, delegatee, uint96(balanceOf[delegator]));
             emit DelegateChanged(delegator, currentDelegate, delegatee);
     }
@@ -585,7 +597,7 @@ contract Baal {
             require(proposal <= proposalCount,'!exist'); /*check proposal exists*/
             require(prop.votingEnds + gracePeriod <= block.timestamp,'!ended'); /*check voting period has ended*/
             require(proposals[proposal - 1].votingEnds == 0,'prev!processed'); /*check previous proposal has processed by deletion*/
-            require(proposals[proposal].votingEnds != 0,'processed'); /*check given proposal has not yet processed by deletion*/
+            require(proposals[proposal].votingEnds != 0,'processed'); /*check given proposal has been sponsored & not yet processed by deletion*/
             if (memberCount == 1) ready = true; /*if single member, process early*/
             else if (prop.yesVotes > totalSupply / 2) ready = true; /*process early if majority member support*/
             else if (prop.votingEnds >= block.timestamp) ready = true; /*otherwise, process if voting period done*/
