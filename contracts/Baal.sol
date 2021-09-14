@@ -19,6 +19,7 @@ interface IShaman {
 contract Baal {
     bool public lootPaused; /*tracks transferability of `loot` economic weight - amendable through 'period'[2] proposal*/
     bool public sharesPaused; /*tracks transferability of erc20 `shares` - amendable through 'period'[2] proposal*/
+    bool singleSummoner; /*internal flag to gauge speedy proposal processing*/
     
     uint8  constant public decimals = 18; /*unit scaling factor in erc20 `shares` accounting - '18' is default to match ETH & common erc20s*/
     uint16 constant MAX_GUILD_TOKEN_COUNT = 400; /*maximum number of whitelistable tokens subject to {ragequit}*/
@@ -31,7 +32,6 @@ contract Baal {
     uint public maxVotingPeriod; /*maximum period for voting in seconds - amendable through 'period'[2] proposal*/
     uint public proposalCount; /*counter for total `proposals` submitted*/
     uint status; /*internal reentrancy check tracking value*/
-    uint memberCount; /*internal membership counter to gauge speedy proposal processing*/
     
     string public name; /*'name' for erc20 `shares` accounting*/
     string public symbol; /*'symbol' for erc20 `shares` accounting*/
@@ -79,7 +79,7 @@ contract Baal {
     }
  
     struct Member { /*Baal membership details*/
-        uint96 loot; /*economic weight held by `members` - combined with `shares` on {ragequit} - can be set on summoning & adjusted via {memberAction} or 'member'[1] proposal*/
+        uint96 loot; /*economic weight held by `members` - can be set on summoning & adjusted via {memberAction}*/
         uint highestIndexYesVote; /*highest proposal index on which a member `approved`*/
         mapping(uint => bool) voted; /*maps voting decisions on proposals by `members` account*/
     }
@@ -122,7 +122,9 @@ contract Baal {
         uint96[]  memory _loot, 
         uint96[]  memory _shares
     ) {
-        require(_summoners.length == _loot.length && _loot.length == _shares.length,'!matched member arrays'); /*check `members`-related array lengths match*/
+        require(_guildTokens.length != 0,'!tokens approved'); /*check approved tokens are not null*/
+        require(_minVotingPeriod < _maxVotingPeriod,'min>max'); /*check minimum period doesn't exceed max*/
+        require(_summoners.length == _loot.length && _loot.length == _shares.length,'!member array parity'); /*check `members`-related array lengths match*/
         
         unchecked {
             for (uint i; i < _shamans.length; i++) shamans[_shamans[i]] = true; /*update mapping of approved `shamans` in Baal*/
@@ -131,7 +133,7 @@ contract Baal {
                 _mintLoot(_summoners[i], _loot[i]); /*mint Baal `loot` to `summoners`*/
                 _mintShares(_summoners[i], _shares[i]); /*mint Baal `shares` to `summoners`*/ 
                 _delegate(_summoners[i], _summoners[i]); /*delegate `summoners` voting weights to themselves - this saves a step before voting*/
-                memberCount++; /*increment `members` counter*/
+                if (_summoners.length == 1) singleSummoner = true; /*flag if Baal summoned singly for speedy processing*/
             }
         }
         
@@ -165,11 +167,9 @@ contract Baal {
         
         if (mint) { /*execute `mint` actions*/
             if (lootOut != 0) _mintLoot(msg.sender, lootOut); /*add `loot` to user account & Baal total*/
-            emit TransferLoot(address(0), msg.sender, lootOut); 
             if (sharesOut != 0) _mintShares(msg.sender, sharesOut); /*add `shares` to user account & Baal total with erc20 accounting*/
         } else { /*otherwise, execute `burn` actions*/
             if (lootOut != 0) _burnLoot(msg.sender, lootOut); /*subtract `loot` from user account & Baal total*/
-            emit TransferLoot(msg.sender, address(0), lootOut);
             if (sharesOut != 0) _burnShares(msg.sender, sharesOut); /*subtract `shares` from user account & Baal total with erc20 accounting*/
         }
     }
@@ -232,9 +232,11 @@ contract Baal {
         require(balanceOf[msg.sender] != 0,'!member'); /*check 'membership' - required to sponsor proposal*/
         require(prop.votingPeriod != 0,'!exist'); /*check proposal existence*/
         require(prop.votingStarts == 0,'sponsored'); /*check proposal not already sponsored*/
-
-        prop.votingStarts = uint32(block.timestamp);
-        prop.votingEnds = uint32(block.timestamp) + prop.votingPeriod;
+        
+        unchecked {
+            prop.votingStarts = uint32(block.timestamp);
+            prop.votingEnds = uint32(block.timestamp) + prop.votingPeriod;
+        }
 
         emit SponsorProposal(msg.sender, proposal, prop.votingStarts);
     }
@@ -250,10 +252,11 @@ contract Baal {
         require(prop.votingEnds >= block.timestamp,'ended'); /*check voting period has not ended*/
         
         unchecked {
-            if (approved) { 
-                prop.yesVotes += balance; members[msg.sender].highestIndexYesVote = proposal; /*if `approved`, cast delegated balance `yesVotes` to proposal*/
-            } else { 
-                prop.noVotes += balance; /*otherwise, cast delegated balance `noVotes` to proposal*/
+            if (approved) { /*if `approved`, cast delegated balance `yesVotes` to proposal*/
+                prop.yesVotes += balance; 
+                members[msg.sender].highestIndexYesVote = proposal;
+            } else { /*otherwise, cast delegated balance `noVotes` to proposal*/
+                prop.noVotes += balance;
             }
         }
         
@@ -324,20 +327,24 @@ contract Baal {
     
     /// @notice Internal function to process 'action'[0] proposal.
     function processActionProposal(Proposal memory prop) private returns (bytes memory returnData) {
-        for (uint i; i < prop.to.length; i++) 
-            (,returnData) = prop.to[i].call{value:prop.value[i]} /*pass ETH value(s), if any*/
-            (prop.data[i]); /*execute low-level call(s)*/
+        unchecked {
+            for (uint i; i < prop.to.length; i++) 
+                (,returnData) = prop.to[i].call{value:prop.value[i]} /*pass ETH value(s), if any*/
+                (prop.data[i]); /*execute low-level call(s)*/
+        }
     }
     
     /// @notice Internal function to process 'member'[1] proposal.
     function processMemberProposal(Proposal memory prop) private {
-        for (uint i; i < prop.to.length; i++) {
-            if (prop.data[i].length == 0) {
-                _mintShares(prop.to[i], prop.value[i]); /*grant `to` `value` `shares`*/
-            } else {
-                uint96 removedBalance = uint96(balanceOf[prop.to[i]]); /*gas-optimize variable*/
-                _burnShares(prop.to[i], removedBalance); /*burn all of `to` `shares` & convert into `loot`*/
-                _mintLoot(prop.to[i], removedBalance); /*mint equivalent `loot`*/
+        unchecked {
+            for (uint i; i < prop.to.length; i++) {
+                if (prop.data[i].length == 0) {
+                    _mintShares(prop.to[i], prop.value[i]); /*grant `to` `value` `shares`*/
+                } else {
+                    uint96 removedBalance = uint96(balanceOf[prop.to[i]]); /*gas-optimize variable*/
+                    _burnShares(prop.to[i], removedBalance); /*burn all of `to` `shares` & convert into `loot`*/
+                    _mintLoot(prop.to[i], removedBalance); /*mint equivalent `loot`*/
+                }
             }
         }
     }
@@ -477,7 +484,9 @@ contract Baal {
     function transferFrom(address from, address to, uint96 amount) external returns (bool success) {
         require(!sharesPaused,'!transferable');
         
-        if (allowance[from][msg.sender] != type(uint).max) allowance[from][msg.sender] -= amount;
+        if (allowance[from][msg.sender] != type(uint).max) {
+            allowance[from][msg.sender] -= amount;
+        }
         
         balanceOf[from] -= amount;
         
@@ -522,11 +531,14 @@ contract Baal {
             }
         }
         
-        if (lootToBurn != 0) /*gas optimization*/ 
+        if (lootToBurn != 0) { /*gas optimization*/ 
             _burnLoot(msg.sender, lootToBurn); /*subtract `loot` from user account & Baal totals*/
-        if (sharesToBurn != 0) /*gas optimization*/ 
+        }
+        
+        if (sharesToBurn != 0) { /*gas optimization*/ 
             _burnShares(msg.sender, sharesToBurn);  /*subtract `shares` from user account with erc20 accounting*/
-            
+        }
+        
         emit Ragequit(msg.sender, to, lootToBurn, sharesToBurn); /*event reflects claims made against Baal*/
     }
 
@@ -627,11 +639,12 @@ contract Baal {
     function _delegate(address delegator, address delegatee) private {
         address currentDelegate = delegates[delegator];
         
-        if (currentDelegate != delegatee)
+        if (currentDelegate != delegatee) {
             delegates[delegator] = delegatee;
             _moveDelegates(currentDelegate, delegatee, uint96(balanceOf[delegator]));
             
             emit DelegateChanged(delegator, currentDelegate, delegatee);
+        }
     }
     
     /// @notice Elaborates delegate update - cf., 'Compound Governance'.
@@ -707,7 +720,7 @@ contract Baal {
             require(proposals[proposal - 1].votingEnds == 0,'prev!processed'); /*check previous proposal has processed by deletion*/
             require(proposals[proposal].votingEnds != 0,'processed'); /*check given proposal has been sponsored & not yet processed by deletion*/
             
-            if (memberCount == 1) ready = true; /*if single member, process early*/
+            if (singleSummoner) ready = true; /*if single member, process early*/
             else if (prop.yesVotes > totalSupply / 2) ready = true; /*process early if majority member support*/
             else if (prop.votingEnds >= block.timestamp) ready = true; /*otherwise, process if voting period done*/
         }
