@@ -120,8 +120,8 @@ contract Baal {
         address[] memory _shamans, 
         address[] memory _summoners, 
         uint96[]  memory _loot, 
-        uint96[]  memory _shares) {
-        
+        uint96[]  memory _shares
+    ) {
         require(_summoners.length == _loot.length && _loot.length == _shares.length,'!matched member arrays'); /*check `members`-related array lengths match*/
         
         unchecked {
@@ -158,8 +158,7 @@ contract Baal {
         uint96 loot, 
         uint96 shares, 
         bool mint
-        ) external nonReentrant payable returns (uint96 lootOut, uint96 sharesOut) {
-        
+    ) external nonReentrant payable returns (uint96 lootOut, uint96 sharesOut) {
         require(shamans[shaman],'!shaman'); /*check `shaman` is approved*/
         
         (lootOut, sharesOut) = IShaman(shaman).memberAction{value: msg.value}(msg.sender, loot, shares); /*fetch 'reaction' per inputs*/
@@ -193,8 +192,7 @@ contract Baal {
         uint96[] calldata value, 
         bytes[] calldata data, 
         string calldata details
-        ) external nonReentrant returns (uint proposal) {
-        
+    ) external nonReentrant returns (uint proposal) {
         require(minVotingPeriod <= votingPeriod && votingPeriod <= maxVotingPeriod,'!votingPeriod'); /*check voting period is within Baal bounds*/
         require(to.length <= 10,'array max'); /*limit executable actions to help avoid block gas limit errors on processing*/
         require(flag <= 3,'!flag'); /*check 'flag' is in bounds*/
@@ -270,7 +268,13 @@ contract Baal {
     /// @param v The recovery byte of the signature.
     /// @param r Half of the ECDSA signature pair.
     /// @param s Half of the ECDSA signature pair.
-    function submitVoteWithSig(uint proposal, bool approved, uint8 v, bytes32 r, bytes32 s) external nonReentrant {
+    function submitVoteWithSig(
+        uint proposal, 
+        bool approved, 
+        uint8 v, 
+        bytes32 r, 
+        bytes32 s
+    ) external nonReentrant {
         Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
         
         bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), block.chainid, address(this))); /*calculate EIP-712 domain hash*/
@@ -388,7 +392,14 @@ contract Baal {
     /// @param v The recovery byte of the signature.
     /// @param r Half of the ECDSA signature pair.
     /// @param s Half of the ECDSA signature pair.
-    function delegateBySig(address delegatee, uint nonce, uint deadline, uint8 v, bytes32 r, bytes32 s) external {
+    function delegateBySig(
+        address delegatee, 
+        uint nonce, 
+        uint deadline, 
+        uint8 v, 
+        bytes32 r, 
+        bytes32 s
+    ) external {
         bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), block.chainid, address(this))); /*calculate EIP-712 domain hash*/
         
         unchecked {
@@ -412,7 +423,15 @@ contract Baal {
     /// @param v The recovery byte of the signature.
     /// @param r Half of the ECDSA signature pair.
     /// @param s Half of the ECDSA signature pair.
-    function permit(address owner, address spender, uint96 amount, uint deadline, uint8 v, bytes32 r, bytes32 s) external {
+    function permit(
+        address owner, 
+        address spender, 
+        uint96 amount, 
+        uint deadline, 
+        uint8 v, 
+        bytes32 r, 
+        bytes32 s
+    ) external {
         bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), block.chainid, address(this))); /*calculate EIP-712 domain hash*/
         
         unchecked {
@@ -607,6 +626,7 @@ contract Baal {
     /// @notice Delegates Baal voting weight.
     function _delegate(address delegator, address delegatee) private {
         address currentDelegate = delegates[delegator];
+        
         if (currentDelegate != delegatee)
             delegates[delegator] = delegatee;
             _moveDelegates(currentDelegate, delegatee, uint96(balanceOf[delegator]));
