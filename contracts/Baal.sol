@@ -218,7 +218,8 @@ contract Baal {
                 votingPeriod,
                 selfSponsor ? uint32(block.timestamp) : 0, 
                 selfSponsor ? uint32(block.timestamp) + votingPeriod : 0, 
-                0, 0, flags, to, value, data, details);
+                0, 0, flags, to, value, data, details
+            );
         }
         
         emit SubmitProposal(flag, proposal, votingPeriod, to, value, data, details); /*emit event reflecting proposal submission*/
@@ -233,8 +234,9 @@ contract Baal {
         require(prop.votingPeriod != 0,'!exist'); /*check proposal existence*/
         require(prop.votingStarts == 0,'sponsored'); /*check proposal not already sponsored*/
         
+        prop.votingStarts = uint32(block.timestamp);
+        
         unchecked {
-            prop.votingStarts = uint32(block.timestamp);
             prop.votingEnds = uint32(block.timestamp) + prop.votingPeriod;
         }
 
@@ -408,18 +410,17 @@ contract Baal {
         bytes32 s
     ) external {
         bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), block.chainid, address(this))); /*calculate EIP-712 domain hash*/
-        
+        bytes32 structHash = keccak256(abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, deadline)); /*calculate EIP-712 struct hash*/
+        bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash)); /*calculate EIP-712 digest for signature*/
+        address signatory = ecrecover(digest, v, r, s); /*recover signer from hash data*/
+            
+        require(signatory != address(0),'!signature'); /*check signer is not null*/
         unchecked {
-            bytes32 structHash = keccak256(abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, deadline)); /*calculate EIP-712 struct hash*/
-            bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, structHash)); /*calculate EIP-712 digest for signature*/
-            address signatory = ecrecover(digest, v, r, s); /*recover signer from hash data*/
-            
-            require(signatory != address(0),'!signature'); /*check signer is not null*/
             require(nonce == nonces[signatory]++,'!nonce'); /*check given `nonce` is next in `nonces`*/
-            require(block.timestamp <= deadline,'expired'); /*check signature is not expired*/
-            
-            _delegate(signatory, delegatee); /*execute delegation*/
         }
+        require(block.timestamp <= deadline,'expired'); /*check signature is not expired*/
+            
+        _delegate(signatory, delegatee); /*execute delegation*/
     }
 
     /// @notice Triggers an approval from owner to spends.
@@ -653,14 +654,14 @@ contract Baal {
             if (srcRep != dstRep && amount != 0) {
                 if (srcRep != address(0)) {
                     uint srcRepNum = numCheckpoints[srcRep];
-                    uint96 srcRepOld = srcRepNum > 0 ? checkpoints[srcRep][srcRepNum - 1].votes : 0;
+                    uint96 srcRepOld = srcRepNum != 0 ? checkpoints[srcRep][srcRepNum - 1].votes : 0;
                     uint96 srcRepNew = srcRepOld - amount;
                     _writeCheckpoint(srcRep, srcRepNum, srcRepOld, srcRepNew);
                 }
             
                 if (dstRep != address(0)) {
                     uint dstRepNum = numCheckpoints[dstRep];
-                    uint96 dstRepOld = dstRepNum > 0 ? checkpoints[dstRep][dstRepNum - 1].votes : 0;
+                    uint96 dstRepOld = dstRepNum != 0 ? checkpoints[dstRep][dstRepNum - 1].votes : 0;
                     uint96 dstRepNew = dstRepOld + amount;
                     _writeCheckpoint(dstRep, dstRepNum, dstRepOld, dstRepNew);
                 }
@@ -673,7 +674,7 @@ contract Baal {
         uint32 timeStamp = uint32(block.timestamp);
         
         unchecked {
-            if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromTimeStamp == timeStamp) {
+            if (nCheckpoints != 0 && checkpoints[delegatee][nCheckpoints - 1].fromTimeStamp == timeStamp) {
                 checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
             } else {
                 checkpoints[delegatee][nCheckpoints] = Checkpoint(timeStamp, newVotes);
