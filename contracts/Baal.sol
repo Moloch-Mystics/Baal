@@ -649,19 +649,21 @@ contract Baal {
     
     /// @notice Elaborates delegate update - cf., 'Compound Governance'.
     function _moveDelegates(address srcRep, address dstRep, uint96 amount) private {
-        if (srcRep != dstRep && amount != 0) {
-            if (srcRep != address(0)) {
-                uint srcRepNum = numCheckpoints[srcRep];
-                uint96 srcRepOld = srcRepNum > 0 ? checkpoints[srcRep][srcRepNum - 1].votes : 0;
-                uint96 srcRepNew = srcRepOld - amount;
-                _writeCheckpoint(srcRep, srcRepNum, srcRepOld, srcRepNew);
-            }
+        unchecked {
+            if (srcRep != dstRep && amount != 0) {
+                if (srcRep != address(0)) {
+                    uint srcRepNum = numCheckpoints[srcRep];
+                    uint96 srcRepOld = srcRepNum > 0 ? checkpoints[srcRep][srcRepNum - 1].votes : 0;
+                    uint96 srcRepNew = srcRepOld - amount;
+                    _writeCheckpoint(srcRep, srcRepNum, srcRepOld, srcRepNew);
+                }
             
-            if (dstRep != address(0)) {
-                uint dstRepNum = numCheckpoints[dstRep];
-                uint96 dstRepOld = dstRepNum > 0 ? checkpoints[dstRep][dstRepNum - 1].votes : 0;
-                uint96 dstRepNew = dstRepOld + amount;
-                _writeCheckpoint(dstRep, dstRepNum, dstRepOld, dstRepNew);
+                if (dstRep != address(0)) {
+                    uint dstRepNum = numCheckpoints[dstRep];
+                    uint96 dstRepOld = dstRepNum > 0 ? checkpoints[dstRep][dstRepNum - 1].votes : 0;
+                    uint96 dstRepNew = dstRepOld + amount;
+                    _writeCheckpoint(dstRep, dstRepNum, dstRepOld, dstRepNew);
+                }
             }
         }
     }
@@ -670,11 +672,13 @@ contract Baal {
     function _writeCheckpoint(address delegatee, uint nCheckpoints, uint96 oldVotes, uint96 newVotes) private {
         uint32 timeStamp = uint32(block.timestamp);
         
-        if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromTimeStamp == timeStamp) {
-          checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
-        } else {
-          checkpoints[delegatee][nCheckpoints] = Checkpoint(timeStamp, newVotes);
-          numCheckpoints[delegatee] = nCheckpoints + 1;
+        unchecked {
+            if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromTimeStamp == timeStamp) {
+                checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
+            } else {
+                checkpoints[delegatee][nCheckpoints] = Checkpoint(timeStamp, newVotes);
+                numCheckpoints[delegatee] = nCheckpoints + 1;
+            }
         }
         
         emit DelegateVotesChanged(delegatee, oldVotes, newVotes);
@@ -683,7 +687,10 @@ contract Baal {
     /// @notice Burn function for Baal `loot`.
     function _burnLoot(address from, uint96 loot) private {
         members[from].loot -= loot; /*subtract `loot` for `from` account*/
-        totalLoot -= loot; /*subtract from total Baal `loot`*/
+        
+        unchecked {
+            totalLoot -= loot; /*subtract from total Baal `loot`*/
+        }
         
         emit TransferLoot(from, address(0), loot); /*emit event reflecting burn of `loot`*/
     }
@@ -691,14 +698,20 @@ contract Baal {
     /// @notice Burn function for Baal `shares`.
     function _burnShares(address from, uint96 shares) private {
         balanceOf[from] -= shares; /*subtract `shares` for `from` account*/
-        totalSupply -= shares; /*subtract from total Baal `shares`*/
+        
+        unchecked {
+            totalSupply -= shares; /*subtract from total Baal `shares`*/
+        }
         
         emit Transfer(from, address(0), shares); /*emit event reflecting burn of `shares` with erc20 accounting*/
     }
     
     /// @notice Minting function for Baal `loot`.
     function _mintLoot(address to, uint96 loot) private {
-        members[to].loot += loot; /*add `loot` for `to` account*/
+        unchecked {
+            members[to].loot += loot; /*add `loot` for `to` account*/
+        }
+        
         totalLoot += loot; /*add to total Baal `loot`*/
         
         emit TransferLoot(address(0), to, loot); /*emit event reflecting mint of `loot`*/
@@ -706,7 +719,10 @@ contract Baal {
     
     /// @notice Minting function for Baal `shares`.
     function _mintShares(address to, uint96 shares) private {
-        balanceOf[to] += shares; /*add `shares` for `to` account*/
+        unchecked {
+            balanceOf[to] += shares; /*add `shares` for `to` account*/
+        }
+        
         totalSupply += shares; /*add to total Baal `shares`*/
         
         emit Transfer(address(0), to, shares); /*emit event reflecting mint of `shares` with erc20 accounting*/
