@@ -91,7 +91,6 @@ contract Baal {
     }
     
     struct Proposal { /*Baal proposal details*/
-        address sponsor; /* member that sponsors prop*/ 
         uint32 votingStarts; /*starting time for proposal in seconds since unix epoch*/
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
         uint32 votingPeriod; /*voting period length*/
@@ -235,8 +234,7 @@ contract Baal {
         }
 
         prop.flags[4] = true; 
-        prop.sponsor = msg.sender;
-        prop.votingStarts = uint32(block.number);
+        prop.votingStarts = uint32(block.timestamp);
         prop.votingEnds = uint32(block.timestamp) + prop.votingPeriod;
 
         proposalQueue.push(proposal);
@@ -250,6 +248,7 @@ contract Baal {
     function submitVote(uint proposal, bool approved) external nonReentrant {
         Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
         uint96 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
+        require(prop.flags[4], "!sponsored"); /*check that proposal has been sponsored*/ 
         require(prop.votingStarts <= block.timestamp,'!started'); /*check voting period has started*/
         require(prop.votingEnds >= block.timestamp,'ended'); /*check voting period has not ended*/
         unchecked {
@@ -505,7 +504,7 @@ contract Baal {
     /// @param blockNumber The block to check `votes` for.
     /// @return votes Prior `votes` delegated to `account`.
     function getPriorVotes(address account, uint blockNumber) public view returns (uint96 votes) {
-        require(blockNumber < block.number,'!determined');
+        require(blockNumber < block.timestamp,'!determined');
         uint nCheckpoints = numCheckpoints[account];
         if (nCheckpoints == 0) { votes = 0; }
         unchecked {
@@ -608,7 +607,7 @@ contract Baal {
     
     /// @notice Elaborates delegate update - cf., 'Compound Governance'.
     function _writeCheckpoint(address delegatee, uint nCheckpoints, uint96 oldVotes, uint96 newVotes) private {
-        uint32 blockNumber = uint32(block.number);
+        uint32 blockNumber = uint32(block.timestamp);
         if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromBlock == blockNumber) {
           checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
         } else {
