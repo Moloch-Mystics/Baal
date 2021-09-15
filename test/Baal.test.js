@@ -262,7 +262,7 @@ describe('Baal contract', function () {
       const priorVote = await baal.getPriorVotes(summoner.address, blockT);
       const nCheckpoints = await baal.numCheckpoints(summoner.address);
       const votes = (await baal.checkpoints(summoner.address, nCheckpoints - 1)).votes;
-      expect(prop.yesVotes).equal(votes);
+      expect(prop.yesVotes).to.equal(votes);
     });
 
     it('happy case - no vote', async function() {
@@ -272,7 +272,7 @@ describe('Baal contract', function () {
       const priorVote = await baal.getPriorVotes(summoner.address, blockT);
       const nCheckpoints = await baal.numCheckpoints(summoner.address);
       const votes = (await baal.checkpoints(summoner.address, nCheckpoints - 1)).votes;
-      expect(prop.noVotes).equal(votes);
+      expect(prop.noVotes).to.equal(votes);
     });
 
     it('require fail - voting period has ended', async function() {
@@ -284,6 +284,7 @@ describe('Baal contract', function () {
 
   describe('processProposal', function () {
     it('happy case - flag[0] - yes wins', async function () {
+      const beforeProcessed = await baal.proposals(1);;
       await baal.submitProposal(
         proposal.flag,
         proposal.votingPeriod,
@@ -295,6 +296,8 @@ describe('Baal contract', function () {
       await baal.submitVote(1, yes);
       await moveForwardPeriods(2);
       await baal.processProposal(1);
+      const afterProcessed = await baal.proposals(1);
+      expect(afterProcessed).to.deep.equal(beforeProcessed);
     });
 
     it('happy case - flag[1] - yes wins', async function () {
@@ -306,12 +309,17 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      const lootBefore = (await baal.members(proposal.account)).loot;
       await baal.submitVote(1, yes);
+      const yesVotes = (await baal.proposals(1)).yesVotes;
       await moveForwardPeriods(2);
       await baal.processProposal(1);
+      const lootAfter = (await baal.members(proposal.account)).loot;
+      expect(lootAfter).to.equal(lootBefore.add(yesVotes));
     });
 
     it('happy case - flag[2] - yes wins', async function () {
+      const beforeProcessed = await baal.proposals(1);
       await baal.submitProposal(
         proposal.flag + 2,
         proposal.votingPeriod,
@@ -323,9 +331,12 @@ describe('Baal contract', function () {
       await baal.submitVote(1, yes);
       await moveForwardPeriods(2);
       await baal.processProposal(1);
+      const afterProcessed = await baal.proposals(1);
+      expect(afterProcessed).to.deep.equal(beforeProcessed);
     });
 
     it('happy case - flag[3] - yes wins', async function () {
+      const beforeProcessed = await baal.proposals(1);
       await baal.submitProposal(
         proposal.flag + 3,
         proposal.votingPeriod,
@@ -337,9 +348,12 @@ describe('Baal contract', function () {
       await baal.submitVote(1, yes);
       await moveForwardPeriods(2);
       await baal.processProposal(1);
+      const afterProcessed = await baal.proposals(1);
+      expect(afterProcessed).to.deep.equal(beforeProcessed);
     });
 
     it('happy case - flag[0] - no wins', async function () {
+      const beforeProcessed = await baal.proposals(1);
       await baal.submitProposal(
         proposal.flag,
         proposal.votingPeriod,
@@ -351,6 +365,8 @@ describe('Baal contract', function () {
       await baal.submitVote(1, no);
       await moveForwardPeriods(2);
       await baal.processProposal(1);
+      const afterProcessed = await baal.proposals(1);
+      expect(afterProcessed).to.deep.equal(beforeProcessed);
     });
 
     it('happy case - flag[1] - no wins', async function () {
@@ -362,12 +378,18 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      const lootBefore = (await baal.members(proposal.account)).loot;
       await baal.submitVote(1, no);
+      const noVotes = (await baal.proposals(1)).noVotes;
       await moveForwardPeriods(2);
       await baal.processProposal(1);
+      const lootAfter = (await baal.members(proposal.account)).loot;
+      expect(lootAfter).to.equal(lootBefore.add(noVotes));
+
     });
 
     it('happy case - flag[2] - no wins', async function () {
+      const beforeProcessed = await baal.proposals(1);
       await baal.submitProposal(
         proposal.flag + 2,
         proposal.votingPeriod,
@@ -379,6 +401,8 @@ describe('Baal contract', function () {
       await baal.submitVote(1, no);
       await moveForwardPeriods(2);
       await baal.processProposal(1);
+      const afterProcessed = await baal.proposals(1);
+      expect(afterProcessed).to.deep.equal(beforeProcessed);
     });
 
     it('require fail - proposal does not exist', async function () {
