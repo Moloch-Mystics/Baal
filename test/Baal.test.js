@@ -408,7 +408,7 @@ describe('Baal contract', function () {
       );
       await baal.sponsorProposal(1); 
       await baal.submitVote(1, yes);
-      await baal.processProposal(1)
+      await baal.processProposal(0)
         .should.be.rejectedWith('!exist');
     });
 
@@ -557,6 +557,7 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      await baal.sponsorProposal(1);
     });
 
     it('happy case - yes vote', async function (){
