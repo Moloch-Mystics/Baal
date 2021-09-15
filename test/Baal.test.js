@@ -240,6 +240,25 @@ describe('Baal contract', function () {
     });
   });
 
+  describe('sponsorProposal', function () {
+    beforeEach(async function () {
+      await baal.submitProposal(
+        proposal.flag,
+        proposal.votingPeriod,
+        [proposal.account], 
+        [proposal.value],
+        [proposal.data],
+        ethers.utils.id(proposal.details)
+      );
+      await baal.sponsorProposal(1);
+    });
+
+    it('happy case - sponsored flag', async function (){
+      const flags = await baal.getProposalFlags(1);
+      expect(flags[proposal.flag + 4]).to.be.true;
+    });
+  });
+
   describe('submitVote', function () {
     beforeEach(async function () {
       await baal.submitProposal(
@@ -250,6 +269,7 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      await baal.sponsorProposal(1); 
     });
 
     it('happy case - yes vote', async function() {
@@ -281,9 +301,10 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      await baal.sponsorProposal(1); 
       await baal.submitVote(1, yes);
       await moveForwardPeriods(2);
-      await baal.processProposal(1);
+      await baal.processProposal(0);
     });
 
     it('happy case - flag[1] - yes wins', async function () {
@@ -295,9 +316,10 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      await baal.sponsorProposal(1); 
       await baal.submitVote(1, yes);
       await moveForwardPeriods(2);
-      await baal.processProposal(1);
+      await baal.processProposal(0);
     });
 
     it('happy case - flag[2] - yes wins', async function () {
@@ -309,9 +331,10 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      await baal.sponsorProposal(1); 
       await baal.submitVote(1, yes);
       await moveForwardPeriods(2);
-      await baal.processProposal(1);
+      await baal.processProposal(0);
     });
 
     it('happy case - flag[3] - yes wins', async function () {
@@ -323,9 +346,10 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      await baal.sponsorProposal(1); 
       await baal.submitVote(1, yes);
       await moveForwardPeriods(2);
-      await baal.processProposal(1);
+      await baal.processProposal(0);
     });
 
     it('happy case - flag[0] - no wins', async function () {
@@ -337,9 +361,10 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      await baal.sponsorProposal(1); 
       await baal.submitVote(1, no);
       await moveForwardPeriods(2);
-      await baal.processProposal(1);
+      await baal.processProposal(0);
     });
 
     it('happy case - flag[1] - no wins', async function () {
@@ -351,9 +376,10 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      await baal.sponsorProposal(1); 
       await baal.submitVote(1, no);
       await moveForwardPeriods(2);
-      await baal.processProposal(1);
+      await baal.processProposal(0);
     });
 
     it('happy case - flag[2] - no wins', async function () {
@@ -365,9 +391,10 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      await baal.sponsorProposal(1); 
       await baal.submitVote(1, no);
       await moveForwardPeriods(2);
-      await baal.processProposal(1);
+      await baal.processProposal(0);
     });
 
     it('require fail - proposal does not exist', async function () {
@@ -379,8 +406,9 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      await baal.sponsorProposal(1); 
       await baal.submitVote(1, yes);
-      await baal.processProposal(2)
+      await baal.processProposal(1)
         .should.be.rejectedWith('!exist');
     });
 
@@ -393,8 +421,9 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      await baal.sponsorProposal(1); 
       await baal.submitVote(1, yes);
-      await baal.processProposal(1)
+      await baal.processProposal(0)
         .should.be.rejectedWith('!ended');
     });
 
@@ -407,6 +436,7 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      await baal.sponsorProposal(1); 
       await baal.submitVote(1, yes);
       await baal.submitProposal(
         proposal.flag,
@@ -416,9 +446,10 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      await baal.sponsorProposal(2); 
       await baal.submitVote(2, yes);
       await moveForwardPeriods(2);
-      await baal.processProposal(2)
+      await baal.processProposal(1)
         .should.be.rejectedWith('prev!processed');
     });
   });
@@ -448,6 +479,7 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
+      await baal.sponsorProposal(1); 
     });
 
     it('happy case', async function (){
