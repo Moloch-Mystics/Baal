@@ -146,13 +146,16 @@ describe('Baal contract', function () {
   });
 
   describe('memberAction', function () {
-    it('happy case', async function () {
+    it('happy case - verify loot', async function () {
       await baal.memberAction(shaman.address, loot / 2, shares / 2, true);
       const lootData = await baal.members(summoner.address);
       expect(lootData.loot).to.equal(1000);
-      //TO-DO why can't we fetch erc20 shares balance of summoner?
-      //const sharesData = await baal.balanceOf(summoner.address);
-      //expect(sharesData.to.equal(200));
+    });
+
+    it('happy case - verify shares', async function () {
+      await baal.memberAction(shaman.address, loot / 2, shares / 2, true);
+      const sharesData = await baal.balanceOf(summoner.address);
+      expect(sharesData).to.equal(200);
     });
   });
   
@@ -253,15 +256,23 @@ describe('Baal contract', function () {
     });
 
     it('happy case - yes vote', async function() {
+      const blockT = await blockTime();
       await baal.submitVote(1, yes);
-      const vote = await baal.getProposalVotes(summoner.address, 1);
-      expect(vote).equal(yes);
+      const prop = await baal.proposals(1);
+      const priorVote = await baal.getPriorVotes(summoner.address, blockT);
+      const nCheckpoints = await baal.numCheckpoints(summoner.address);
+      const votes = (await baal.checkpoints(summoner.address, nCheckpoints - 1)).votes;
+      expect(prop.yesVotes).equal(votes);
     });
 
     it('happy case - no vote', async function() {
+      const blockT = await blockTime();
       await baal.submitVote(1, no);
-      const vote = await baal.getProposalVotes(summoner.address, 1);
-      expect(vote).to.equal(no);
+      const prop = await baal.proposals(1);
+      const priorVote = await baal.getPriorVotes(summoner.address, blockT);
+      const nCheckpoints = await baal.numCheckpoints(summoner.address);
+      const votes = (await baal.checkpoints(summoner.address, nCheckpoints - 1)).votes;
+      expect(prop.noVotes).equal(votes);
     });
 
     it('require fail - voting period has ended', async function() {
@@ -394,20 +405,6 @@ describe('Baal contract', function () {
         ethers.utils.id(proposal.details)
       );
       await baal.submitVote(1, yes);
-      await baal.processProposal(1)
-        .should.be.rejectedWith('!ended');
-    });
-
-    it('require fail - voting period has not ended', async function () {
-      await baal.submitProposal(
-        proposal.flag,
-        proposal.votingPeriod,
-        [proposal.account], 
-        [proposal.value],
-        [proposal.data],
-        ethers.utils.id(proposal.details)
-      );
-      await baal.submitVote(1, yes);
       await baal.submitProposal(
         proposal.flag,
         proposal.votingPeriod,
@@ -425,11 +422,11 @@ describe('Baal contract', function () {
 
   describe('getCurrentVotes', function () {
     it('happy case - account with votes', async function () {
-      //const currentVotes = await baal.getCurrentVotes(summoner.address);
-      //const nCheckpoints = await baal.numCheckpoints(summoner.address);
-      //const checkpoints = await baal.checkpoints(summoner.address, nCheckpoints - 1);
-      //const votes = checkpoints.votes;
-      //expect(currentVotes).to.equal(votes);
+      const currentVotes = await baal.getCurrentVotes(summoner.address);
+      const nCheckpoints = await baal.numCheckpoints(summoner.address);
+      const checkpoints = await baal.checkpoints(summoner.address, nCheckpoints - 1);
+      const votes = checkpoints.votes;
+      expect(currentVotes).to.equal(votes);
     });
 
     it('happy case - account without votes', async function () {
@@ -450,10 +447,28 @@ describe('Baal contract', function () {
       );
     });
 
-    it('happy case', async function (){
-      const blockNum = await blockNumber();
+    it('happy case - yes vote', async function (){
+      const blockT = await blockTime();
       await baal.submitVote(1, yes);
-      const priorVote = await baal.getPriorVotes(summoner.address, blockNum);
+      const priorVote = await baal.getPriorVotes(summoner.address, blockT);
+      const nCheckpoints = await baal.numCheckpoints(summoner.address);
+      const votes = (await baal.checkpoints(summoner.address, nCheckpoints - 1)).votes;
+      expect(priorVote).to.equal(votes);
+    });
+
+    it('happy case - no vote', async function (){
+      const blockT = await blockTime();
+      await baal.submitVote(1, no);
+      const priorVote = await baal.getPriorVotes(summoner.address, blockT);
+      const nCheckpoints = await baal.numCheckpoints(summoner.address);
+      const votes = (await baal.checkpoints(summoner.address, nCheckpoints - 1)).votes;
+      expect(priorVote).to.equal(votes);
+    });
+
+    it('require fail - timestamp not determined', async function () {
+      const blockT = await blockTime();
+      await baal.getPriorVotes(summoner.address, blockT)
+        .should.be.rejectedWith('!determined');
     });
   });
 
@@ -512,31 +527,6 @@ describe('Baal contract', function () {
 
       const flags = await baal.getProposalFlags(1);
       expect(flags[proposal.flag + 3]).to.be.true;
-    });
-  });
-
-  describe('getProposalVotes', function () {
-    beforeEach(async function () {
-      await baal.submitProposal(
-        proposal.flag,
-        proposal.votingPeriod,
-        [proposal.account], 
-        [proposal.value],
-        [proposal.data],
-        ethers.utils.id(proposal.details)
-      );
-    });
-
-    it('happy case - yes vote', async function (){
-      await baal.submitVote(1, yes);
-      const proposalVote = await baal.getProposalVotes(summoner.address, 1);
-      expect(proposalVote).to.equal(yes);
-    });
-
-    it('happy case - no vote', async function (){
-      await baal.submitVote(1, no);
-      const proposalVote = await baal.getProposalVotes(summoner.address, 1);
-      expect(proposalVote).to.equal(no);
     });
   });
 });
