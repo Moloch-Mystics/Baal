@@ -316,13 +316,9 @@ describe('Baal contract', function () {
       await baal.sponsorProposal(1); 
       await baal.submitVote(1, yes);
       await moveForwardPeriods(2);
-<<<<<<< HEAD
       await baal.processProposal(0);
-=======
-      await baal.processProposal(1);
       const afterProcessed = await baal.proposals(1);
       expect(afterProcessed).to.deep.equal(beforeProcessed);
->>>>>>> 1080cd442d2553ac0fd85ea666e31844f0993dad
     });
 
     it('happy case - flag[1] - yes wins', async function () {
@@ -334,21 +330,14 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
-<<<<<<< HEAD
       await baal.sponsorProposal(1); 
-=======
       const lootBefore = (await baal.members(proposal.account)).loot;
->>>>>>> 1080cd442d2553ac0fd85ea666e31844f0993dad
       await baal.submitVote(1, yes);
       const yesVotes = (await baal.proposals(1)).yesVotes;
       await moveForwardPeriods(2);
-<<<<<<< HEAD
       await baal.processProposal(0);
-=======
-      await baal.processProposal(1);
       const lootAfter = (await baal.members(proposal.account)).loot;
       expect(lootAfter).to.equal(lootBefore.add(yesVotes));
->>>>>>> 1080cd442d2553ac0fd85ea666e31844f0993dad
     });
 
     it('happy case - flag[2] - yes wins', async function () {
@@ -364,13 +353,9 @@ describe('Baal contract', function () {
       await baal.sponsorProposal(1); 
       await baal.submitVote(1, yes);
       await moveForwardPeriods(2);
-<<<<<<< HEAD
       await baal.processProposal(0);
-=======
-      await baal.processProposal(1);
       const afterProcessed = await baal.proposals(1);
       expect(afterProcessed).to.deep.equal(beforeProcessed);
->>>>>>> 1080cd442d2553ac0fd85ea666e31844f0993dad
     });
 
     it('happy case - flag[3] - yes wins', async function () {
@@ -386,13 +371,9 @@ describe('Baal contract', function () {
       await baal.sponsorProposal(1); 
       await baal.submitVote(1, yes);
       await moveForwardPeriods(2);
-<<<<<<< HEAD
       await baal.processProposal(0);
-=======
-      await baal.processProposal(1);
       const afterProcessed = await baal.proposals(1);
       expect(afterProcessed).to.deep.equal(beforeProcessed);
->>>>>>> 1080cd442d2553ac0fd85ea666e31844f0993dad
     });
 
     it('happy case - flag[0] - no wins', async function () {
@@ -408,13 +389,9 @@ describe('Baal contract', function () {
       await baal.sponsorProposal(1); 
       await baal.submitVote(1, no);
       await moveForwardPeriods(2);
-<<<<<<< HEAD
       await baal.processProposal(0);
-=======
-      await baal.processProposal(1);
       const afterProcessed = await baal.proposals(1);
       expect(afterProcessed).to.deep.equal(beforeProcessed);
->>>>>>> 1080cd442d2553ac0fd85ea666e31844f0993dad
     });
 
     it('happy case - flag[1] - no wins', async function () {
@@ -426,22 +403,14 @@ describe('Baal contract', function () {
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
-<<<<<<< HEAD
       await baal.sponsorProposal(1); 
-=======
-      const lootBefore = (await baal.members(proposal.account)).loot;
->>>>>>> 1080cd442d2553ac0fd85ea666e31844f0993dad
       await baal.submitVote(1, no);
       const noVotes = (await baal.proposals(1)).noVotes;
       await moveForwardPeriods(2);
-<<<<<<< HEAD
       await baal.processProposal(0);
-=======
-      await baal.processProposal(1);
       const lootAfter = (await baal.members(proposal.account)).loot;
       expect(lootAfter).to.equal(lootBefore.add(noVotes));
 
->>>>>>> 1080cd442d2553ac0fd85ea666e31844f0993dad
     });
 
     it('happy case - flag[2] - no wins', async function () {
@@ -457,13 +426,7 @@ describe('Baal contract', function () {
       await baal.sponsorProposal(1); 
       await baal.submitVote(1, no);
       await moveForwardPeriods(2);
-<<<<<<< HEAD
       await baal.processProposal(0);
-=======
-      await baal.processProposal(1);
-      const afterProcessed = await baal.proposals(1);
-      expect(afterProcessed).to.deep.equal(beforeProcessed);
->>>>>>> 1080cd442d2553ac0fd85ea666e31844f0993dad
     });
 
     it('require fail - proposal does not exist', async function () {
