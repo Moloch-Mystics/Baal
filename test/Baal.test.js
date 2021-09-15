@@ -444,6 +444,42 @@ describe('Baal contract', function () {
     });
   });
 
+  describe('ragequit', function () {
+    beforeEach(async function () {
+      await baal.submitProposal(
+        proposal.flag,
+        proposal.votingPeriod,
+        [proposal.account], 
+        [proposal.value],
+        [proposal.data],
+        ethers.utils.id(proposal.details)
+      );
+    });
+
+    it('happy case - full ragequit', async function () {
+      const lootBefore = (await baal.members(summoner.address)).loot;
+      await baal.ragequit(summoner.address, loot, shares);
+      const lootAfter = (await baal.members(summoner.address)).loot;
+      expect(lootAfter).to.equal(lootBefore.sub(loot));
+    });
+
+    it('happy case - partial ragequit', async function () {
+      const lootBefore = (await baal.members(summoner.address)).loot;
+      const lootToBurn = 200;
+      const sharesToBurn = 70;
+      await baal.ragequit(summoner.address, lootToBurn, sharesToBurn);
+      const lootAfter = (await baal.members(summoner.address)).loot;
+      expect(lootAfter).to.equal(lootBefore.sub(lootToBurn));
+    });
+
+    it('require fail - proposal voting has not ended', async function () {
+      const lootBefore = (await baal.members(summoner.address)).loot;
+      await baal.submitVote(1, yes);
+      await baal.ragequit(summoner.address, loot, shares)
+        .should.be.rejectedWith('processed');
+    });
+  });
+
   describe('getCurrentVotes', function () {
     it('happy case - account with votes', async function () {
       const currentVotes = await baal.getCurrentVotes(summoner.address);
