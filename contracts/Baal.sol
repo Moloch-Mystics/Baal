@@ -257,7 +257,7 @@ contract Baal {
         uint96 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
         
         require(prop.votingEnds >= block.timestamp,'ended'); /*check voting period has not ended*/
-        require(!members[msg.sender].voted[proposal]); /*check vote not already cast*/
+        require(!members[msg.sender].voted[proposal],'voted'); /*check vote not already cast*/
         
         unchecked {
             if (approved) { /*if `approved`, cast delegated balance `yesVotes` to proposal*/
