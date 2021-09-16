@@ -27,6 +27,7 @@ contract Baal {
     uint96 public totalLoot; /*counter for total `loot` economic weight held by `members`*/  
     uint96 public totalSupply; /*counter for total `members` voting `shares` with erc20 accounting*/
     
+    uint32 public flashFeeNumerator; /*tracks 'fee' numerator for {flashLoan} in {flashFee} - e.g., '1 = 0.0001%'*/
     uint32 public gracePeriod; /*time delay after proposal voting period for processing*/
     uint32 public minVotingPeriod; /*minimum period for voting in seconds - amendable through 'period'[2] proposal*/
     uint32 public maxVotingPeriod; /*maximum period for voting in seconds - amendable through 'period'[2] proposal*/
@@ -82,6 +83,7 @@ contract Baal {
     struct Member { /*Baal membership details*/
         uint96 loot; /*economic weight held by `members` - can be set on summoning & adjusted via {memberAction}*/
         uint highestIndexYesVote; /*highest proposal index on which a member `approved`*/
+        mapping(uint => bool) voted; /*maps voting decisions on proposals by `members` account*/
     }
     
     struct Proposal { /*Baal proposal details*/
@@ -255,6 +257,7 @@ contract Baal {
         uint96 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
         
         require(prop.votingEnds >= block.timestamp,'ended'); /*check voting period has not ended*/
+        require(!members[msg.sender].voted[proposal]); /*check vote not already cast*/
         
         unchecked {
             if (approved) { /*if `approved`, cast delegated balance `yesVotes` to proposal*/
@@ -264,6 +267,8 @@ contract Baal {
                 prop.noVotes += balance;
             }
         }
+        
+        members[msg.sender].voted[proposal] = true; /*record voting action to `members` struct per user account*/
 
         emit SubmitVote(msg.sender, balance, proposal, approved); /*emit event reflecting vote*/
     }
@@ -362,9 +367,11 @@ contract Baal {
         } else if (length == 3) {
             if (prop.value[2] != 0) gracePeriod = uint32(prop.value[2]); /*if positive, reset grace period to third `value`*/
         } else if (length == 4) {
-            prop.value[3] == 0 ? lootPaused = false : lootPaused = true; /*if positive, pause `loot` transfers on fourth `value`*/
+            if (prop.value[3] != 0) flashFeeNumerator = uint32(prop.value[3]); /*if positive, reset grace period to fourth `value`*/
         } else if (length == 5) {
-            prop.value[4] == 0 ? sharesPaused = false : sharesPaused = true; /*if positive, pause `shares` transfers on fifth `value`*/
+            prop.value[4] == 0 ? lootPaused = false : lootPaused = true; /*if positive, pause `loot` transfers on fifth `value`*/
+        } else if (length == 6) {
+            prop.value[5] == 0 ? sharesPaused = false : sharesPaused = true; /*if positive, pause `shares` transfers on sixth `value`*/
         }
     }  
         
@@ -524,6 +531,31 @@ contract Baal {
         
         emit TransferLoot(msg.sender, to, amount);
     }
+    
+    /// @notice Flashloan ability that conforms to `IERC3156FlashLender`, as defined in 'https://eips.ethereum.org/EIPS/eip-3156'.
+    /// @param receiver Address of token receiver that conforms to `IERC3156FlashBorrower` & handles flashloan.
+    /// @param token The loan currency.
+    /// @param amount The amount of tokens lent.
+    /// @param data Arbitrary data structure, intended to contain user-defined parameters.
+    function flashLoan(
+        address receiver,
+        address token,
+        uint amount,
+        bytes calldata data
+    ) external returns (bool success) {
+        uint fee = flashFee(token, amount);
+        require(fee != 0,'uninitialized');
+        
+        _safeTransfer(token, receiver, amount);
+        
+        (,bytes memory _flashData) = receiver.call(abi.encodeWithSelector(0x23e30c8b, msg.sender, token, amount, fee, data)); /*'onFlashLoan(address,address,uint,uint,bytes)'*/
+        bytes32 flashData = abi.decode(_flashData, (bytes32));
+        require(flashData == keccak256('ERC3156FlashBorrower.onFlashLoan'),'Callback failed'); /*checks flash loan success*/
+        
+        _safeTransferFrom(token, receiver, address(this), amount + fee);
+        
+        success = true;
+    }
 
     /// @notice Process member burn of `shares` and/or `loot` to claim 'fair share' of `guildTokens`.
     /// @param to Account that receives 'fair share'.
@@ -598,11 +630,19 @@ contract Baal {
         tokens = guildTokens;
     }
 
-    /// @notice Returns `flags` for given Baal `proposal` describing type ('action'[0], 'member'[1], 'period'[2], 'whitelist'[3]).
-    /// @param proposal The index to check `flags` for.
-    /// @return flags The boolean flags describing `proposal` type.
-    function getProposalFlags(uint proposal) external view returns (bool[4] memory flags) {
-        flags = proposals[proposal].flags;
+    /// @notice Returns the `fee` to be charged for a flash loan.
+    /// @param amount The sum of tokens lent.
+    /// @return fee The `fee` amount of 'token' to be charged for the loan, on top of the returned principal - uniform in Baal.
+    function flashFee(address, uint amount) public view returns (uint fee) {
+        fee = amount * flashFeeNumerator / 10000; /*Calculate `fee` - precision factor '10000' derived from ERC-3156 'Flash Loan Reference'*/
+    }
+    
+    /// @notice Returns the `max` amount of `token` available to be lent.
+    /// @param token The loan currency.
+    /// @return max The `amount` of `token` that can be borrowed.
+    function maxFlashLoan(address token) external view returns (uint max) {
+        (,bytes memory balanceData) = token.staticcall(abi.encodeWithSelector(0x70a08231, address(this))); /*get Baal token balance - 'balanceOf(address)'*/
+        max = abi.decode(balanceData, (uint)); /*decode Baal token balance for calculation*/
     }
 
     /***************
@@ -760,5 +800,11 @@ contract Baal {
     function _safeTransfer(address token, address to, uint amount) private {
         (bool success, bytes memory data) = token.call(abi.encodeWithSelector(0xa9059cbb, to, amount)); /*'transfer(address,uint)'*/
         require(success && (data.length == 0 || abi.decode(data, (bool))),'transfer failed'); /*checks success & allows non-conforming transfers*/
+    }
+    
+    /// @notice Provides 'safe' {transferFrom} for tokens that do not consistently return 'true/false'.
+    function _safeTransferFrom(address token, address from, address to, uint amount) private {
+        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(0x23b872dd, from, to, amount)); /*'transferFrom(address,address,uint)'*/
+        require(success && (data.length == 0 || abi.decode(data, (bool))),'transferFrom failed'); /*checks success & allows non-conforming transfers*/
     }
 }
