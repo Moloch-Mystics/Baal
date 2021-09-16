@@ -629,6 +629,13 @@ contract Baal {
     function getGuildTokens() external view returns (address[] memory tokens) {
         tokens = guildTokens;
     }
+    
+    /// @notice Returns `flags` for given Baal `proposal` describing type ('action'[0], 'member'[1], 'period'[2], 'whitelist'[3]).
+    /// @param proposal The index to check `flags` for.
+    /// @return flags The boolean flags describing `proposal` type.
+    function getProposalFlags(uint proposal) external view returns (bool[4] memory flags) {
+        flags = proposals[proposal].flags;
+    }
 
     /// @notice Returns the `fee` to be charged for a flash loan.
     /// @param amount The sum of tokens lent.
