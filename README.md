@@ -2,9 +2,26 @@
 
 Baal is a minimal yet composable DAO template continuing work from the [`Moloch`](https://github.com/MolochVentures/moloch), [`Minion`](https://github.com/raid-guild/moloch-minion) and [`Compound`](https://github.com/compound-finance/compound-protocol/tree/master/contracts/Governance) frameworks to make it easier for people to combine and command crypto assets with intuitive membership games.
 
-*Guilds, venture clubs and panels can benefit from Baal:* 
+*Guilds, venture clubs and control panels can benefit from Baal:* 
 
 <p align="center"><img src="https://media.giphy.com/media/rgwNTGFUbNTgsgiYha/giphy.gif"></p>
+
+## Interfaces Supported
+
+[ERC-20](https://eips.ethereum.org/EIPS/eip-20)
+> Baal shares are pausable, fungible tokens. Non-conformant tokens can also be handled by Baal by implementing `safeTransfer/From()`.
+
+[EIP-2612](https://eips.ethereum.org/EIPS/eip-2612)
+> Baal shares support EIP-712-style approvals by implementing `permit()`, allowing pulls in a single transaction and 'gas' to be paid in tokens (including Baal shares), abstracting the need to hold ETH.
+
+[ERC-721](https://eips.ethereum.org/EIPS/eip-721)
+> Baal is a 'safe' receiver of NFTs by implementing `onERC721Received()`.
+
+[ERC-1155](https://eips.ethereum.org/EIPS/eip-1155)
+> Baal is a 'safe' receiver of tokens issued under 'multi-token' contracts by implementing `onERC1155Received()` and `onERC1155BatchReceived()`.
+
+[ERC-3156](https://eips.ethereum.org/EIPS/eip-3156) 
+> Tokens held in Baal can be flash lent for an amendable fee by implementing `flashLoan()`. This feature can be turned on and off.
 
 ## Optimizations:
 
