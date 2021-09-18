@@ -298,6 +298,7 @@ contract Baal {
         uint96 balance = getPriorVotes(signatory, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
         
         require(prop.votingEnds >= block.timestamp,'ended'); /*check voting period has not ended*/
+        require(!members[signatory].voted[proposal],'voted'); /*check vote not already cast*/
         
         unchecked {
             if (approved) { /*if `approved`, cast delegated balance `yesVotes` to proposal*/
@@ -306,6 +307,8 @@ contract Baal {
                 prop.noVotes += balance;
             }
         }
+        
+        members[signatory].voted[proposal] = true; /*record voting action to `members` struct per user account*/
         
         emit SubmitVote(signatory, balance, proposal, approved); /*emit event reflecting vote*/
     }
