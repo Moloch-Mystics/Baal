@@ -63,7 +63,7 @@ contract Baal is Executor, Initializable {
     mapping(address => bool)   public shamans; /*maps contracts approved in 'whitelist'[3] proposals for {memberAction} that mint or burn `shares`*/
     
     event SummonComplete(bool lootPaused, bool sharesPaused, uint gracePeriod, uint minVotingPeriod, uint maxVotingPeriod, string name, string symbol, address[] guildTokens, address[] shamans, address[] summoners, uint96[] loot, uint96[] shares); /*emits after Baal summoning*/
-    event SubmitProposal(bool self, uint indexed proposal, uint votingPeriod, bytes proposalData, string details); /*emits after proposal is submitted*/
+    event SubmitProposal(uint indexed proposal, uint votingPeriod, bytes proposalData, string details); /*emits after proposal is submitted*/
     event SponsorProposal(address indexed member, uint indexed proposal, uint indexed votingStarts); /*emits after member has sponsored proposal*/
     event SubmitVote(address indexed member, uint balance, uint indexed proposal, bool indexed approved); /*emits after vote is submitted on proposal*/
     event ProcessProposal(uint indexed proposal); /*emits when proposal is processed & executed*/
@@ -103,7 +103,6 @@ contract Baal is Executor, Initializable {
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
         uint96 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
         uint96 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
-        bool self; /*execute proposal through Baal or through Safe*/
         bytes proposalData; /*raw data associated with state updates*/
         string details; /*human-readable context for proposal*/
     }
@@ -166,19 +165,18 @@ contract Baal is Executor, Initializable {
     PROPOSAL FUNCTIONS
     *****************/
     /// @notice Submit proposal to Baal `members` for approval within given voting period.
-    /// @param self Execute on Baal or Safe
     /// @param votingPeriod Voting period in seconds.
     /// @param proposalData Multisend encoded transactions or proposal data
     /// @param details Context for proposal.
     /// @return proposal Count for submitted proposal.
-    function submitProposal(bool self, uint32 votingPeriod, bytes calldata proposalData, string calldata details) external nonReentrant returns (uint proposal) {
+    function submitProposal(uint32 votingPeriod, bytes calldata proposalData, string calldata details) external nonReentrant returns (uint proposal) {
         require(balanceOf[msg.sender] != 0,'!member'); /*check 'membership' - required to submit proposal*/
         require(minVotingPeriod <= votingPeriod && votingPeriod <= maxVotingPeriod,'!votingPeriod'); /*check voting period is within Baal bounds*/
         unchecked {
             proposalCount++; /*increment proposal counter*/
-            proposals[proposalCount] = Proposal(votingPeriod, uint32(block.number), uint32(block.timestamp) + votingPeriod, 0, 0, self, proposalData, details); /*push params into proposal struct - start voting period timer*/
+            proposals[proposalCount] = Proposal(votingPeriod, uint32(block.number), uint32(block.timestamp) + votingPeriod, 0, 0, proposalData, details); /*push params into proposal struct - start voting period timer*/
         }
-        emit SubmitProposal(self, proposal, votingPeriod, proposalData, details); /*emit event reflecting proposal submission*/
+        emit SubmitProposal(proposal, votingPeriod, proposalData, details); /*emit event reflecting proposal submission*/
     }
     
     /// @notice Sponsor proposal to Baal `members` for approval within voting period.
@@ -293,6 +291,14 @@ contract Baal is Executor, Initializable {
         require(to.length == amount.length,'!array parity'); /*check array lengths match*/
         for (uint256 i = 0; i < to.length; i++) {
             _mintShares(to[i], amount[i]); /*grant `to` `amount` `shares`*/
+        }
+    }
+
+    /// @notice Baal only function to mint loot
+    function mintLoot (address[] calldata to, uint96[] calldata amount) external baalOnly {
+        require(to.length == amount.length,'!array parity'); /*check array lengths match*/
+        for (uint256 i = 0; i < to.length; i++) {
+            _mintLoot(to[i], amount[i]); /*grant `to` `amount` `shares`*/
         }
     }
 

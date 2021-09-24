@@ -45,6 +45,7 @@ interface BaalInterface extends ethers.utils.Interface {
     "memberAction(address,uint96,uint96,bool)": FunctionFragment;
     "members(address)": FunctionFragment;
     "minVotingPeriod()": FunctionFragment;
+    "mintLoot(address[],uint96[])": FunctionFragment;
     "mintShares(address[],uint96[])": FunctionFragment;
     "multicall(bytes[])": FunctionFragment;
     "name()": FunctionFragment;
@@ -67,7 +68,7 @@ interface BaalInterface extends ethers.utils.Interface {
     "shamans(address)": FunctionFragment;
     "sharesPaused()": FunctionFragment;
     "sponsorProposal(uint256)": FunctionFragment;
-    "submitProposal(bool,uint32,bytes,string)": FunctionFragment;
+    "submitProposal(uint32,bytes,string)": FunctionFragment;
     "submitVote(uint256,bool)": FunctionFragment;
     "submitVoteWithSig(uint256,bool,uint8,bytes32,bytes32)": FunctionFragment;
     "symbol()": FunctionFragment;
@@ -160,6 +161,10 @@ interface BaalInterface extends ethers.utils.Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "mintLoot",
+    values: [string[], BigNumberish[]]
+  ): string;
+  encodeFunctionData(
     functionFragment: "mintShares",
     values: [string[], BigNumberish[]]
   ): string;
@@ -245,7 +250,7 @@ interface BaalInterface extends ethers.utils.Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "submitProposal",
-    values: [boolean, BigNumberish, BytesLike, string]
+    values: [BigNumberish, BytesLike, string]
   ): string;
   encodeFunctionData(
     functionFragment: "submitVote",
@@ -336,6 +341,7 @@ interface BaalInterface extends ethers.utils.Interface {
     functionFragment: "minVotingPeriod",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "mintLoot", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "mintShares", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "multicall", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "name", data: BytesLike): Result;
@@ -427,7 +433,7 @@ interface BaalInterface extends ethers.utils.Interface {
     "ProcessProposal(uint256)": EventFragment;
     "Ragequit(address,address,uint96,uint96)": EventFragment;
     "SponsorProposal(address,uint256,uint256)": EventFragment;
-    "SubmitProposal(bool,uint256,uint256,bytes,string)": EventFragment;
+    "SubmitProposal(uint256,uint256,bytes,string)": EventFragment;
     "SubmitVote(address,uint256,uint256,bool)": EventFragment;
     "SummonComplete(bool,bool,uint256,uint256,uint256,string,string,address[],address[],address[],uint96[],uint96[])": EventFragment;
     "Transfer(address,address,uint256)": EventFragment;
@@ -757,6 +763,18 @@ export class Baal extends Contract {
       0: number;
     }>;
 
+    mintLoot(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
+    "mintLoot(address[],uint96[])"(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
     mintShares(
       to: string[],
       amount: BigNumberish[],
@@ -934,7 +952,6 @@ export class Baal extends Contract {
       votingEnds: number;
       yesVotes: BigNumber;
       noVotes: BigNumber;
-      self: boolean;
       proposalData: string;
       details: string;
       0: number;
@@ -942,9 +959,8 @@ export class Baal extends Contract {
       2: number;
       3: BigNumber;
       4: BigNumber;
-      5: boolean;
+      5: string;
       6: string;
-      7: string;
     }>;
 
     "proposals(uint256)"(
@@ -956,7 +972,6 @@ export class Baal extends Contract {
       votingEnds: number;
       yesVotes: BigNumber;
       noVotes: BigNumber;
-      self: boolean;
       proposalData: string;
       details: string;
       0: number;
@@ -964,9 +979,8 @@ export class Baal extends Contract {
       2: number;
       3: BigNumber;
       4: BigNumber;
-      5: boolean;
+      5: string;
       6: string;
-      7: string;
     }>;
 
     proposalsPassed(
@@ -1082,15 +1096,13 @@ export class Baal extends Contract {
     ): Promise<ContractTransaction>;
 
     submitProposal(
-      self: boolean,
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
       details: string,
       overrides?: Overrides
     ): Promise<ContractTransaction>;
 
-    "submitProposal(bool,uint32,bytes,string)"(
-      self: boolean,
+    "submitProposal(uint32,bytes,string)"(
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
       details: string,
@@ -1421,6 +1433,18 @@ export class Baal extends Contract {
 
   "minVotingPeriod()"(overrides?: CallOverrides): Promise<number>;
 
+  mintLoot(
+    to: string[],
+    amount: BigNumberish[],
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
+  "mintLoot(address[],uint96[])"(
+    to: string[],
+    amount: BigNumberish[],
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
   mintShares(
     to: string[],
     amount: BigNumberish[],
@@ -1558,7 +1582,6 @@ export class Baal extends Contract {
     votingEnds: number;
     yesVotes: BigNumber;
     noVotes: BigNumber;
-    self: boolean;
     proposalData: string;
     details: string;
     0: number;
@@ -1566,9 +1589,8 @@ export class Baal extends Contract {
     2: number;
     3: BigNumber;
     4: BigNumber;
-    5: boolean;
+    5: string;
     6: string;
-    7: string;
   }>;
 
   "proposals(uint256)"(
@@ -1580,7 +1602,6 @@ export class Baal extends Contract {
     votingEnds: number;
     yesVotes: BigNumber;
     noVotes: BigNumber;
-    self: boolean;
     proposalData: string;
     details: string;
     0: number;
@@ -1588,9 +1609,8 @@ export class Baal extends Contract {
     2: number;
     3: BigNumber;
     4: BigNumber;
-    5: boolean;
+    5: string;
     6: string;
-    7: string;
   }>;
 
   proposalsPassed(
@@ -1688,15 +1708,13 @@ export class Baal extends Contract {
   ): Promise<ContractTransaction>;
 
   submitProposal(
-    self: boolean,
     votingPeriod: BigNumberish,
     proposalData: BytesLike,
     details: string,
     overrides?: Overrides
   ): Promise<ContractTransaction>;
 
-  "submitProposal(bool,uint32,bytes,string)"(
-    self: boolean,
+  "submitProposal(uint32,bytes,string)"(
     votingPeriod: BigNumberish,
     proposalData: BytesLike,
     details: string,
@@ -2019,6 +2037,18 @@ export class Baal extends Contract {
 
     "minVotingPeriod()"(overrides?: CallOverrides): Promise<number>;
 
+    mintLoot(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    "mintLoot(address[],uint96[])"(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: CallOverrides
+    ): Promise<void>;
+
     mintShares(
       to: string[],
       amount: BigNumberish[],
@@ -2153,7 +2183,6 @@ export class Baal extends Contract {
       votingEnds: number;
       yesVotes: BigNumber;
       noVotes: BigNumber;
-      self: boolean;
       proposalData: string;
       details: string;
       0: number;
@@ -2161,9 +2190,8 @@ export class Baal extends Contract {
       2: number;
       3: BigNumber;
       4: BigNumber;
-      5: boolean;
+      5: string;
       6: string;
-      7: string;
     }>;
 
     "proposals(uint256)"(
@@ -2175,7 +2203,6 @@ export class Baal extends Contract {
       votingEnds: number;
       yesVotes: BigNumber;
       noVotes: BigNumber;
-      self: boolean;
       proposalData: string;
       details: string;
       0: number;
@@ -2183,9 +2210,8 @@ export class Baal extends Contract {
       2: number;
       3: BigNumber;
       4: BigNumber;
-      5: boolean;
+      5: string;
       6: string;
-      7: string;
     }>;
 
     proposalsPassed(
@@ -2283,15 +2309,13 @@ export class Baal extends Contract {
     ): Promise<void>;
 
     submitProposal(
-      self: boolean,
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
       details: string,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
-    "submitProposal(bool,uint32,bytes,string)"(
-      self: boolean,
+    "submitProposal(uint32,bytes,string)"(
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
       details: string,
@@ -2424,7 +2448,6 @@ export class Baal extends Contract {
     ): EventFilter;
 
     SubmitProposal(
-      self: null,
       proposal: BigNumberish | null,
       votingPeriod: null,
       proposalData: null,
@@ -2654,6 +2677,18 @@ export class Baal extends Contract {
     minVotingPeriod(overrides?: CallOverrides): Promise<BigNumber>;
 
     "minVotingPeriod()"(overrides?: CallOverrides): Promise<BigNumber>;
+
+    mintLoot(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<BigNumber>;
+
+    "mintLoot(address[],uint96[])"(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<BigNumber>;
 
     mintShares(
       to: string[],
@@ -2888,15 +2923,13 @@ export class Baal extends Contract {
     ): Promise<BigNumber>;
 
     submitProposal(
-      self: boolean,
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
       details: string,
       overrides?: Overrides
     ): Promise<BigNumber>;
 
-    "submitProposal(bool,uint32,bytes,string)"(
-      self: boolean,
+    "submitProposal(uint32,bytes,string)"(
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
       details: string,
@@ -3213,6 +3246,18 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
+    mintLoot(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    "mintLoot(address[],uint96[])"(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
     mintShares(
       to: string[],
       amount: BigNumberish[],
@@ -3458,15 +3503,13 @@ export class Baal extends Contract {
     ): Promise<PopulatedTransaction>;
 
     submitProposal(
-      self: boolean,
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
       details: string,
       overrides?: Overrides
     ): Promise<PopulatedTransaction>;
 
-    "submitProposal(bool,uint32,bytes,string)"(
-      self: boolean,
+    "submitProposal(uint32,bytes,string)"(
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
       details: string,
