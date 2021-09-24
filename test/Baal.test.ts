@@ -1,10 +1,17 @@
-const { ethers } = require('hardhat');
-const chai = require('chai');
-const { expect } = chai;
+import { ethers } from 'hardhat'
+import { solidity } from 'ethereum-waffle'
+import { use, expect } from 'chai'
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 
-chai
-  .use(require('chai-as-promised'))
-  .should();
+import { Baal } from '../src/types/Baal'
+import { TestErc20 } from '../src/types/TestErc20'
+import { RageQuitBank } from '../src/types/RageQuitBank'
+
+use(solidity)
+
+// chai
+//   .use(require('chai-as-promised'))
+//   .should();
 
 const revertMessages =  {
   molochConstructorShamanCannotBe0: 'shaman cannot be 0',
@@ -14,7 +21,7 @@ const revertMessages =  {
   molochConstructorMinVotingPeriodCannotBe0: 'minVotingPeriod cannot be 0',
   molochConstructorMaxVotingPeriodCannotBe0: 'maxVotingPeriod cannot be 0',
   submitProposalVotingPeriod: '!votingPeriod',
-  submitProposalArrays: '!arrays',
+  submitProposalArrays: '!array parity',
   submitProposalArrayMax: 'array max',
   submitProposalFlag: '!flag',
   submitVoteTimeEnded: 'ended',
@@ -33,7 +40,7 @@ async function blockNumber() {
   return block.number;
 }
 
-async function moveForwardPeriods(periods) {
+async function moveForwardPeriods(periods: number) {
   const goToTime = deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS * periods;
   await ethers.provider.send('evm_increaseTime', [goToTime]);
   return true;
@@ -49,13 +56,13 @@ const deploymentConfig = {
 
 describe('Baal contract', function () {
 
-  let baal;
-  let shaman;
-  let applicant;
-  let guildToken;
-  let summoner;
+  let baal: Baal;
+  let weth: TestErc20
+  let shaman: RageQuitBank;
+  let applicant: SignerWithAddress;
+  let summoner: SignerWithAddress;
   
-  let proposal;
+  let proposal: { [key: string]: any};
 
   const loot = 500;
   const shares = 100;
@@ -70,11 +77,11 @@ describe('Baal contract', function () {
     [summoner, applicant] = await ethers.getSigners();
 
     const ERC20 = await ethers.getContractFactory("TestERC20");
-    weth = await ERC20.deploy("WETH", "WETH", 10000000);
+    weth = (await ERC20.deploy("WETH", "WETH", 10000000)) as TestErc20;
 
-    shaman = await ShamanContract.deploy();
+    shaman = (await ShamanContract.deploy()) as RageQuitBank;
     
-    baal = await BaalContract.deploy(
+    baal = (await BaalContract.deploy(
       sharesPaused,
       deploymentConfig.GRACE_PERIOD_IN_SECONDS,
       deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS,
@@ -86,7 +93,7 @@ describe('Baal contract', function () {
       [summoner.address],
       [loot],
       [shares]
-    );
+    )) as Baal;
 
     await shaman.init(
       baal.address
@@ -174,69 +181,69 @@ describe('Baal contract', function () {
     });
 
     it('require fail - voting period too low', async function() { 
-      await baal.submitProposal(
+      expect(baal.submitProposal(
         proposal.flag,
         deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS - 100,
         [proposal.account], 
         [proposal.value],
         [proposal.data],
         ethers.utils.id(proposal.details)
-      ).should.be.rejectedWith(revertMessages.submitProposalVotingPeriod);
+      )).to.be.revertedWith(revertMessages.submitProposalVotingPeriod);
     });
 
     it('require fail - voting period too high', async function() { 
-      await baal.submitProposal(
+      expect(baal.submitProposal(
         proposal.flag,
         deploymentConfig.MAX_VOTING_PERIOD_IN_SECONDS + 100,
         [proposal.account], 
         [proposal.value],
         [proposal.data],
         ethers.utils.id(proposal.details)
-      ).should.be.rejectedWith(revertMessages.submitProposalVotingPeriod);
+      )).to.be.revertedWith(revertMessages.submitProposalVotingPeriod);
     });
 
     it('require fail - to array does not match', async function() { 
-      await baal.submitProposal(
+      expect(baal.submitProposal(
         proposal.flag,
         deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS + 100,
         [proposal.account, summoner.address], 
         [proposal.value],
         [proposal.data],
         ethers.utils.id(proposal.details)
-      ).should.be.rejectedWith(revertMessages.submitProposalArray);
+      )).to.be.revertedWith(revertMessages.submitProposalArrays);
     });
 
     it('require fail - value array does not match', async function() { 
-      await baal.submitProposal(
+      expect(baal.submitProposal(
         proposal.flag,
         deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS + 100,
         [proposal.account, summoner.address], 
         [proposal.value, 20],
         [proposal.data],
         ethers.utils.id(proposal.details)
-      ).should.be.rejectedWith(revertMessages.submitProposalArray);
+      )).to.be.revertedWith(revertMessages.submitProposalArrays);
     });
 
     it('require fail - data array does not match', async function() { 
-      await baal.submitProposal(
+      expect(baal.submitProposal(
         proposal.flag,
         deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS + 100,
         [proposal.account, summoner.address], 
         [proposal.value],
         [proposal.data, 15],
         ethers.utils.id(proposal.details)
-      ).should.be.rejectedWith(revertMessages.submitProposalArray);
+      )).to.be.revertedWith(revertMessages.submitProposalArrays);
     });
 
     it('require fail - flag is out of bounds', async function() { 
-      await baal.submitProposal(
+      expect(baal.submitProposal(
         6,
         deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS + 100,
         [proposal.account, summoner.address], 
         [proposal.value],
         [proposal.data],
         ethers.utils.id(proposal.details)
-      ).should.be.rejectedWith(revertMessages.submitProposalFlag);
+      )).to.be.revertedWith(revertMessages.submitProposalFlag);
     });
   });
 
@@ -266,8 +273,8 @@ describe('Baal contract', function () {
 
     it('require fail - voting period has ended', async function() {
       await moveForwardPeriods(2);
-      await baal.submitVote(1, no)
-        .should.be.rejectedWith(revertMessages.submitVoteTimeEnded);
+      expect(baal.submitVote(1, no))
+        .to.be.revertedWith(revertMessages.submitVoteTimeEnded);
     });
   });
 
@@ -305,7 +312,7 @@ describe('Baal contract', function () {
         proposal.flag + 2,
         proposal.votingPeriod,
         [proposal.account], 
-        [proposal.value, 0, 0, 0, 0, 0],
+        [proposal.value, 0, 0, 0, 0],
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -361,7 +368,7 @@ describe('Baal contract', function () {
         proposal.flag + 2,
         proposal.votingPeriod,
         [proposal.account], 
-        [proposal.value, 0, 0, 0, 0, 0],
+        [proposal.value, 0, 0, 0, 0],
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -380,8 +387,8 @@ describe('Baal contract', function () {
         ethers.utils.id(proposal.details)
       );
       await baal.submitVote(1, yes);
-      await baal.processProposal(2)
-        .should.be.rejectedWith('!exist');
+      expect(baal.processProposal(2))
+        .to.be.revertedWith('!exist');
     });
 
     it('require fail - voting period has not ended', async function () {
@@ -394,8 +401,8 @@ describe('Baal contract', function () {
         ethers.utils.id(proposal.details)
       );
       await baal.submitVote(1, yes);
-      await baal.processProposal(1)
-        .should.be.rejectedWith('!ended');
+      expect(baal.processProposal(1))
+        .to.be.revertedWith('!ended');
     });
 
     it('require fail - voting period has not ended', async function () {
@@ -418,8 +425,8 @@ describe('Baal contract', function () {
       );
       await baal.submitVote(2, yes);
       await moveForwardPeriods(2);
-      await baal.processProposal(2)
-        .should.be.rejectedWith('prev!processed');
+      expect(baal.processProposal(2))
+        .to.be.revertedWith('prev!processed');
     });
   });
 
@@ -491,7 +498,7 @@ describe('Baal contract', function () {
         proposal.flag + 2,
         proposal.votingPeriod,
         [proposal.account], 
-        [proposal.value, 0, 0, 0, 0, 0],
+        [proposal.value, 0, 0, 0, 0],
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
