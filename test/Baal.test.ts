@@ -331,7 +331,7 @@ describe('Baal contract', function () {
         proposal.flag + 2,
         proposal.votingPeriod,
         [proposal.account], 
-        [proposal.value, 0, 0, 0, 0],
+        [proposal.value, 0, 0, 0, 0, 0],
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -401,7 +401,7 @@ describe('Baal contract', function () {
         proposal.flag + 2,
         proposal.votingPeriod,
         [proposal.account], 
-        [proposal.value, 0, 0, 0, 0],
+        [proposal.value, 0, 0, 0, 0, 0],
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
@@ -573,7 +573,7 @@ describe('Baal contract', function () {
         proposal.flag + 2,
         proposal.votingPeriod,
         [proposal.account], 
-        [proposal.value, 0, 0, 0, 0],
+        [proposal.value, 0, 0, 0, 0, 0],
         [proposal.data],
         ethers.utils.id(proposal.details)
       );
