@@ -25,24 +25,27 @@ interface BaalInterface extends ethers.utils.Interface {
   functions: {
     "allowance(address,address)": FunctionFragment;
     "approve(address,uint256)": FunctionFragment;
-    "baalBatch(bytes[],bool)": FunctionFragment;
     "balanceOf(address)": FunctionFragment;
     "checkpoints(address,uint256)": FunctionFragment;
     "decimals()": FunctionFragment;
     "delegate(address)": FunctionFragment;
     "delegateBySig(address,uint256,uint256,uint8,bytes32,bytes32)": FunctionFragment;
     "delegates(address)": FunctionFragment;
+    "flashFee(address,uint256)": FunctionFragment;
+    "flashFeeNumerator()": FunctionFragment;
+    "flashLoan(address,address,uint256,bytes)": FunctionFragment;
     "getCurrentVotes(address)": FunctionFragment;
     "getGuildTokens()": FunctionFragment;
     "getPriorVotes(address,uint256)": FunctionFragment;
     "getProposalFlags(uint256)": FunctionFragment;
-    "getProposalVotes(address,uint256)": FunctionFragment;
     "gracePeriod()": FunctionFragment;
     "lootPaused()": FunctionFragment;
+    "maxFlashLoan(address)": FunctionFragment;
     "maxVotingPeriod()": FunctionFragment;
     "memberAction(address,uint96,uint96,bool)": FunctionFragment;
     "members(address)": FunctionFragment;
     "minVotingPeriod()": FunctionFragment;
+    "multicall(bytes[])": FunctionFragment;
     "name()": FunctionFragment;
     "nonces(address)": FunctionFragment;
     "numCheckpoints(address)": FunctionFragment;
@@ -53,6 +56,7 @@ interface BaalInterface extends ethers.utils.Interface {
     "processProposal(uint256)": FunctionFragment;
     "proposalCount()": FunctionFragment;
     "proposals(uint256)": FunctionFragment;
+    "proposalsPassed(uint256)": FunctionFragment;
     "ragequit(address,uint96,uint96)": FunctionFragment;
     "shamans(address)": FunctionFragment;
     "sharesPaused()": FunctionFragment;
@@ -76,10 +80,6 @@ interface BaalInterface extends ethers.utils.Interface {
     functionFragment: "approve",
     values: [string, BigNumberish]
   ): string;
-  encodeFunctionData(
-    functionFragment: "baalBatch",
-    values: [BytesLike[], boolean]
-  ): string;
   encodeFunctionData(functionFragment: "balanceOf", values: [string]): string;
   encodeFunctionData(
     functionFragment: "checkpoints",
@@ -100,6 +100,18 @@ interface BaalInterface extends ethers.utils.Interface {
   ): string;
   encodeFunctionData(functionFragment: "delegates", values: [string]): string;
   encodeFunctionData(
+    functionFragment: "flashFee",
+    values: [string, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "flashFeeNumerator",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "flashLoan",
+    values: [string, string, BigNumberish, BytesLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "getCurrentVotes",
     values: [string]
   ): string;
@@ -116,16 +128,16 @@ interface BaalInterface extends ethers.utils.Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "getProposalVotes",
-    values: [string, BigNumberish]
-  ): string;
-  encodeFunctionData(
     functionFragment: "gracePeriod",
     values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "lootPaused",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "maxFlashLoan",
+    values: [string]
   ): string;
   encodeFunctionData(
     functionFragment: "maxVotingPeriod",
@@ -139,6 +151,10 @@ interface BaalInterface extends ethers.utils.Interface {
   encodeFunctionData(
     functionFragment: "minVotingPeriod",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "multicall",
+    values: [BytesLike[]]
   ): string;
   encodeFunctionData(functionFragment: "name", values?: undefined): string;
   encodeFunctionData(functionFragment: "nonces", values: [string]): string;
@@ -180,6 +196,10 @@ interface BaalInterface extends ethers.utils.Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "proposals",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "proposalsPassed",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
@@ -235,7 +255,6 @@ interface BaalInterface extends ethers.utils.Interface {
 
   decodeFunctionResult(functionFragment: "allowance", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "baalBatch", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "checkpoints",
@@ -248,6 +267,12 @@ interface BaalInterface extends ethers.utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "delegates", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "flashFee", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "flashFeeNumerator",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "flashLoan", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "getCurrentVotes",
     data: BytesLike
@@ -265,14 +290,14 @@ interface BaalInterface extends ethers.utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "getProposalVotes",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "gracePeriod",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "lootPaused", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "maxFlashLoan",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "maxVotingPeriod",
     data: BytesLike
@@ -286,6 +311,7 @@ interface BaalInterface extends ethers.utils.Interface {
     functionFragment: "minVotingPeriod",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "multicall", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "name", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "nonces", data: BytesLike): Result;
   decodeFunctionResult(
@@ -314,6 +340,10 @@ interface BaalInterface extends ethers.utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "proposals", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "proposalsPassed",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "ragequit", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "shamans", data: BytesLike): Result;
   decodeFunctionResult(
@@ -355,6 +385,7 @@ interface BaalInterface extends ethers.utils.Interface {
     "DelegateVotesChanged(address,uint256,uint256)": EventFragment;
     "ProcessProposal(uint256)": EventFragment;
     "Ragequit(address,address,uint96,uint96)": EventFragment;
+    "SponsorProposal(address,uint256,uint256)": EventFragment;
     "SubmitProposal(uint8,uint256,uint256,address[],uint96[],bytes[],string)": EventFragment;
     "SubmitVote(address,uint256,uint256,bool)": EventFragment;
     "SummonComplete(bool,bool,uint256,uint256,uint256,string,string,address[],address[],address[],uint96[],uint96[])": EventFragment;
@@ -367,6 +398,7 @@ interface BaalInterface extends ethers.utils.Interface {
   getEvent(nameOrSignatureOrTopic: "DelegateVotesChanged"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "ProcessProposal"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Ragequit"): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "SponsorProposal"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "SubmitProposal"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "SubmitVote"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "SummonComplete"): EventFragment;
@@ -413,18 +445,6 @@ export class Baal extends Contract {
     "approve(address,uint256)"(
       to: string,
       amount: BigNumberish,
-      overrides?: Overrides
-    ): Promise<ContractTransaction>;
-
-    baalBatch(
-      calls: BytesLike[],
-      revertOnFail: boolean,
-      overrides?: Overrides
-    ): Promise<ContractTransaction>;
-
-    "baalBatch(bytes[],bool)"(
-      calls: BytesLike[],
-      revertOnFail: boolean,
       overrides?: Overrides
     ): Promise<ContractTransaction>;
 
@@ -516,6 +536,48 @@ export class Baal extends Contract {
       0: string;
     }>;
 
+    flashFee(
+      arg0: string,
+      amount: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<{
+      fee: BigNumber;
+      0: BigNumber;
+    }>;
+
+    "flashFee(address,uint256)"(
+      arg0: string,
+      amount: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<{
+      fee: BigNumber;
+      0: BigNumber;
+    }>;
+
+    flashFeeNumerator(overrides?: CallOverrides): Promise<{
+      0: number;
+    }>;
+
+    "flashFeeNumerator()"(overrides?: CallOverrides): Promise<{
+      0: number;
+    }>;
+
+    flashLoan(
+      receiver: string,
+      token: string,
+      amount: BigNumberish,
+      data: BytesLike,
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
+    "flashLoan(address,address,uint256,bytes)"(
+      receiver: string,
+      token: string,
+      amount: BigNumberish,
+      data: BytesLike,
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
     getCurrentVotes(
       account: string,
       overrides?: CallOverrides
@@ -576,30 +638,12 @@ export class Baal extends Contract {
       0: [boolean, boolean, boolean, boolean];
     }>;
 
-    getProposalVotes(
-      account: string,
-      proposal: BigNumberish,
-      overrides?: CallOverrides
-    ): Promise<{
-      vote: boolean;
-      0: boolean;
-    }>;
-
-    "getProposalVotes(address,uint256)"(
-      account: string,
-      proposal: BigNumberish,
-      overrides?: CallOverrides
-    ): Promise<{
-      vote: boolean;
-      0: boolean;
-    }>;
-
     gracePeriod(overrides?: CallOverrides): Promise<{
-      0: BigNumber;
+      0: number;
     }>;
 
     "gracePeriod()"(overrides?: CallOverrides): Promise<{
-      0: BigNumber;
+      0: number;
     }>;
 
     lootPaused(overrides?: CallOverrides): Promise<{
@@ -610,12 +654,28 @@ export class Baal extends Contract {
       0: boolean;
     }>;
 
-    maxVotingPeriod(overrides?: CallOverrides): Promise<{
+    maxFlashLoan(
+      token: string,
+      overrides?: CallOverrides
+    ): Promise<{
+      max: BigNumber;
       0: BigNumber;
     }>;
 
-    "maxVotingPeriod()"(overrides?: CallOverrides): Promise<{
+    "maxFlashLoan(address)"(
+      token: string,
+      overrides?: CallOverrides
+    ): Promise<{
+      max: BigNumber;
       0: BigNumber;
+    }>;
+
+    maxVotingPeriod(overrides?: CallOverrides): Promise<{
+      0: number;
+    }>;
+
+    "maxVotingPeriod()"(overrides?: CallOverrides): Promise<{
+      0: number;
     }>;
 
     memberAction(
@@ -655,12 +715,22 @@ export class Baal extends Contract {
     }>;
 
     minVotingPeriod(overrides?: CallOverrides): Promise<{
-      0: BigNumber;
+      0: number;
     }>;
 
     "minVotingPeriod()"(overrides?: CallOverrides): Promise<{
-      0: BigNumber;
+      0: number;
     }>;
+
+    multicall(
+      data: BytesLike[],
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
+    "multicall(bytes[])"(
+      data: BytesLike[],
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
 
     name(overrides?: CallOverrides): Promise<{
       0: string;
@@ -842,6 +912,20 @@ export class Baal extends Contract {
       3: BigNumber;
       4: BigNumber;
       5: string;
+    }>;
+
+    proposalsPassed(
+      arg0: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<{
+      0: boolean;
+    }>;
+
+    "proposalsPassed(uint256)"(
+      arg0: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<{
+      0: boolean;
     }>;
 
     ragequit(
@@ -1027,18 +1111,6 @@ export class Baal extends Contract {
     overrides?: Overrides
   ): Promise<ContractTransaction>;
 
-  baalBatch(
-    calls: BytesLike[],
-    revertOnFail: boolean,
-    overrides?: Overrides
-  ): Promise<ContractTransaction>;
-
-  "baalBatch(bytes[],bool)"(
-    calls: BytesLike[],
-    revertOnFail: boolean,
-    overrides?: Overrides
-  ): Promise<ContractTransaction>;
-
   balanceOf(arg0: string, overrides?: CallOverrides): Promise<BigNumber>;
 
   "balanceOf(address)"(
@@ -1109,6 +1181,38 @@ export class Baal extends Contract {
     overrides?: CallOverrides
   ): Promise<string>;
 
+  flashFee(
+    arg0: string,
+    amount: BigNumberish,
+    overrides?: CallOverrides
+  ): Promise<BigNumber>;
+
+  "flashFee(address,uint256)"(
+    arg0: string,
+    amount: BigNumberish,
+    overrides?: CallOverrides
+  ): Promise<BigNumber>;
+
+  flashFeeNumerator(overrides?: CallOverrides): Promise<number>;
+
+  "flashFeeNumerator()"(overrides?: CallOverrides): Promise<number>;
+
+  flashLoan(
+    receiver: string,
+    token: string,
+    amount: BigNumberish,
+    data: BytesLike,
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
+  "flashLoan(address,address,uint256,bytes)"(
+    receiver: string,
+    token: string,
+    amount: BigNumberish,
+    data: BytesLike,
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
   getCurrentVotes(
     account: string,
     overrides?: CallOverrides
@@ -1145,29 +1249,24 @@ export class Baal extends Contract {
     overrides?: CallOverrides
   ): Promise<[boolean, boolean, boolean, boolean]>;
 
-  getProposalVotes(
-    account: string,
-    proposal: BigNumberish,
-    overrides?: CallOverrides
-  ): Promise<boolean>;
+  gracePeriod(overrides?: CallOverrides): Promise<number>;
 
-  "getProposalVotes(address,uint256)"(
-    account: string,
-    proposal: BigNumberish,
-    overrides?: CallOverrides
-  ): Promise<boolean>;
-
-  gracePeriod(overrides?: CallOverrides): Promise<BigNumber>;
-
-  "gracePeriod()"(overrides?: CallOverrides): Promise<BigNumber>;
+  "gracePeriod()"(overrides?: CallOverrides): Promise<number>;
 
   lootPaused(overrides?: CallOverrides): Promise<boolean>;
 
   "lootPaused()"(overrides?: CallOverrides): Promise<boolean>;
 
-  maxVotingPeriod(overrides?: CallOverrides): Promise<BigNumber>;
+  maxFlashLoan(token: string, overrides?: CallOverrides): Promise<BigNumber>;
 
-  "maxVotingPeriod()"(overrides?: CallOverrides): Promise<BigNumber>;
+  "maxFlashLoan(address)"(
+    token: string,
+    overrides?: CallOverrides
+  ): Promise<BigNumber>;
+
+  maxVotingPeriod(overrides?: CallOverrides): Promise<number>;
+
+  "maxVotingPeriod()"(overrides?: CallOverrides): Promise<number>;
 
   memberAction(
     shaman: string,
@@ -1205,9 +1304,19 @@ export class Baal extends Contract {
     1: BigNumber;
   }>;
 
-  minVotingPeriod(overrides?: CallOverrides): Promise<BigNumber>;
+  minVotingPeriod(overrides?: CallOverrides): Promise<number>;
 
-  "minVotingPeriod()"(overrides?: CallOverrides): Promise<BigNumber>;
+  "minVotingPeriod()"(overrides?: CallOverrides): Promise<number>;
+
+  multicall(
+    data: BytesLike[],
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
+  "multicall(bytes[])"(
+    data: BytesLike[],
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
 
   name(overrides?: CallOverrides): Promise<string>;
 
@@ -1350,6 +1459,16 @@ export class Baal extends Contract {
     4: BigNumber;
     5: string;
   }>;
+
+  proposalsPassed(
+    arg0: BigNumberish,
+    overrides?: CallOverrides
+  ): Promise<boolean>;
+
+  "proposalsPassed(uint256)"(
+    arg0: BigNumberish,
+    overrides?: CallOverrides
+  ): Promise<boolean>;
 
   ragequit(
     to: string,
@@ -1508,18 +1627,6 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<boolean>;
 
-    baalBatch(
-      calls: BytesLike[],
-      revertOnFail: boolean,
-      overrides?: CallOverrides
-    ): Promise<string>;
-
-    "baalBatch(bytes[],bool)"(
-      calls: BytesLike[],
-      revertOnFail: boolean,
-      overrides?: CallOverrides
-    ): Promise<string>;
-
     balanceOf(arg0: string, overrides?: CallOverrides): Promise<BigNumber>;
 
     "balanceOf(address)"(
@@ -1587,6 +1694,38 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<string>;
 
+    flashFee(
+      arg0: string,
+      amount: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
+    "flashFee(address,uint256)"(
+      arg0: string,
+      amount: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
+    flashFeeNumerator(overrides?: CallOverrides): Promise<number>;
+
+    "flashFeeNumerator()"(overrides?: CallOverrides): Promise<number>;
+
+    flashLoan(
+      receiver: string,
+      token: string,
+      amount: BigNumberish,
+      data: BytesLike,
+      overrides?: CallOverrides
+    ): Promise<boolean>;
+
+    "flashLoan(address,address,uint256,bytes)"(
+      receiver: string,
+      token: string,
+      amount: BigNumberish,
+      data: BytesLike,
+      overrides?: CallOverrides
+    ): Promise<boolean>;
+
     getCurrentVotes(
       account: string,
       overrides?: CallOverrides
@@ -1623,29 +1762,24 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<[boolean, boolean, boolean, boolean]>;
 
-    getProposalVotes(
-      account: string,
-      proposal: BigNumberish,
-      overrides?: CallOverrides
-    ): Promise<boolean>;
+    gracePeriod(overrides?: CallOverrides): Promise<number>;
 
-    "getProposalVotes(address,uint256)"(
-      account: string,
-      proposal: BigNumberish,
-      overrides?: CallOverrides
-    ): Promise<boolean>;
-
-    gracePeriod(overrides?: CallOverrides): Promise<BigNumber>;
-
-    "gracePeriod()"(overrides?: CallOverrides): Promise<BigNumber>;
+    "gracePeriod()"(overrides?: CallOverrides): Promise<number>;
 
     lootPaused(overrides?: CallOverrides): Promise<boolean>;
 
     "lootPaused()"(overrides?: CallOverrides): Promise<boolean>;
 
-    maxVotingPeriod(overrides?: CallOverrides): Promise<BigNumber>;
+    maxFlashLoan(token: string, overrides?: CallOverrides): Promise<BigNumber>;
 
-    "maxVotingPeriod()"(overrides?: CallOverrides): Promise<BigNumber>;
+    "maxFlashLoan(address)"(
+      token: string,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
+    maxVotingPeriod(overrides?: CallOverrides): Promise<number>;
+
+    "maxVotingPeriod()"(overrides?: CallOverrides): Promise<number>;
 
     memberAction(
       shaman: string,
@@ -1693,9 +1827,16 @@ export class Baal extends Contract {
       1: BigNumber;
     }>;
 
-    minVotingPeriod(overrides?: CallOverrides): Promise<BigNumber>;
+    minVotingPeriod(overrides?: CallOverrides): Promise<number>;
 
-    "minVotingPeriod()"(overrides?: CallOverrides): Promise<BigNumber>;
+    "minVotingPeriod()"(overrides?: CallOverrides): Promise<number>;
+
+    multicall(data: BytesLike[], overrides?: CallOverrides): Promise<string[]>;
+
+    "multicall(bytes[])"(
+      data: BytesLike[],
+      overrides?: CallOverrides
+    ): Promise<string[]>;
 
     name(overrides?: CallOverrides): Promise<string>;
 
@@ -1838,6 +1979,16 @@ export class Baal extends Contract {
       4: BigNumber;
       5: string;
     }>;
+
+    proposalsPassed(
+      arg0: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<boolean>;
+
+    "proposalsPassed(uint256)"(
+      arg0: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<boolean>;
 
     ragequit(
       to: string,
@@ -1999,14 +2150,20 @@ export class Baal extends Contract {
     Ragequit(
       member: string | null,
       to: null,
-      lootToBurn: null,
-      sharesToBurn: null
+      lootToBurn: BigNumberish | null,
+      sharesToBurn: BigNumberish | null
+    ): EventFilter;
+
+    SponsorProposal(
+      member: string | null,
+      proposal: BigNumberish | null,
+      votingStarts: BigNumberish | null
     ): EventFilter;
 
     SubmitProposal(
       flag: BigNumberish | null,
       proposal: BigNumberish | null,
-      votingPeriod: null,
+      votingPeriod: BigNumberish | null,
       to: null,
       value: null,
       data: null,
@@ -2069,18 +2226,6 @@ export class Baal extends Contract {
       overrides?: Overrides
     ): Promise<BigNumber>;
 
-    baalBatch(
-      calls: BytesLike[],
-      revertOnFail: boolean,
-      overrides?: Overrides
-    ): Promise<BigNumber>;
-
-    "baalBatch(bytes[],bool)"(
-      calls: BytesLike[],
-      revertOnFail: boolean,
-      overrides?: Overrides
-    ): Promise<BigNumber>;
-
     balanceOf(arg0: string, overrides?: CallOverrides): Promise<BigNumber>;
 
     "balanceOf(address)"(
@@ -2138,6 +2283,38 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
+    flashFee(
+      arg0: string,
+      amount: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
+    "flashFee(address,uint256)"(
+      arg0: string,
+      amount: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
+    flashFeeNumerator(overrides?: CallOverrides): Promise<BigNumber>;
+
+    "flashFeeNumerator()"(overrides?: CallOverrides): Promise<BigNumber>;
+
+    flashLoan(
+      receiver: string,
+      token: string,
+      amount: BigNumberish,
+      data: BytesLike,
+      overrides?: Overrides
+    ): Promise<BigNumber>;
+
+    "flashLoan(address,address,uint256,bytes)"(
+      receiver: string,
+      token: string,
+      amount: BigNumberish,
+      data: BytesLike,
+      overrides?: Overrides
+    ): Promise<BigNumber>;
+
     getCurrentVotes(
       account: string,
       overrides?: CallOverrides
@@ -2174,18 +2351,6 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
-    getProposalVotes(
-      account: string,
-      proposal: BigNumberish,
-      overrides?: CallOverrides
-    ): Promise<BigNumber>;
-
-    "getProposalVotes(address,uint256)"(
-      account: string,
-      proposal: BigNumberish,
-      overrides?: CallOverrides
-    ): Promise<BigNumber>;
-
     gracePeriod(overrides?: CallOverrides): Promise<BigNumber>;
 
     "gracePeriod()"(overrides?: CallOverrides): Promise<BigNumber>;
@@ -2193,6 +2358,13 @@ export class Baal extends Contract {
     lootPaused(overrides?: CallOverrides): Promise<BigNumber>;
 
     "lootPaused()"(overrides?: CallOverrides): Promise<BigNumber>;
+
+    maxFlashLoan(token: string, overrides?: CallOverrides): Promise<BigNumber>;
+
+    "maxFlashLoan(address)"(
+      token: string,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
 
     maxVotingPeriod(overrides?: CallOverrides): Promise<BigNumber>;
 
@@ -2224,6 +2396,13 @@ export class Baal extends Contract {
     minVotingPeriod(overrides?: CallOverrides): Promise<BigNumber>;
 
     "minVotingPeriod()"(overrides?: CallOverrides): Promise<BigNumber>;
+
+    multicall(data: BytesLike[], overrides?: Overrides): Promise<BigNumber>;
+
+    "multicall(bytes[])"(
+      data: BytesLike[],
+      overrides?: Overrides
+    ): Promise<BigNumber>;
 
     name(overrides?: CallOverrides): Promise<BigNumber>;
 
@@ -2337,6 +2516,16 @@ export class Baal extends Contract {
     ): Promise<BigNumber>;
 
     "proposals(uint256)"(
+      arg0: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
+    proposalsPassed(
+      arg0: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
+    "proposalsPassed(uint256)"(
       arg0: BigNumberish,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
@@ -2502,18 +2691,6 @@ export class Baal extends Contract {
       overrides?: Overrides
     ): Promise<PopulatedTransaction>;
 
-    baalBatch(
-      calls: BytesLike[],
-      revertOnFail: boolean,
-      overrides?: Overrides
-    ): Promise<PopulatedTransaction>;
-
-    "baalBatch(bytes[],bool)"(
-      calls: BytesLike[],
-      revertOnFail: boolean,
-      overrides?: Overrides
-    ): Promise<PopulatedTransaction>;
-
     balanceOf(
       arg0: string,
       overrides?: CallOverrides
@@ -2580,6 +2757,40 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
+    flashFee(
+      arg0: string,
+      amount: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    "flashFee(address,uint256)"(
+      arg0: string,
+      amount: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    flashFeeNumerator(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    "flashFeeNumerator()"(
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    flashLoan(
+      receiver: string,
+      token: string,
+      amount: BigNumberish,
+      data: BytesLike,
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    "flashLoan(address,address,uint256,bytes)"(
+      receiver: string,
+      token: string,
+      amount: BigNumberish,
+      data: BytesLike,
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
     getCurrentVotes(
       account: string,
       overrides?: CallOverrides
@@ -2618,18 +2829,6 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
-    getProposalVotes(
-      account: string,
-      proposal: BigNumberish,
-      overrides?: CallOverrides
-    ): Promise<PopulatedTransaction>;
-
-    "getProposalVotes(address,uint256)"(
-      account: string,
-      proposal: BigNumberish,
-      overrides?: CallOverrides
-    ): Promise<PopulatedTransaction>;
-
     gracePeriod(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     "gracePeriod()"(overrides?: CallOverrides): Promise<PopulatedTransaction>;
@@ -2637,6 +2836,16 @@ export class Baal extends Contract {
     lootPaused(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     "lootPaused()"(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    maxFlashLoan(
+      token: string,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    "maxFlashLoan(address)"(
+      token: string,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
 
     maxVotingPeriod(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
@@ -2674,6 +2883,16 @@ export class Baal extends Contract {
 
     "minVotingPeriod()"(
       overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    multicall(
+      data: BytesLike[],
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    "multicall(bytes[])"(
+      data: BytesLike[],
+      overrides?: Overrides
     ): Promise<PopulatedTransaction>;
 
     name(overrides?: CallOverrides): Promise<PopulatedTransaction>;
@@ -2794,6 +3013,16 @@ export class Baal extends Contract {
     ): Promise<PopulatedTransaction>;
 
     "proposals(uint256)"(
+      arg0: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    proposalsPassed(
+      arg0: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    "proposalsPassed(uint256)"(
       arg0: BigNumberish,
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
