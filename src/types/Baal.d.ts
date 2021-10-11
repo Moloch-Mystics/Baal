@@ -31,6 +31,7 @@ interface BaalInterface extends ethers.utils.Interface {
     "decimals()": FunctionFragment;
     "delegate(address)": FunctionFragment;
     "delegateBySig(address,uint256,uint256,uint8,bytes32,bytes32)": FunctionFragment;
+    "delegateSummoners(address[],address[])": FunctionFragment;
     "delegates(address)": FunctionFragment;
     "flashFee(address,uint256)": FunctionFragment;
     "flashFeeNumerator()": FunctionFragment;
@@ -109,6 +110,10 @@ interface BaalInterface extends ethers.utils.Interface {
       BytesLike,
       BytesLike
     ]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "delegateSummoners",
+    values: [string[], string[]]
   ): string;
   encodeFunctionData(functionFragment: "delegates", values: [string]): string;
   encodeFunctionData(
@@ -298,6 +303,10 @@ interface BaalInterface extends ethers.utils.Interface {
   decodeFunctionResult(functionFragment: "delegate", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "delegateBySig",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "delegateSummoners",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "delegates", data: BytesLike): Result;
@@ -576,6 +585,18 @@ export class Baal extends Contract {
       v: BigNumberish,
       r: BytesLike,
       s: BytesLike,
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
+    delegateSummoners(
+      _delegators: string[],
+      _delegatees: string[],
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
+    "delegateSummoners(address[],address[])"(
+      _delegators: string[],
+      _delegatees: string[],
       overrides?: Overrides
     ): Promise<ContractTransaction>;
 
@@ -1309,6 +1330,18 @@ export class Baal extends Contract {
     overrides?: Overrides
   ): Promise<ContractTransaction>;
 
+  delegateSummoners(
+    _delegators: string[],
+    _delegatees: string[],
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
+  "delegateSummoners(address[],address[])"(
+    _delegators: string[],
+    _delegatees: string[],
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
   delegates(arg0: string, overrides?: CallOverrides): Promise<string>;
 
   "delegates(address)"(
@@ -1900,6 +1933,18 @@ export class Baal extends Contract {
       v: BigNumberish,
       r: BytesLike,
       s: BytesLike,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    delegateSummoners(
+      _delegators: string[],
+      _delegatees: string[],
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    "delegateSummoners(address[],address[])"(
+      _delegators: string[],
+      _delegatees: string[],
       overrides?: CallOverrides
     ): Promise<void>;
 
@@ -2567,6 +2612,18 @@ export class Baal extends Contract {
       overrides?: Overrides
     ): Promise<BigNumber>;
 
+    delegateSummoners(
+      _delegators: string[],
+      _delegatees: string[],
+      overrides?: Overrides
+    ): Promise<BigNumber>;
+
+    "delegateSummoners(address[],address[])"(
+      _delegators: string[],
+      _delegatees: string[],
+      overrides?: Overrides
+    ): Promise<BigNumber>;
+
     delegates(arg0: string, overrides?: CallOverrides): Promise<BigNumber>;
 
     "delegates(address)"(
@@ -3115,6 +3172,18 @@ export class Baal extends Contract {
       v: BigNumberish,
       r: BytesLike,
       s: BytesLike,
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    delegateSummoners(
+      _delegators: string[],
+      _delegatees: string[],
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    "delegateSummoners(address[],address[])"(
+      _delegators: string[],
+      _delegatees: string[],
       overrides?: Overrides
     ): Promise<PopulatedTransaction>;
 
