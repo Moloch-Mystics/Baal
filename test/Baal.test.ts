@@ -127,12 +127,14 @@ describe('Baal contract', function () {
     await baal.setUp(encodedInitParams)
 
     await shaman.init(baal.address)
+    
+    const selfTransferAction = encodeMultiAction(multisend, ['0x'], [baal.address], [BigNumber.from(0)], [0])
 
     proposal = {
       flag: 0,
       votingPeriod: 175000,
       account: summoner.address,
-      data: '0x',
+      data: selfTransferAction,
       details: 'all hail baal',
     }
   })
@@ -223,22 +225,18 @@ describe('Baal contract', function () {
     })
 
     it('happy case - yes vote', async function () {
-      const blockT = await blockTime()
       await baal.submitVote(1, yes)
       const prop = await baal.proposals(1)
-      const priorVote = await baal.getPriorVotes(summoner.address, blockT)
       const nCheckpoints = await baal.numCheckpoints(summoner.address)
-      const votes = (await baal.checkpoints(summoner.address, nCheckpoints.sub(1))).votes
+      const votes = (await baal.checkpoints(summoner.address, nCheckpoints)).votes
       expect(prop.yesVotes).to.equal(votes)
     })
 
     it('happy case - no vote', async function () {
-      const blockT = await blockTime()
       await baal.submitVote(1, no)
       const prop = await baal.proposals(1)
-      const priorVote = await baal.getPriorVotes(summoner.address, blockT)
       const nCheckpoints = await baal.numCheckpoints(summoner.address)
-      const votes = (await baal.checkpoints(summoner.address, nCheckpoints.sub(1))).votes
+      const votes = (await baal.checkpoints(summoner.address, nCheckpoints)).votes
       expect(prop.noVotes).to.equal(votes)
     })
 
