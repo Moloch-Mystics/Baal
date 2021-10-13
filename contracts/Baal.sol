@@ -12,6 +12,8 @@ pragma solidity >=0.8.0;
 import "@gnosis.pm/safe-contracts/contracts/base/Executor.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
+import "./libraries/base64.sol";
 
 /// @notice Interface for Baal {memberAction} that adjusts member `shares` & `loot`.
 interface IShaman {
@@ -73,7 +75,9 @@ contract Baal is Executor, Initializable {
     mapping(uint256 => Proposal) public proposals; /*maps `proposalCount` to struct details*/
     mapping(uint256 => bool) public proposalsPassed; /*maps `proposalCount` to approval status - separated out as struct is deleted, and this value can be used by minion-like contracts*/
     mapping(address => bool) public shamans; /*maps contracts approved in 'whitelist'[3] proposals for {memberAction} that mint or burn `shares`*/
-
+    
+    mapping(uint256 => address) private _owners; /*maps token ID to owner*/
+    
     event SummonComplete(
         bool lootPaused,
         bool sharesPaused,
@@ -823,6 +827,104 @@ contract Baal is Executor, Initializable {
             abi.encodeWithSelector(0x70a08231, address(this))
         ); /*get Baal token balance - 'balanceOf(address)'*/
         max = abi.decode(balanceData, (uint256)); /*decode Baal token balance for calculation*/
+    }
+    
+    /***************
+    NFT FUNCTIONS
+    ***************/
+    /// @notice Returns the json data associated with this token ID
+    /// @param _tokenId the token ID
+    function tokenURI(uint256 _tokenId)
+        public
+        view
+        virtual
+        returns (string memory)
+    {
+        require(
+            _owners[_tokenId] != address(0),
+            "ERC721Metadata: URI query for nonexistent token"
+        );
+        return string(_constructTokenURI(_tokenId));
+    }
+
+    function ownerOf(uint256 tokenId) public view virtual returns (address) {
+        address owner = _owners[tokenId];
+        require(owner != address(0), "ERC721: owner query for nonexistent token");
+        return owner;
+    }
+    
+    function tokenId(address _owner) public view returns (uint256) {
+        uint256 _tokenId = uint256(keccak256(abi.encodePacked(msg.sender)));
+        require(_owners[_tokenId] != address(0), "ERC721: owner query for nonexistent token");
+        return _tokenId;
+    }
+    
+    /// @notice Enable member to register Baal NFT metadata
+    function claim() public {
+        uint256 _tokenId = uint256(keccak256(abi.encodePacked(msg.sender)));
+        require(_owners[_tokenId] == address(0), "claimed");
+        
+        Member storage _member = members[msg.sender];
+        require(_member.loot > 0 || balanceOf[msg.sender] > 0, "!shares or loot");
+        _owners[_tokenId] = msg.sender;
+    }
+
+    /// @notice Constructs the tokenURI, separated out from the public function as its a big function.
+    /// @dev Generates the json data URI and svg data URI that ends up sent when someone requests the tokenURI
+    /// @param _tokenId the tokenId
+    function _constructTokenURI(uint256 _tokenId)
+        internal
+        view
+        returns (string memory)
+    {
+        address _address = _owners[_tokenId];
+        Member storage _member = members[_address];
+
+        string memory _nftName = string(
+            abi.encodePacked("Baal ", name)
+        );
+
+        string memory _baalMetadataSVGs =
+                string(abi.encodePacked(
+                    '<text dominant-baseline="middle" text-anchor="middle" fill="white" x="50%" y="20px">',
+                    Strings.toString(balanceOf[_address]),
+                    ' Shares',
+                    "</text>",
+                    '<text dominant-baseline="middle" text-anchor="middle" fill="white" x="50%" y="40px">',
+                    Strings.toString(_member.loot),
+                    ' Loot',
+                    "</text>"
+                ));
+
+        bytes memory svg = abi.encodePacked(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet" style="font:14px serif"><rect width="400" height="400" fill="black" />',
+            _baalMetadataSVGs,
+            "</svg>"
+        );
+
+        bytes memory _image = abi.encodePacked(
+            "data:image/svg+xml;base64,",
+            Base64.encode(bytes(svg))
+        );
+
+        return
+            string(
+                abi.encodePacked(
+                    "data:application/json;base64,",
+                    Base64.encode(
+                        bytes(
+                            abi.encodePacked(
+                                '{"name":"',
+                                _nftName,
+                                '", "image":"',
+                                _image,
+                                // Todo something clever
+                                '", "description": "Member of Baal. Dynamically generated NFT showing member voting weight"}'
+                            )
+                        )
+                    )
+                )
+            );
     }
 
     /***************

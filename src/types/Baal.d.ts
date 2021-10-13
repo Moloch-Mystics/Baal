@@ -27,6 +27,7 @@ interface BaalInterface extends ethers.utils.Interface {
     "approve(address,uint256)": FunctionFragment;
     "balanceOf(address)": FunctionFragment;
     "checkpoints(address,uint256)": FunctionFragment;
+    "claim()": FunctionFragment;
     "convertSharesToLoot(address)": FunctionFragment;
     "decimals()": FunctionFragment;
     "delegate(address)": FunctionFragment;
@@ -55,6 +56,7 @@ interface BaalInterface extends ethers.utils.Interface {
     "onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)": FunctionFragment;
     "onERC1155Received(address,address,uint256,uint256,bytes)": FunctionFragment;
     "onERC721Received(address,address,uint256,bytes)": FunctionFragment;
+    "ownerOf(uint256)": FunctionFragment;
     "permit(address,address,uint96,uint256,uint8,bytes32,bytes32)": FunctionFragment;
     "processProposal(uint256)": FunctionFragment;
     "proposalCount()": FunctionFragment;
@@ -73,6 +75,8 @@ interface BaalInterface extends ethers.utils.Interface {
     "submitVote(uint256,bool)": FunctionFragment;
     "submitVoteWithSig(uint256,bool,uint8,bytes32,bytes32)": FunctionFragment;
     "symbol()": FunctionFragment;
+    "tokenId(address)": FunctionFragment;
+    "tokenURI(uint256)": FunctionFragment;
     "totalLoot()": FunctionFragment;
     "totalSupply()": FunctionFragment;
     "transfer(address,uint96)": FunctionFragment;
@@ -94,6 +98,7 @@ interface BaalInterface extends ethers.utils.Interface {
     functionFragment: "checkpoints",
     values: [string, BigNumberish]
   ): string;
+  encodeFunctionData(functionFragment: "claim", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "convertSharesToLoot",
     values: [string]
@@ -196,6 +201,10 @@ interface BaalInterface extends ethers.utils.Interface {
     values: [string, string, BigNumberish, BytesLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "ownerOf",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "permit",
     values: [
       string,
@@ -266,6 +275,11 @@ interface BaalInterface extends ethers.utils.Interface {
     values: [BigNumberish, boolean, BigNumberish, BytesLike, BytesLike]
   ): string;
   encodeFunctionData(functionFragment: "symbol", values?: undefined): string;
+  encodeFunctionData(functionFragment: "tokenId", values: [string]): string;
+  encodeFunctionData(
+    functionFragment: "tokenURI",
+    values: [BigNumberish]
+  ): string;
   encodeFunctionData(functionFragment: "totalLoot", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "totalSupply",
@@ -295,6 +309,7 @@ interface BaalInterface extends ethers.utils.Interface {
     functionFragment: "checkpoints",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "claim", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "convertSharesToLoot",
     data: BytesLike
@@ -371,6 +386,7 @@ interface BaalInterface extends ethers.utils.Interface {
     functionFragment: "onERC721Received",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "ownerOf", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "permit", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "processProposal",
@@ -416,6 +432,8 @@ interface BaalInterface extends ethers.utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "symbol", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "tokenId", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "tokenURI", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "totalLoot", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "totalSupply",
@@ -539,6 +557,10 @@ export class Baal extends Contract {
       0: number;
       1: BigNumber;
     }>;
+
+    claim(overrides?: Overrides): Promise<ContractTransaction>;
+
+    "claim()"(overrides?: Overrides): Promise<ContractTransaction>;
 
     convertSharesToLoot(
       to: string,
@@ -924,6 +946,20 @@ export class Baal extends Contract {
       0: string;
     }>;
 
+    ownerOf(
+      tokenId: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<{
+      0: string;
+    }>;
+
+    "ownerOf(uint256)"(
+      tokenId: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<{
+      0: string;
+    }>;
+
     permit(
       owner: string,
       spender: string,
@@ -1168,6 +1204,34 @@ export class Baal extends Contract {
       0: string;
     }>;
 
+    tokenId(
+      _owner: string,
+      overrides?: CallOverrides
+    ): Promise<{
+      0: BigNumber;
+    }>;
+
+    "tokenId(address)"(
+      _owner: string,
+      overrides?: CallOverrides
+    ): Promise<{
+      0: BigNumber;
+    }>;
+
+    tokenURI(
+      _tokenId: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<{
+      0: string;
+    }>;
+
+    "tokenURI(uint256)"(
+      _tokenId: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<{
+      0: string;
+    }>;
+
     totalLoot(overrides?: CallOverrides): Promise<{
       0: BigNumber;
     }>;
@@ -1285,6 +1349,10 @@ export class Baal extends Contract {
     0: number;
     1: BigNumber;
   }>;
+
+  claim(overrides?: Overrides): Promise<ContractTransaction>;
+
+  "claim()"(overrides?: Overrides): Promise<ContractTransaction>;
 
   convertSharesToLoot(
     to: string,
@@ -1570,6 +1638,13 @@ export class Baal extends Contract {
     overrides?: CallOverrides
   ): Promise<string>;
 
+  ownerOf(tokenId: BigNumberish, overrides?: CallOverrides): Promise<string>;
+
+  "ownerOf(uint256)"(
+    tokenId: BigNumberish,
+    overrides?: CallOverrides
+  ): Promise<string>;
+
   permit(
     owner: string,
     spender: string,
@@ -1788,6 +1863,20 @@ export class Baal extends Contract {
 
   "symbol()"(overrides?: CallOverrides): Promise<string>;
 
+  tokenId(_owner: string, overrides?: CallOverrides): Promise<BigNumber>;
+
+  "tokenId(address)"(
+    _owner: string,
+    overrides?: CallOverrides
+  ): Promise<BigNumber>;
+
+  tokenURI(_tokenId: BigNumberish, overrides?: CallOverrides): Promise<string>;
+
+  "tokenURI(uint256)"(
+    _tokenId: BigNumberish,
+    overrides?: CallOverrides
+  ): Promise<string>;
+
   totalLoot(overrides?: CallOverrides): Promise<BigNumber>;
 
   "totalLoot()"(overrides?: CallOverrides): Promise<BigNumber>;
@@ -1897,6 +1986,10 @@ export class Baal extends Contract {
       0: number;
       1: BigNumber;
     }>;
+
+    claim(overrides?: CallOverrides): Promise<void>;
+
+    "claim()"(overrides?: CallOverrides): Promise<void>;
 
     convertSharesToLoot(to: string, overrides?: CallOverrides): Promise<void>;
 
@@ -2183,6 +2276,13 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<string>;
 
+    ownerOf(tokenId: BigNumberish, overrides?: CallOverrides): Promise<string>;
+
+    "ownerOf(uint256)"(
+      tokenId: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<string>;
+
     permit(
       owner: string,
       spender: string,
@@ -2401,6 +2501,23 @@ export class Baal extends Contract {
 
     "symbol()"(overrides?: CallOverrides): Promise<string>;
 
+    tokenId(_owner: string, overrides?: CallOverrides): Promise<BigNumber>;
+
+    "tokenId(address)"(
+      _owner: string,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
+    tokenURI(
+      _tokenId: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<string>;
+
+    "tokenURI(uint256)"(
+      _tokenId: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<string>;
+
     totalLoot(overrides?: CallOverrides): Promise<BigNumber>;
 
     "totalLoot()"(overrides?: CallOverrides): Promise<BigNumber>;
@@ -2573,6 +2690,10 @@ export class Baal extends Contract {
       arg1: BigNumberish,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
+
+    claim(overrides?: Overrides): Promise<BigNumber>;
+
+    "claim()"(overrides?: Overrides): Promise<BigNumber>;
 
     convertSharesToLoot(to: string, overrides?: Overrides): Promise<BigNumber>;
 
@@ -2836,6 +2957,16 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
+    ownerOf(
+      tokenId: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
+    "ownerOf(uint256)"(
+      tokenId: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
     permit(
       owner: string,
       spender: string,
@@ -3027,6 +3158,23 @@ export class Baal extends Contract {
 
     "symbol()"(overrides?: CallOverrides): Promise<BigNumber>;
 
+    tokenId(_owner: string, overrides?: CallOverrides): Promise<BigNumber>;
+
+    "tokenId(address)"(
+      _owner: string,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
+    tokenURI(
+      _tokenId: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
+    "tokenURI(uint256)"(
+      _tokenId: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
     totalLoot(overrides?: CallOverrides): Promise<BigNumber>;
 
     "totalLoot()"(overrides?: CallOverrides): Promise<BigNumber>;
@@ -3130,6 +3278,10 @@ export class Baal extends Contract {
       arg1: BigNumberish,
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
+
+    claim(overrides?: Overrides): Promise<PopulatedTransaction>;
+
+    "claim()"(overrides?: Overrides): Promise<PopulatedTransaction>;
 
     convertSharesToLoot(
       to: string,
@@ -3425,6 +3577,16 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
+    ownerOf(
+      tokenId: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    "ownerOf(uint256)"(
+      tokenId: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
     permit(
       owner: string,
       spender: string,
@@ -3618,6 +3780,26 @@ export class Baal extends Contract {
     symbol(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     "symbol()"(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    tokenId(
+      _owner: string,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    "tokenId(address)"(
+      _owner: string,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    tokenURI(
+      _tokenId: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    "tokenURI(uint256)"(
+      _tokenId: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
 
     totalLoot(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 

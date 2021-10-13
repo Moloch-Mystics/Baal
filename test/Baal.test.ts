@@ -354,4 +354,14 @@ describe('Baal contract', function () {
       expect(baal.getPriorVotes(summoner.address, blockT)).to.be.revertedWith('!determined')
     })
   })
+  
+  describe('claim', function () {
+    it('happy case - allows member to claim NFT', async function () {
+      await baal.claim();
+      const tokenId = await baal.tokenId(summoner.address)
+      const tokenUri = await baal.tokenURI(tokenId)
+      console.log({tokenUri})
+      expect(await baal.ownerOf(tokenId)).to.equal(summoner.address)
+    })
+  })
 })
