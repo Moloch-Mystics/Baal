@@ -2,13 +2,17 @@ import { ethers } from 'hardhat'
 import { solidity } from 'ethereum-waffle'
 import { use, expect } from 'chai'
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
+import { BigNumber } from '@ethersproject/bignumber'
+import { ContractFactory } from '@ethersproject/contracts'
 
 import { Baal } from '../src/types/Baal'
+import { SafeBaalSummoner } from '../src/types/SafeBaalSummoner'
 import { TestErc20 } from '../src/types/TestErc20'
 import { RageQuitBank } from '../src/types/RageQuitBank'
 import { MultiSend } from '../src/types/MultiSend'
-import { encodeMultiAction } from '../src/util'
-import { BigNumber } from '@ethersproject/bignumber'
+import { GnosisSafe } from '../src/types/GnosisSafe'
+import { CompatibilityFallbackHandler } from '../src/types/CompatibilityFallbackHandler'
+import { encodeMultiAction, generateNonce } from '../src/util'
 
 use(solidity)
 
@@ -58,10 +62,23 @@ const deploymentConfig = {
 }
 
 describe('Baal contract', function () {
+  let BaalContract: ContractFactory
+  let BaalSummonerContract: ContractFactory
+  let GnosisSafeContract: ContractFactory
+  let CompatibilityFallbackHandler: ContractFactory
+  let MultisendContract: ContractFactory
+  let ShamanContract: ContractFactory
+  let ERC20: ContractFactory
+
   let baal: Baal
+  let baalSingleton: Baal
+  let baalSummoner: SafeBaalSummoner
   let weth: TestErc20
   let shaman: RageQuitBank
+
+  let gnosisSafeSingleton: GnosisSafe
   let multisend: MultiSend
+  let compatibilityFallbackHandler: CompatibilityFallbackHandler
 
   let applicant: SignerWithAddress
   let summoner: SignerWithAddress
@@ -76,20 +93,34 @@ describe('Baal contract', function () {
   const yes = true
   const no = false
 
-  beforeEach(async function () {
-    const BaalContract = await ethers.getContractFactory('Baal')
-    const ShamanContract = await ethers.getContractFactory('RageQuitBank')
-    const MultisendContract = await ethers.getContractFactory('MultiSend')
+  this.beforeAll(async function () {
+    BaalContract = await ethers.getContractFactory('Baal')
+    BaalSummonerContract = await ethers.getContractFactory('SafeBaalSummoner')
+    GnosisSafeContract = await ethers.getContractFactory('GnosisSafe')
+    CompatibilityFallbackHandler = await ethers.getContractFactory('CompatibilityFallbackHandler')
+    MultisendContract = await ethers.getContractFactory('MultiSend')
+    ShamanContract = await ethers.getContractFactory('RageQuitBank')
+    ERC20 = await ethers.getContractFactory('TestERC20')
     ;[summoner, applicant] = await ethers.getSigners()
 
-    const ERC20 = await ethers.getContractFactory('TestERC20')
+    gnosisSafeSingleton = (await GnosisSafeContract.deploy()) as GnosisSafe
+    multisend = (await MultisendContract.deploy()) as MultiSend
+    compatibilityFallbackHandler = (await CompatibilityFallbackHandler.deploy()) as CompatibilityFallbackHandler
+
+    baalSingleton = (await BaalContract.deploy()) as Baal
+
+    baalSummoner = (await BaalSummonerContract.deploy(
+      baalSingleton.address,
+      gnosisSafeSingleton.address,
+      compatibilityFallbackHandler.address,
+      multisend.address
+    )) as SafeBaalSummoner
+  })
+
+  beforeEach(async function () {
     weth = (await ERC20.deploy('WETH', 'WETH', 10000000)) as TestErc20
 
     shaman = (await ShamanContract.deploy()) as RageQuitBank
-
-    multisend = (await MultisendContract.deploy()) as MultiSend
-
-    baal = (await BaalContract.deploy()) as Baal
 
     const abiCoder = ethers.utils.defaultAbiCoder
 
@@ -104,30 +135,32 @@ describe('Baal contract', function () {
       ]
     )
 
-    const setPeriods = await baal.interface.encodeFunctionData('setPeriods', [periods])
-    const setGuildTokens = await baal.interface.encodeFunctionData('setGuildTokens', [[weth.address]])
-    const setShaman = await baal.interface.encodeFunctionData('setShamans', [[shaman.address], true])
-    const mintShares = await baal.interface.encodeFunctionData('mintShares', [[summoner.address], [shares]])
-    const mintLoot = await baal.interface.encodeFunctionData('mintLoot', [[summoner.address], [loot]])
-    const delegateSummoners = await baal.interface.encodeFunctionData('delegateSummoners', [[summoner.address], [summoner.address]])
+    const setPeriods = await baalSingleton.interface.encodeFunctionData('setPeriods', [periods])
+    const setGuildTokens = await baalSingleton.interface.encodeFunctionData('setGuildTokens', [[weth.address]])
+    const setShaman = await baalSingleton.interface.encodeFunctionData('setShamans', [[shaman.address], true])
+    const mintShares = await baalSingleton.interface.encodeFunctionData('mintShares', [[summoner.address], [shares]])
+    const mintLoot = await baalSingleton.interface.encodeFunctionData('mintLoot', [[summoner.address], [loot]])
+    const delegateSummoners = await baalSingleton.interface.encodeFunctionData('delegateSummoners', [[summoner.address], [summoner.address]])
 
-    const initalizationActions = encodeMultiAction(
-      multisend,
-      [setPeriods, setGuildTokens, setShaman, mintShares, mintLoot, delegateSummoners],
-      [baal.address, baal.address, baal.address, baal.address, baal.address, baal.address],
-      [BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0)],
-      [0, 0, 0, 0, 0, 0]
-    )
+    const initalizationActions = [setPeriods, setGuildTokens, setShaman, mintShares, mintLoot, delegateSummoners]
+    // encodeMultiAction(
+    //   multisend,
+    //   [setPeriods, setGuildTokens, setShaman, mintShares, mintLoot, delegateSummoners],
+    //   [baal.address, baal.address, baal.address, baal.address, baal.address, baal.address],
+    //   [BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0)],
+    //   [0, 0, 0, 0, 0, 0]
+    // )
 
-    const encodedInitParams = abiCoder.encode(
-      ['string', 'string', 'address', 'bytes'],
-      [deploymentConfig.TOKEN_NAME, deploymentConfig.TOKEN_SYMBOL, multisend.address, initalizationActions]
-    )
 
-    await baal.setUp(encodedInitParams)
+    const salt = await generateNonce()
+    await baalSummoner.SummonBaalAndSafe('rise', '0x' + salt, deploymentConfig.TOKEN_NAME, deploymentConfig.TOKEN_SYMBOL, initalizationActions)
+
+    const newBaalCount = (await baalSummoner.baalCount()).toNumber()
+    const newBaalAddress = await baalSummoner.baalList(newBaalCount - 1)
+    baal = (await BaalContract.attach(newBaalAddress)) as Baal
 
     await shaman.init(baal.address)
-    
+
     const selfTransferAction = encodeMultiAction(multisend, ['0x'], [baal.address], [BigNumber.from(0)], [0])
 
     proposal = {

@@ -25,6 +25,7 @@ interface BaalInterface extends ethers.utils.Interface {
   functions: {
     "allowance(address,address)": FunctionFragment;
     "approve(address,uint256)": FunctionFragment;
+    "avatar()": FunctionFragment;
     "balanceOf(address)": FunctionFragment;
     "checkpoints(address,uint256)": FunctionFragment;
     "convertSharesToLoot(address)": FunctionFragment;
@@ -33,13 +34,16 @@ interface BaalInterface extends ethers.utils.Interface {
     "delegateBySig(address,uint256,uint256,uint8,bytes32,bytes32)": FunctionFragment;
     "delegateSummoners(address[],address[])": FunctionFragment;
     "delegates(address)": FunctionFragment;
+    "executeAsBaal(address,uint256,bytes)": FunctionFragment;
     "flashFee(address,uint256)": FunctionFragment;
     "flashFeeNumerator()": FunctionFragment;
     "flashLoan(address,address,uint256,bytes)": FunctionFragment;
     "getCurrentVotes(address)": FunctionFragment;
+    "getGuard()": FunctionFragment;
     "getGuildTokens()": FunctionFragment;
     "getPriorVotes(address,uint256)": FunctionFragment;
     "gracePeriod()": FunctionFragment;
+    "guard()": FunctionFragment;
     "lootPaused()": FunctionFragment;
     "maxFlashLoan(address)": FunctionFragment;
     "maxVotingPeriod()": FunctionFragment;
@@ -55,16 +59,21 @@ interface BaalInterface extends ethers.utils.Interface {
     "onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)": FunctionFragment;
     "onERC1155Received(address,address,uint256,uint256,bytes)": FunctionFragment;
     "onERC721Received(address,address,uint256,bytes)": FunctionFragment;
+    "owner()": FunctionFragment;
     "permit(address,address,uint96,uint256,uint8,bytes32,bytes32)": FunctionFragment;
     "processProposal(uint256)": FunctionFragment;
     "proposalCount()": FunctionFragment;
     "proposals(uint256)": FunctionFragment;
     "proposalsPassed(uint256)": FunctionFragment;
     "ragequit(address,uint96,uint96)": FunctionFragment;
+    "renounceOwnership()": FunctionFragment;
+    "setAvatar(address)": FunctionFragment;
     "setFlashFeeNumerator(uint32)": FunctionFragment;
+    "setGuard(address)": FunctionFragment;
     "setGuildTokens(address[])": FunctionFragment;
     "setPeriods(bytes)": FunctionFragment;
     "setShamans(address[],bool)": FunctionFragment;
+    "setTarget(address)": FunctionFragment;
     "setUp(bytes)": FunctionFragment;
     "shamans(address)": FunctionFragment;
     "sharesPaused()": FunctionFragment;
@@ -73,11 +82,13 @@ interface BaalInterface extends ethers.utils.Interface {
     "submitVote(uint256,bool)": FunctionFragment;
     "submitVoteWithSig(uint256,bool,uint8,bytes32,bytes32)": FunctionFragment;
     "symbol()": FunctionFragment;
+    "target()": FunctionFragment;
     "totalLoot()": FunctionFragment;
     "totalSupply()": FunctionFragment;
     "transfer(address,uint96)": FunctionFragment;
     "transferFrom(address,address,uint96)": FunctionFragment;
     "transferLoot(address,uint96)": FunctionFragment;
+    "transferOwnership(address)": FunctionFragment;
     "unsetGuildTokens(uint256[])": FunctionFragment;
   };
 
@@ -89,6 +100,7 @@ interface BaalInterface extends ethers.utils.Interface {
     functionFragment: "approve",
     values: [string, BigNumberish]
   ): string;
+  encodeFunctionData(functionFragment: "avatar", values?: undefined): string;
   encodeFunctionData(functionFragment: "balanceOf", values: [string]): string;
   encodeFunctionData(
     functionFragment: "checkpoints",
@@ -117,6 +129,10 @@ interface BaalInterface extends ethers.utils.Interface {
   ): string;
   encodeFunctionData(functionFragment: "delegates", values: [string]): string;
   encodeFunctionData(
+    functionFragment: "executeAsBaal",
+    values: [string, BigNumberish, BytesLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "flashFee",
     values: [string, BigNumberish]
   ): string;
@@ -132,6 +148,7 @@ interface BaalInterface extends ethers.utils.Interface {
     functionFragment: "getCurrentVotes",
     values: [string]
   ): string;
+  encodeFunctionData(functionFragment: "getGuard", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "getGuildTokens",
     values?: undefined
@@ -144,6 +161,7 @@ interface BaalInterface extends ethers.utils.Interface {
     functionFragment: "gracePeriod",
     values?: undefined
   ): string;
+  encodeFunctionData(functionFragment: "guard", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "lootPaused",
     values?: undefined
@@ -195,6 +213,7 @@ interface BaalInterface extends ethers.utils.Interface {
     functionFragment: "onERC721Received",
     values: [string, string, BigNumberish, BytesLike]
   ): string;
+  encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "permit",
     values: [
@@ -228,9 +247,15 @@ interface BaalInterface extends ethers.utils.Interface {
     values: [string, BigNumberish, BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "renounceOwnership",
+    values?: undefined
+  ): string;
+  encodeFunctionData(functionFragment: "setAvatar", values: [string]): string;
+  encodeFunctionData(
     functionFragment: "setFlashFeeNumerator",
     values: [BigNumberish]
   ): string;
+  encodeFunctionData(functionFragment: "setGuard", values: [string]): string;
   encodeFunctionData(
     functionFragment: "setGuildTokens",
     values: [string[]]
@@ -243,6 +268,7 @@ interface BaalInterface extends ethers.utils.Interface {
     functionFragment: "setShamans",
     values: [string[], boolean]
   ): string;
+  encodeFunctionData(functionFragment: "setTarget", values: [string]): string;
   encodeFunctionData(functionFragment: "setUp", values: [BytesLike]): string;
   encodeFunctionData(functionFragment: "shamans", values: [string]): string;
   encodeFunctionData(
@@ -266,6 +292,7 @@ interface BaalInterface extends ethers.utils.Interface {
     values: [BigNumberish, boolean, BigNumberish, BytesLike, BytesLike]
   ): string;
   encodeFunctionData(functionFragment: "symbol", values?: undefined): string;
+  encodeFunctionData(functionFragment: "target", values?: undefined): string;
   encodeFunctionData(functionFragment: "totalLoot", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "totalSupply",
@@ -284,12 +311,17 @@ interface BaalInterface extends ethers.utils.Interface {
     values: [string, BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "transferOwnership",
+    values: [string]
+  ): string;
+  encodeFunctionData(
     functionFragment: "unsetGuildTokens",
     values: [BigNumberish[]]
   ): string;
 
   decodeFunctionResult(functionFragment: "allowance", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "avatar", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "checkpoints",
@@ -310,6 +342,10 @@ interface BaalInterface extends ethers.utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "delegates", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "executeAsBaal",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "flashFee", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "flashFeeNumerator",
@@ -320,6 +356,7 @@ interface BaalInterface extends ethers.utils.Interface {
     functionFragment: "getCurrentVotes",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "getGuard", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "getGuildTokens",
     data: BytesLike
@@ -332,6 +369,7 @@ interface BaalInterface extends ethers.utils.Interface {
     functionFragment: "gracePeriod",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "guard", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "lootPaused", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "maxFlashLoan",
@@ -371,6 +409,7 @@ interface BaalInterface extends ethers.utils.Interface {
     functionFragment: "onERC721Received",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "permit", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "processProposal",
@@ -387,15 +426,22 @@ interface BaalInterface extends ethers.utils.Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "ragequit", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "renounceOwnership",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "setAvatar", data: BytesLike): Result;
+  decodeFunctionResult(
     functionFragment: "setFlashFeeNumerator",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "setGuard", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "setGuildTokens",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "setPeriods", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "setShamans", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "setTarget", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "setUp", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "shamans", data: BytesLike): Result;
   decodeFunctionResult(
@@ -416,6 +462,7 @@ interface BaalInterface extends ethers.utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "symbol", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "target", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "totalLoot", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "totalSupply",
@@ -431,33 +478,45 @@ interface BaalInterface extends ethers.utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "transferOwnership",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "unsetGuildTokens",
     data: BytesLike
   ): Result;
 
   events: {
     "Approval(address,address,uint256)": EventFragment;
+    "AvatarSet(address,address)": EventFragment;
+    "ChangedGuard(address)": EventFragment;
     "DelegateChanged(address,address,address)": EventFragment;
     "DelegateVotesChanged(address,uint256,uint256)": EventFragment;
+    "OwnershipTransferred(address,address)": EventFragment;
     "ProcessProposal(uint256)": EventFragment;
     "Ragequit(address,address,uint96,uint96)": EventFragment;
     "SponsorProposal(address,uint256,uint256)": EventFragment;
     "SubmitProposal(uint256,uint256,bytes,string)": EventFragment;
     "SubmitVote(address,uint256,uint256,bool)": EventFragment;
     "SummonComplete(bool,bool,uint256,uint256,uint256,string,string,address[],address[],address[],uint96[],uint96[])": EventFragment;
+    "TargetSet(address,address)": EventFragment;
     "Transfer(address,address,uint256)": EventFragment;
     "TransferLoot(address,address,uint96)": EventFragment;
   };
 
   getEvent(nameOrSignatureOrTopic: "Approval"): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "AvatarSet"): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "ChangedGuard"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "DelegateChanged"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "DelegateVotesChanged"): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "OwnershipTransferred"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "ProcessProposal"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Ragequit"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "SponsorProposal"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "SubmitProposal"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "SubmitVote"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "SummonComplete"): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "TargetSet"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Transfer"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "TransferLoot"): EventFragment;
 }
@@ -503,6 +562,14 @@ export class Baal extends Contract {
       amount: BigNumberish,
       overrides?: Overrides
     ): Promise<ContractTransaction>;
+
+    avatar(overrides?: CallOverrides): Promise<{
+      0: string;
+    }>;
+
+    "avatar()"(overrides?: CallOverrides): Promise<{
+      0: string;
+    }>;
 
     balanceOf(
       arg0: string,
@@ -614,6 +681,20 @@ export class Baal extends Contract {
       0: string;
     }>;
 
+    executeAsBaal(
+      _to: string,
+      _value: BigNumberish,
+      _data: BytesLike,
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
+    "executeAsBaal(address,uint256,bytes)"(
+      _to: string,
+      _value: BigNumberish,
+      _data: BytesLike,
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
     flashFee(
       arg0: string,
       amount: BigNumberish,
@@ -672,6 +753,16 @@ export class Baal extends Contract {
       0: BigNumber;
     }>;
 
+    getGuard(overrides?: CallOverrides): Promise<{
+      _guard: string;
+      0: string;
+    }>;
+
+    "getGuard()"(overrides?: CallOverrides): Promise<{
+      _guard: string;
+      0: string;
+    }>;
+
     getGuildTokens(overrides?: CallOverrides): Promise<{
       tokens: string[];
       0: string[];
@@ -706,6 +797,14 @@ export class Baal extends Contract {
 
     "gracePeriod()"(overrides?: CallOverrides): Promise<{
       0: number;
+    }>;
+
+    guard(overrides?: CallOverrides): Promise<{
+      0: string;
+    }>;
+
+    "guard()"(overrides?: CallOverrides): Promise<{
+      0: string;
     }>;
 
     lootPaused(overrides?: CallOverrides): Promise<{
@@ -924,6 +1023,14 @@ export class Baal extends Contract {
       0: string;
     }>;
 
+    owner(overrides?: CallOverrides): Promise<{
+      0: string;
+    }>;
+
+    "owner()"(overrides?: CallOverrides): Promise<{
+      0: string;
+    }>;
+
     permit(
       owner: string,
       spender: string,
@@ -1032,6 +1139,20 @@ export class Baal extends Contract {
       overrides?: Overrides
     ): Promise<ContractTransaction>;
 
+    renounceOwnership(overrides?: Overrides): Promise<ContractTransaction>;
+
+    "renounceOwnership()"(overrides?: Overrides): Promise<ContractTransaction>;
+
+    setAvatar(
+      _avatar: string,
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
+    "setAvatar(address)"(
+      _avatar: string,
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
     setFlashFeeNumerator(
       _flashFeeNumerator: BigNumberish,
       overrides?: Overrides
@@ -1039,6 +1160,16 @@ export class Baal extends Contract {
 
     "setFlashFeeNumerator(uint32)"(
       _flashFeeNumerator: BigNumberish,
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
+    setGuard(
+      _guard: string,
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
+    "setGuard(address)"(
+      _guard: string,
       overrides?: Overrides
     ): Promise<ContractTransaction>;
 
@@ -1071,6 +1202,16 @@ export class Baal extends Contract {
     "setShamans(address[],bool)"(
       _shamans: string[],
       enabled: boolean,
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
+    setTarget(
+      _target: string,
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
+    "setTarget(address)"(
+      _target: string,
       overrides?: Overrides
     ): Promise<ContractTransaction>;
 
@@ -1168,6 +1309,14 @@ export class Baal extends Contract {
       0: string;
     }>;
 
+    target(overrides?: CallOverrides): Promise<{
+      0: string;
+    }>;
+
+    "target()"(overrides?: CallOverrides): Promise<{
+      0: string;
+    }>;
+
     totalLoot(overrides?: CallOverrides): Promise<{
       0: BigNumber;
     }>;
@@ -1222,6 +1371,16 @@ export class Baal extends Contract {
       overrides?: Overrides
     ): Promise<ContractTransaction>;
 
+    transferOwnership(
+      newOwner: string,
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
+    "transferOwnership(address)"(
+      newOwner: string,
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
     unsetGuildTokens(
       _tokenIndexes: BigNumberish[],
       overrides?: Overrides
@@ -1256,6 +1415,10 @@ export class Baal extends Contract {
     amount: BigNumberish,
     overrides?: Overrides
   ): Promise<ContractTransaction>;
+
+  avatar(overrides?: CallOverrides): Promise<string>;
+
+  "avatar()"(overrides?: CallOverrides): Promise<string>;
 
   balanceOf(arg0: string, overrides?: CallOverrides): Promise<BigNumber>;
 
@@ -1349,6 +1512,20 @@ export class Baal extends Contract {
     overrides?: CallOverrides
   ): Promise<string>;
 
+  executeAsBaal(
+    _to: string,
+    _value: BigNumberish,
+    _data: BytesLike,
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
+  "executeAsBaal(address,uint256,bytes)"(
+    _to: string,
+    _value: BigNumberish,
+    _data: BytesLike,
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
   flashFee(
     arg0: string,
     amount: BigNumberish,
@@ -1391,6 +1568,10 @@ export class Baal extends Contract {
     overrides?: CallOverrides
   ): Promise<BigNumber>;
 
+  getGuard(overrides?: CallOverrides): Promise<string>;
+
+  "getGuard()"(overrides?: CallOverrides): Promise<string>;
+
   getGuildTokens(overrides?: CallOverrides): Promise<string[]>;
 
   "getGuildTokens()"(overrides?: CallOverrides): Promise<string[]>;
@@ -1410,6 +1591,10 @@ export class Baal extends Contract {
   gracePeriod(overrides?: CallOverrides): Promise<number>;
 
   "gracePeriod()"(overrides?: CallOverrides): Promise<number>;
+
+  guard(overrides?: CallOverrides): Promise<string>;
+
+  "guard()"(overrides?: CallOverrides): Promise<string>;
 
   lootPaused(overrides?: CallOverrides): Promise<boolean>;
 
@@ -1570,6 +1755,10 @@ export class Baal extends Contract {
     overrides?: CallOverrides
   ): Promise<string>;
 
+  owner(overrides?: CallOverrides): Promise<string>;
+
+  "owner()"(overrides?: CallOverrides): Promise<string>;
+
   permit(
     owner: string,
     spender: string,
@@ -1670,6 +1859,20 @@ export class Baal extends Contract {
     overrides?: Overrides
   ): Promise<ContractTransaction>;
 
+  renounceOwnership(overrides?: Overrides): Promise<ContractTransaction>;
+
+  "renounceOwnership()"(overrides?: Overrides): Promise<ContractTransaction>;
+
+  setAvatar(
+    _avatar: string,
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
+  "setAvatar(address)"(
+    _avatar: string,
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
   setFlashFeeNumerator(
     _flashFeeNumerator: BigNumberish,
     overrides?: Overrides
@@ -1677,6 +1880,13 @@ export class Baal extends Contract {
 
   "setFlashFeeNumerator(uint32)"(
     _flashFeeNumerator: BigNumberish,
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
+  setGuard(_guard: string, overrides?: Overrides): Promise<ContractTransaction>;
+
+  "setGuard(address)"(
+    _guard: string,
     overrides?: Overrides
   ): Promise<ContractTransaction>;
 
@@ -1709,6 +1919,16 @@ export class Baal extends Contract {
   "setShamans(address[],bool)"(
     _shamans: string[],
     enabled: boolean,
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
+  setTarget(
+    _target: string,
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
+  "setTarget(address)"(
+    _target: string,
     overrides?: Overrides
   ): Promise<ContractTransaction>;
 
@@ -1788,6 +2008,10 @@ export class Baal extends Contract {
 
   "symbol()"(overrides?: CallOverrides): Promise<string>;
 
+  target(overrides?: CallOverrides): Promise<string>;
+
+  "target()"(overrides?: CallOverrides): Promise<string>;
+
   totalLoot(overrides?: CallOverrides): Promise<BigNumber>;
 
   "totalLoot()"(overrides?: CallOverrides): Promise<BigNumber>;
@@ -1834,6 +2058,16 @@ export class Baal extends Contract {
     overrides?: Overrides
   ): Promise<ContractTransaction>;
 
+  transferOwnership(
+    newOwner: string,
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
+  "transferOwnership(address)"(
+    newOwner: string,
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
   unsetGuildTokens(
     _tokenIndexes: BigNumberish[],
     overrides?: Overrides
@@ -1868,6 +2102,10 @@ export class Baal extends Contract {
       amount: BigNumberish,
       overrides?: CallOverrides
     ): Promise<boolean>;
+
+    avatar(overrides?: CallOverrides): Promise<string>;
+
+    "avatar()"(overrides?: CallOverrides): Promise<string>;
 
     balanceOf(arg0: string, overrides?: CallOverrides): Promise<BigNumber>;
 
@@ -1955,6 +2193,20 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<string>;
 
+    executeAsBaal(
+      _to: string,
+      _value: BigNumberish,
+      _data: BytesLike,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    "executeAsBaal(address,uint256,bytes)"(
+      _to: string,
+      _value: BigNumberish,
+      _data: BytesLike,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
     flashFee(
       arg0: string,
       amount: BigNumberish,
@@ -1997,6 +2249,10 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
+    getGuard(overrides?: CallOverrides): Promise<string>;
+
+    "getGuard()"(overrides?: CallOverrides): Promise<string>;
+
     getGuildTokens(overrides?: CallOverrides): Promise<string[]>;
 
     "getGuildTokens()"(overrides?: CallOverrides): Promise<string[]>;
@@ -2016,6 +2272,10 @@ export class Baal extends Contract {
     gracePeriod(overrides?: CallOverrides): Promise<number>;
 
     "gracePeriod()"(overrides?: CallOverrides): Promise<number>;
+
+    guard(overrides?: CallOverrides): Promise<string>;
+
+    "guard()"(overrides?: CallOverrides): Promise<string>;
 
     lootPaused(overrides?: CallOverrides): Promise<boolean>;
 
@@ -2183,6 +2443,10 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<string>;
 
+    owner(overrides?: CallOverrides): Promise<string>;
+
+    "owner()"(overrides?: CallOverrides): Promise<string>;
+
     permit(
       owner: string,
       spender: string,
@@ -2283,6 +2547,17 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<void>;
 
+    renounceOwnership(overrides?: CallOverrides): Promise<void>;
+
+    "renounceOwnership()"(overrides?: CallOverrides): Promise<void>;
+
+    setAvatar(_avatar: string, overrides?: CallOverrides): Promise<void>;
+
+    "setAvatar(address)"(
+      _avatar: string,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
     setFlashFeeNumerator(
       _flashFeeNumerator: BigNumberish,
       overrides?: CallOverrides
@@ -2290,6 +2565,13 @@ export class Baal extends Contract {
 
     "setFlashFeeNumerator(uint32)"(
       _flashFeeNumerator: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    setGuard(_guard: string, overrides?: CallOverrides): Promise<void>;
+
+    "setGuard(address)"(
+      _guard: string,
       overrides?: CallOverrides
     ): Promise<void>;
 
@@ -2319,6 +2601,13 @@ export class Baal extends Contract {
     "setShamans(address[],bool)"(
       _shamans: string[],
       enabled: boolean,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    setTarget(_target: string, overrides?: CallOverrides): Promise<void>;
+
+    "setTarget(address)"(
+      _target: string,
       overrides?: CallOverrides
     ): Promise<void>;
 
@@ -2401,6 +2690,10 @@ export class Baal extends Contract {
 
     "symbol()"(overrides?: CallOverrides): Promise<string>;
 
+    target(overrides?: CallOverrides): Promise<string>;
+
+    "target()"(overrides?: CallOverrides): Promise<string>;
+
     totalLoot(overrides?: CallOverrides): Promise<BigNumber>;
 
     "totalLoot()"(overrides?: CallOverrides): Promise<BigNumber>;
@@ -2447,6 +2740,16 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<void>;
 
+    transferOwnership(
+      newOwner: string,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    "transferOwnership(address)"(
+      newOwner: string,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
     unsetGuildTokens(
       _tokenIndexes: BigNumberish[],
       overrides?: CallOverrides
@@ -2465,6 +2768,13 @@ export class Baal extends Contract {
       amount: null
     ): EventFilter;
 
+    AvatarSet(
+      previousAvatar: string | null,
+      newAvatar: string | null
+    ): EventFilter;
+
+    ChangedGuard(guard: null): EventFilter;
+
     DelegateChanged(
       delegator: string | null,
       fromDelegate: string | null,
@@ -2475,6 +2785,11 @@ export class Baal extends Contract {
       delegate: string | null,
       previousBalance: null,
       newBalance: null
+    ): EventFilter;
+
+    OwnershipTransferred(
+      previousOwner: string | null,
+      newOwner: string | null
     ): EventFilter;
 
     ProcessProposal(proposal: BigNumberish | null): EventFilter;
@@ -2521,6 +2836,11 @@ export class Baal extends Contract {
       shares: null
     ): EventFilter;
 
+    TargetSet(
+      previousTarget: string | null,
+      newTarget: string | null
+    ): EventFilter;
+
     Transfer(from: string | null, to: string | null, amount: null): EventFilter;
 
     TransferLoot(
@@ -2554,6 +2874,10 @@ export class Baal extends Contract {
       amount: BigNumberish,
       overrides?: Overrides
     ): Promise<BigNumber>;
+
+    avatar(overrides?: CallOverrides): Promise<BigNumber>;
+
+    "avatar()"(overrides?: CallOverrides): Promise<BigNumber>;
 
     balanceOf(arg0: string, overrides?: CallOverrides): Promise<BigNumber>;
 
@@ -2631,6 +2955,20 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
+    executeAsBaal(
+      _to: string,
+      _value: BigNumberish,
+      _data: BytesLike,
+      overrides?: Overrides
+    ): Promise<BigNumber>;
+
+    "executeAsBaal(address,uint256,bytes)"(
+      _to: string,
+      _value: BigNumberish,
+      _data: BytesLike,
+      overrides?: Overrides
+    ): Promise<BigNumber>;
+
     flashFee(
       arg0: string,
       amount: BigNumberish,
@@ -2673,6 +3011,10 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
+    getGuard(overrides?: CallOverrides): Promise<BigNumber>;
+
+    "getGuard()"(overrides?: CallOverrides): Promise<BigNumber>;
+
     getGuildTokens(overrides?: CallOverrides): Promise<BigNumber>;
 
     "getGuildTokens()"(overrides?: CallOverrides): Promise<BigNumber>;
@@ -2692,6 +3034,10 @@ export class Baal extends Contract {
     gracePeriod(overrides?: CallOverrides): Promise<BigNumber>;
 
     "gracePeriod()"(overrides?: CallOverrides): Promise<BigNumber>;
+
+    guard(overrides?: CallOverrides): Promise<BigNumber>;
+
+    "guard()"(overrides?: CallOverrides): Promise<BigNumber>;
 
     lootPaused(overrides?: CallOverrides): Promise<BigNumber>;
 
@@ -2836,6 +3182,10 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
+    owner(overrides?: CallOverrides): Promise<BigNumber>;
+
+    "owner()"(overrides?: CallOverrides): Promise<BigNumber>;
+
     permit(
       owner: string,
       spender: string,
@@ -2906,6 +3256,17 @@ export class Baal extends Contract {
       overrides?: Overrides
     ): Promise<BigNumber>;
 
+    renounceOwnership(overrides?: Overrides): Promise<BigNumber>;
+
+    "renounceOwnership()"(overrides?: Overrides): Promise<BigNumber>;
+
+    setAvatar(_avatar: string, overrides?: Overrides): Promise<BigNumber>;
+
+    "setAvatar(address)"(
+      _avatar: string,
+      overrides?: Overrides
+    ): Promise<BigNumber>;
+
     setFlashFeeNumerator(
       _flashFeeNumerator: BigNumberish,
       overrides?: Overrides
@@ -2913,6 +3274,13 @@ export class Baal extends Contract {
 
     "setFlashFeeNumerator(uint32)"(
       _flashFeeNumerator: BigNumberish,
+      overrides?: Overrides
+    ): Promise<BigNumber>;
+
+    setGuard(_guard: string, overrides?: Overrides): Promise<BigNumber>;
+
+    "setGuard(address)"(
+      _guard: string,
       overrides?: Overrides
     ): Promise<BigNumber>;
 
@@ -2945,6 +3313,13 @@ export class Baal extends Contract {
     "setShamans(address[],bool)"(
       _shamans: string[],
       enabled: boolean,
+      overrides?: Overrides
+    ): Promise<BigNumber>;
+
+    setTarget(_target: string, overrides?: Overrides): Promise<BigNumber>;
+
+    "setTarget(address)"(
+      _target: string,
       overrides?: Overrides
     ): Promise<BigNumber>;
 
@@ -3027,6 +3402,10 @@ export class Baal extends Contract {
 
     "symbol()"(overrides?: CallOverrides): Promise<BigNumber>;
 
+    target(overrides?: CallOverrides): Promise<BigNumber>;
+
+    "target()"(overrides?: CallOverrides): Promise<BigNumber>;
+
     totalLoot(overrides?: CallOverrides): Promise<BigNumber>;
 
     "totalLoot()"(overrides?: CallOverrides): Promise<BigNumber>;
@@ -3073,6 +3452,16 @@ export class Baal extends Contract {
       overrides?: Overrides
     ): Promise<BigNumber>;
 
+    transferOwnership(
+      newOwner: string,
+      overrides?: Overrides
+    ): Promise<BigNumber>;
+
+    "transferOwnership(address)"(
+      newOwner: string,
+      overrides?: Overrides
+    ): Promise<BigNumber>;
+
     unsetGuildTokens(
       _tokenIndexes: BigNumberish[],
       overrides?: Overrides
@@ -3108,6 +3497,10 @@ export class Baal extends Contract {
       amount: BigNumberish,
       overrides?: Overrides
     ): Promise<PopulatedTransaction>;
+
+    avatar(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    "avatar()"(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     balanceOf(
       arg0: string,
@@ -3197,6 +3590,20 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
+    executeAsBaal(
+      _to: string,
+      _value: BigNumberish,
+      _data: BytesLike,
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    "executeAsBaal(address,uint256,bytes)"(
+      _to: string,
+      _value: BigNumberish,
+      _data: BytesLike,
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
     flashFee(
       arg0: string,
       amount: BigNumberish,
@@ -3241,6 +3648,10 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
+    getGuard(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    "getGuard()"(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
     getGuildTokens(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     "getGuildTokens()"(
@@ -3262,6 +3673,10 @@ export class Baal extends Contract {
     gracePeriod(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     "gracePeriod()"(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    guard(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    "guard()"(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     lootPaused(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
@@ -3425,6 +3840,10 @@ export class Baal extends Contract {
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
+    owner(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    "owner()"(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
     permit(
       owner: string,
       spender: string,
@@ -3495,6 +3914,20 @@ export class Baal extends Contract {
       overrides?: Overrides
     ): Promise<PopulatedTransaction>;
 
+    renounceOwnership(overrides?: Overrides): Promise<PopulatedTransaction>;
+
+    "renounceOwnership()"(overrides?: Overrides): Promise<PopulatedTransaction>;
+
+    setAvatar(
+      _avatar: string,
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    "setAvatar(address)"(
+      _avatar: string,
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
     setFlashFeeNumerator(
       _flashFeeNumerator: BigNumberish,
       overrides?: Overrides
@@ -3502,6 +3935,16 @@ export class Baal extends Contract {
 
     "setFlashFeeNumerator(uint32)"(
       _flashFeeNumerator: BigNumberish,
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    setGuard(
+      _guard: string,
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    "setGuard(address)"(
+      _guard: string,
       overrides?: Overrides
     ): Promise<PopulatedTransaction>;
 
@@ -3534,6 +3977,16 @@ export class Baal extends Contract {
     "setShamans(address[],bool)"(
       _shamans: string[],
       enabled: boolean,
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    setTarget(
+      _target: string,
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    "setTarget(address)"(
+      _target: string,
       overrides?: Overrides
     ): Promise<PopulatedTransaction>;
 
@@ -3619,6 +4072,10 @@ export class Baal extends Contract {
 
     "symbol()"(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
+    target(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    "target()"(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
     totalLoot(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     "totalLoot()"(overrides?: CallOverrides): Promise<PopulatedTransaction>;
@@ -3662,6 +4119,16 @@ export class Baal extends Contract {
     "transferLoot(address,uint96)"(
       to: string,
       amount: BigNumberish,
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    transferOwnership(
+      newOwner: string,
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    "transferOwnership(address)"(
+      newOwner: string,
       overrides?: Overrides
     ): Promise<PopulatedTransaction>;
 

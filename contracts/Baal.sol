@@ -9,9 +9,10 @@
        ▀    ▀*/
 pragma solidity >=0.8.0;
 
-import "@gnosis.pm/safe-contracts/contracts/base/Executor.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
-import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import "@gnosis.pm/zodiac/contracts/core/Module.sol";
+import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
+import "@gnosis.pm/safe-contracts/contracts/GnosisSafe.sol";
 
 /// @notice Interface for Baal {memberAction} that adjusts member `shares` & `loot`.
 interface IShaman {
@@ -24,7 +25,7 @@ interface IShaman {
 
 /// @title Baal ';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
-contract Baal is Executor, Initializable {
+contract Baal is Module {
     bool public lootPaused; /*tracks transferability of `loot` economic weight - amendable through 'period'[2] proposal*/
     bool public sharesPaused; /*tracks transferability of erc20 `shares` - amendable through 'period'[2] proposal*/
     bool singleSummoner; /*internal flag to gauge speedy proposal processing*/
@@ -71,7 +72,7 @@ contract Baal is Executor, Initializable {
 
     mapping(address => Member) public members; /*maps `members` accounts to struct details*/
     mapping(uint256 => Proposal) public proposals; /*maps `proposalCount` to struct details*/
-    mapping(uint256 => bool) public proposalsPassed; /*maps `proposalCount` to approval status - separated out as struct is deleted, and this value can be used by minion-like contracts*/
+    mapping(uint256 => bool) public proposalsPassed; /*maps `proposalCount` to approval status - separated out as struct is deleted, and this value can be used by baal-like contracts*/
     mapping(address => bool) public shamans; /*maps contracts approved in 'whitelist'[3] proposals for {memberAction} that mint or burn `shares`*/
 
     event SummonComplete(
@@ -138,8 +139,8 @@ contract Baal is Executor, Initializable {
         status = 1;
     }
 
-    modifier baalOnly() {
-        require(msg.sender == address(this), "!baal");
+    modifier avatarOnly() {
+        require(msg.sender == avatar, "!avatar");
         _;
     }
 
@@ -167,17 +168,40 @@ contract Baal is Executor, Initializable {
         string details; /*human-readable context for proposal*/
     }
 
+    /// @dev This constructor ensures that this contract can only be used as a master copy for Proxy contracts
+    constructor() {
+        // By setting the owner it is not possible to call setUp
+        // This is an unusable baal, perfect for the singleton
+        __Ownable_init();
+        transferOwnership(address(0xdead));
+    }
+
     /// @notice Summon Baal with voting configuration & initial array of `members` accounts with `shares` & `loot` weights.
     /// @param _initializationParams Encoded setup information
-    function setUp(bytes memory _initializationParams) public initializer {
+    function setUp(bytes memory _initializationParams)
+        public
+        override
+        initializer
+    {
         (
             string memory _name, // _name Name for erc20 `shares` accounting.
             string memory _symbol, // _symbol Symbol for erc20 `shares` accounting.
+            address _avatar,
             address _multisendLibrary,
-            bytes memory _initializationMultisendData // here you call BaalOnly functions to set up initial shares, loot, shamans, periods, etc
-        ) = abi.decode(_initializationParams, (string, string, address, bytes));
+            bytes[] memory _initializationActions // here you call avatarOnly functions to set up initial shares, loot, shamans, periods, etc
+        ) = abi.decode(
+                _initializationParams,
+                (string, string, address, address, bytes[])
+            );
+        __Ownable_init();
+        transferOwnership(_avatar);
+
         name = _name; /*initialize Baal `name` with erc20 accounting*/
         symbol = _symbol; /*initialize Baal `symbol` with erc20 accounting*/
+
+        // Set the Gnosis safe address
+        avatar = _avatar;
+        target = _avatar;
 
         multisendLibrary = _multisendLibrary;
 
@@ -186,16 +210,19 @@ contract Baal is Executor, Initializable {
         // * convert shares to loot
         // * set shamans
         // * set periods
-        require(
-            execute(
-                multisendLibrary,
-                0,
-                _initializationMultisendData,
-                Enum.Operation.DelegateCall,
-                gasleft()
-            ),
-            "call failure"
-        );
+        for (uint256 i = 0; i < _initializationActions.length; i++) {
+            require(
+                exec(
+                    address(this),
+                    0,
+                    _initializationActions[i],
+                    Enum.Operation.Call
+                ),
+                "call failure"
+            );
+        }
+
+        // transferOwnership(_avatar);
 
         status = 1; /*initialize 'reentrancy guard' status*/
     }
@@ -204,7 +231,7 @@ contract Baal is Executor, Initializable {
     function delegateSummoners(
         address[] memory _delegators,
         address[] memory _delegatees
-    ) external initializer baalOnly {
+    ) external initializer avatarOnly {
         for (uint256 i; i < _delegators.length; i++) {
             _delegate(_delegators[i], _delegatees[i]); /*delegate `summoners` voting weights to themselves - this saves a step before voting*/
         }
@@ -385,7 +412,7 @@ contract Baal is Executor, Initializable {
 
         if (prop.yesVotes > prop.noVotes)
             /*check if `proposal` approved by simple majority of members*/
-            proposalsPassed[proposal] = true; /*flag that proposal passed - allows minion-like extensions*/
+            proposalsPassed[proposal] = true; /*flag that proposal passed - allows baal-like extensions*/
         processActionProposal(prop); /*execute 'action'*/
 
         delete proposals[proposal]; /*delete given proposal struct details for gas refund & the commons*/
@@ -396,21 +423,31 @@ contract Baal is Executor, Initializable {
     /// @notice Internal function to process 'action'[0] proposal.
     function processActionProposal(Proposal memory prop) private {
         require(
-            execute(
+            exec(
                 multisendLibrary,
                 0,
                 prop.proposalData,
-                Enum.Operation.DelegateCall,
-                gasleft()
+                Enum.Operation.DelegateCall
             ),
             "call failure"
         );
     }
 
+    /// @dev Function to Execute arbitrary code as baal - useful if funds are accidentally sent here
+    /// @notice Can only be called by the avatar which means this can only be called if passed by another
+    ///     proposal or by a delegated signer on the Safe
+    /// @param _to address to call
+    /// @param _value value to include in wei
+    /// @param _data arbitrary transaction data
+    function executeAsBaal(address _to, uint256 _value, bytes calldata _data) external avatarOnly {
+        (bool success,) = _to.call{value: _value}(_data);
+        require(success, "call failure");
+    }
+
     /// @notice Baal only function to mint shares
     function mintShares(address[] calldata to, uint96[] calldata amount)
         external
-        baalOnly
+        avatarOnly
     {
         require(to.length == amount.length, "!array parity"); /*check array lengths match*/
         for (uint256 i = 0; i < to.length; i++) {
@@ -421,7 +458,7 @@ contract Baal is Executor, Initializable {
     /// @notice Baal only function to mint loot
     function mintLoot(address[] calldata to, uint96[] calldata amount)
         external
-        baalOnly
+        avatarOnly
     {
         require(to.length == amount.length, "!array parity"); /*check array lengths match*/
         for (uint256 i = 0; i < to.length; i++) {
@@ -430,14 +467,14 @@ contract Baal is Executor, Initializable {
     }
 
     /// @notice Baal only function to convert shares to loot
-    function convertSharesToLoot(address to) external baalOnly {
+    function convertSharesToLoot(address to) external avatarOnly {
         uint96 removedBalance = uint96(balanceOf[to]); /*gas-optimize variable*/
         _burnShares(to, removedBalance); /*burn all of `to` `shares` & convert into `loot`*/
         _mintLoot(to, removedBalance); /*mint equivalent `loot`*/
     }
 
     /// @notice Baal only function to change periods
-    function setPeriods(bytes memory _periodData) external baalOnly {
+    function setPeriods(bytes memory _periodData) external avatarOnly {
         (
             uint32 min,
             uint32 max,
@@ -453,14 +490,17 @@ contract Baal is Executor, Initializable {
     }
 
     /// @notice Baal only function to set flash fee numerator
-    function setFlashFeeNumerator(uint32 _flashFeeNumerator) external baalOnly {
+    function setFlashFeeNumerator(uint32 _flashFeeNumerator)
+        external
+        avatarOnly
+    {
         flashFeeNumerator = _flashFeeNumerator;
     }
 
     /// @notice Baal only function to set shaman status
     function setShamans(address[] calldata _shamans, bool enabled)
         external
-        baalOnly
+        avatarOnly
     {
         for (uint256 i; i < _shamans.length; i++) {
             shamans[_shamans[i]] = enabled;
@@ -468,7 +508,7 @@ contract Baal is Executor, Initializable {
     }
 
     /// @notice Baal only function to whitelist guildToken
-    function setGuildTokens(address[] calldata _tokens) external baalOnly {
+    function setGuildTokens(address[] calldata _tokens) external avatarOnly {
         for (uint256 i; i < _tokens.length; i++) {
             if (guildTokens.length != MAX_GUILD_TOKEN_COUNT)
                 guildTokens.push(_tokens[i]); /*push account to `guildTokens` array if within 'MAX'*/
@@ -478,7 +518,7 @@ contract Baal is Executor, Initializable {
     /// @notice Baal only function to remove guildToken
     function unsetGuildTokens(uint256[] calldata _tokenIndexes)
         external
-        baalOnly
+        avatarOnly
     {
         for (uint256 i; i < _tokenIndexes.length; i++) {
             guildTokens[_tokenIndexes[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
@@ -1056,5 +1096,195 @@ contract Baal is Executor, Initializable {
             success && (data.length == 0 || abi.decode(data, (bool))),
             "transferFrom failed"
         ); /*checks success & allows non-conforming transfers*/
+    }
+}
+
+/// @title BaalSummoner - Factory contract to depoy new Baals and Safes
+/// @dev Can deploy Baal and a new safe, or just Baal to be attached to an existing safe
+contract SafeBaalSummoner is ModuleProxyFactory {
+    // Template contract to use for new baal proxies
+    address payable public immutable baalSingleton;
+
+    // Template contract to use for new Gnosis safe proxies
+    address public gnosisSingleton;
+
+    // Library to use for EIP1271 compatability
+    address public gnosisFallbackLibrary;
+
+    // Library to use for all safe transaction executions
+    address public gnosisMultisendLibrary;
+
+    // Track list and count of deployed baals
+    address[] public baalList;
+    uint256 public baalCount;
+
+    // Track metadata for deployed baals
+    mapping(address => string) public baals;
+
+    // Public type data
+    string public constant baalType = "Baal V0";
+
+    event SummonedBaal(
+        address indexed baal,
+        address indexed avatar,
+        string details,
+        string baalType
+    );
+
+    /// @dev Construtor sets the initial templates
+    /// @notice Can only be called once by factory
+    /// @param _baalSingleton Template contract to be used for baal factory
+    /// @param _gnosisSingleton Template contract to be used for safe factory
+    /// @param _gnosisFallbackLibrary Library contract to be used in configuring new safes
+    /// @param _gnosisMultisendLibrary Library contract to be used in configuring new safes
+    constructor(
+        address payable _baalSingleton,
+        address _gnosisSingleton,
+        address _gnosisFallbackLibrary,
+        address _gnosisMultisendLibrary
+    ) {
+        baalSingleton = _baalSingleton;
+        gnosisSingleton = _gnosisSingleton;
+        gnosisFallbackLibrary = _gnosisFallbackLibrary;
+        gnosisMultisendLibrary = _gnosisMultisendLibrary;
+    }
+
+    /// @dev Function to only summon a baal to be attached to an existing safe
+    /// @param _avatar Already deployed safe
+    /// @param _details Optional metadata to store
+    /// @param _saltNonce Number used to calculate the address of the new baal
+    function SummonBaal(
+        address _avatar,
+        string memory _details,
+        bytes memory baalInitializer,
+        uint256 _saltNonce
+    ) external returns (address) {
+        // Encode initializer for setup function
+        bytes memory _initializerCall = abi.encodeWithSignature(
+            "setUp(bytes)",
+            baalInitializer
+        );
+
+        Baal _baal = Baal(
+            payable(deployModule(baalSingleton, _initializerCall, _saltNonce))
+        );
+
+        baals[address(_baal)] = _details;
+        baalList.push(address(_baal));
+        baalCount++;
+
+        emit SummonedBaal(address(_baal), _avatar, _details, baalType);
+
+        return (address(_baal));
+    }
+
+    function _encodeSafeSetup(
+        string memory _name,
+        string memory _symbol,
+        address _safe,
+        address _baal,
+        bytes[] memory _baalInitializationActions
+    ) internal view returns (bytes memory) {
+        bytes memory _baalInitializer = abi.encode(
+            _name,
+            _symbol,
+            _safe,
+            gnosisMultisendLibrary,
+            _baalInitializationActions
+        );
+
+        bytes memory _setupBaal = abi.encodeWithSignature(
+            "setUp(bytes)",
+            _baalInitializer
+        );
+
+        // Generate delegate calls so the safe calls enableModule on itself during setup
+        bytes memory _enableBaal = abi.encodeWithSignature(
+            "enableModule(address)",
+            address(_baal)
+        );
+
+        bytes memory _setupModulesMultisend = abi.encodePacked(
+            uint8(0),
+            address(_safe),
+            uint256(0),
+            uint256(_enableBaal.length),
+            bytes(_enableBaal),
+            uint8(0),
+            address(_baal),
+            uint256(0),
+            uint256(_setupBaal.length),
+            bytes(_setupBaal)
+        );
+
+        bytes memory _multisendAction = abi.encodeWithSignature(
+            "multiSend(bytes)",
+            _setupModulesMultisend
+        );
+
+        return _multisendAction;
+    }
+
+    /// @dev Function to summon baal and configure with a new safe
+    /// @param _details Optional metadata to store
+    /// @param _saltNonce Number used to calculate the address of the new baal
+    function SummonBaalAndSafe(
+        string memory _details,
+        uint256 _saltNonce,
+        string memory _name,
+        string memory _symbol,
+        bytes[] memory _baalInitializationActions
+    ) external returns (address) {
+        // Deploy new baal but do not set it up yet
+        Baal _baal = Baal(
+            payable(
+                createProxy(
+                    baalSingleton,
+                    keccak256(abi.encodePacked(_saltNonce))
+                    // keccak256(abi.encodePacked(_details, _saltNonce))
+                )
+            )
+        );
+
+        // Deploy new safe but do not set it up yet
+        GnosisSafe _safe = GnosisSafe(
+            payable(
+                createProxy(
+                    gnosisSingleton,
+                    keccak256(abi.encodePacked(address(_baal), _saltNonce))
+                )
+            )
+        );
+
+        bytes memory _multisendAction = _encodeSafeSetup(
+            _name,
+            _symbol,
+            address(_safe),
+            address(_baal),
+            _baalInitializationActions
+        );
+
+        // Workaround for solidity dynamic memory array
+        address[] memory _owners = new address[](1);
+        _owners[0] = address(_baal);
+
+        // Call setup on safe to enable our new module and set the module as the only signer
+        _safe.setup(
+            _owners,
+            1,
+            gnosisMultisendLibrary,
+            _multisendAction,
+            gnosisFallbackLibrary,
+            address(0),
+            0,
+            payable(address(0))
+        );
+
+        baals[address(_baal)] = _details;
+        baalList.push(address(_baal));
+        baalCount++;
+        emit SummonedBaal(address(_baal), address(_safe), _details, baalType);
+
+        return (address(_baal));
     }
 }

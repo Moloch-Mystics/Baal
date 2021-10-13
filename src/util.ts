@@ -1,5 +1,7 @@
 import { BigNumber } from '@ethersproject/bignumber'
 import { encodeMultiSend, MetaTransaction } from '@gnosis.pm/safe-contracts'
+import { randomBytes } from 'crypto'
+
 import { MultiSend } from './types/MultiSend'
 
 export const encodeMultiAction = (multisend: MultiSend, actions: string[], tos: string[], values: BigNumber[], operations: number[]) => {
@@ -43,4 +45,9 @@ export const decodeMultiAction = (multisend: MultiSend, encoded: string) => {
   }
 
   return transactions
+}
+
+export const generateNonce = async () => {
+  const buffer = await randomBytes(32)
+  return buffer.toString('hex')
 }
