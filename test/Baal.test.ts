@@ -176,6 +176,8 @@ describe('Baal contract', function () {
       const summonerData = await baal.members(summoner.address)
       expect(summonerData.loot).to.equal(500)
       expect(summonerData.highestIndexYesVote).to.equal(0)
+      
+      expect(await baal.balanceOf(summoner.address)).to.equal(100)
 
       const totalLoot = await baal.totalLoot()
       expect(totalLoot).to.equal(500)
@@ -228,7 +230,7 @@ describe('Baal contract', function () {
       await baal.submitVote(1, yes)
       const prop = await baal.proposals(1)
       const nCheckpoints = await baal.numCheckpoints(summoner.address)
-      const votes = (await baal.checkpoints(summoner.address, nCheckpoints)).votes
+      const votes = (await baal.checkpoints(summoner.address, nCheckpoints.sub(1))).votes
       expect(prop.yesVotes).to.equal(votes)
     })
 
@@ -236,7 +238,7 @@ describe('Baal contract', function () {
       await baal.submitVote(1, no)
       const prop = await baal.proposals(1)
       const nCheckpoints = await baal.numCheckpoints(summoner.address)
-      const votes = (await baal.checkpoints(summoner.address, nCheckpoints)).votes
+      const votes = (await baal.checkpoints(summoner.address, nCheckpoints.sub(1))).votes
       expect(prop.noVotes).to.equal(votes)
     })
 
@@ -255,6 +257,7 @@ describe('Baal contract', function () {
       await baal.processProposal(1)
       const afterProcessed = await baal.proposals(1)
       expect(afterProcessed).to.deep.equal(beforeProcessed)
+      expect(await baal.proposalsPassed(1)).to.equal(true)
     })
 
     it('happy case no wins', async function () {
@@ -265,6 +268,7 @@ describe('Baal contract', function () {
       await baal.processProposal(1)
       const afterProcessed = await baal.proposals(1)
       expect(afterProcessed).to.deep.equal(beforeProcessed)
+      expect(await baal.proposalsPassed(1)).to.equal(false)
     })
 
     it('require fail - proposal does not exist', async function () {

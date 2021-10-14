@@ -254,23 +254,27 @@ contract Baal is Executor, Initializable {
         bytes calldata proposalData,
         string calldata details
     ) external nonReentrant returns (uint256 proposal) {
-        require(balanceOf[msg.sender] != 0, "!member"); /*check 'membership' - required to submit proposal*/
         require(
             minVotingPeriod <= votingPeriod && votingPeriod <= maxVotingPeriod,
             "!votingPeriod"
         ); /*check voting period is within Baal bounds*/
+
+        bool selfSponsor; /*plant sponsor flag*/
+        if (balanceOf[msg.sender] != 0) selfSponsor = true; /*if a member, self-sponsor*/
+
         unchecked {
             proposalCount++; /*increment proposal counter*/
-            proposals[proposalCount] = Proposal(
+            proposals[proposalCount] = Proposal( /*push params into proposal struct - start voting period timer if member submission*/
                 votingPeriod,
-                uint32(block.number),
-                uint32(block.timestamp) + votingPeriod,
+                selfSponsor ? uint32(block.timestamp) : 0,
+                selfSponsor ? uint32(block.timestamp) + votingPeriod : 0,
                 0,
                 0,
                 proposalData,
                 details
-            ); /*push params into proposal struct - start voting period timer*/
+            );
         }
+
         emit SubmitProposal(proposal, votingPeriod, proposalData, details); /*emit event reflecting proposal submission*/
     }
 
@@ -297,6 +301,7 @@ contract Baal is Executor, Initializable {
     /// @param approved If 'true', member will cast `yesVotes` onto proposal - if 'false', `noVotes` will be counted.
     function submitVote(uint256 proposal, bool approved) external nonReentrant {
         Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
+
 
         uint96 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
 
@@ -383,10 +388,11 @@ contract Baal is Executor, Initializable {
 
         _processingReady(proposal, prop); /*validate `proposal` processing requirements*/
 
-        if (prop.yesVotes > prop.noVotes)
-            /*check if `proposal` approved by simple majority of members*/
+        /*check if `proposal` approved by simple majority of members*/
+        if (prop.yesVotes > prop.noVotes) {
             proposalsPassed[proposal] = true; /*flag that proposal passed - allows minion-like extensions*/
-        processActionProposal(prop); /*execute 'action'*/
+            processActionProposal(prop); /*execute 'action'*/
+        }
 
         delete proposals[proposal]; /*delete given proposal struct details for gas refund & the commons*/
 
