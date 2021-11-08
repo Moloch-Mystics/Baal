@@ -60,7 +60,7 @@ contract Baal is Executor, Initializable {
 
     address[] guildTokens; /*array list of erc20 tokens approved on summoning or by 'whitelist'[3] `proposals` for {ragequit} claims*/
 
-    address multisendLibrary; /* address of multisend library */
+    address multisendLibrary; /*address of multisend library*/
 
     mapping(address => mapping(address => uint256)) public allowance; /*maps approved pulls of `shares` with erc20 accounting*/
     mapping(address => uint256) public balanceOf; /*maps `members` accounts to `shares` with erc20 accounting*/
@@ -172,13 +172,13 @@ contract Baal is Executor, Initializable {
     }
 
     /// @notice Summon Baal with voting configuration & initial array of `members` accounts with `shares` & `loot` weights.
-    /// @param _initializationParams Encoded setup information
+    /// @param _initializationParams Encoded setup information.
     function setUp(bytes memory _initializationParams) public initializer {
         (
-            string memory _name, // _name Name for erc20 `shares` accounting.
-            string memory _symbol, // _symbol Symbol for erc20 `shares` accounting.
-            address _multisendLibrary,
-            bytes memory _initializationMultisendData // here you call BaalOnly functions to set up initial shares, loot, shamans, periods, etc
+            string memory _name, /*_name Name for erc20 `shares` accounting*/
+            string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
+            address _multisendLibrary, /*address of multisend library*/
+            bytes memory _initializationMultisendData /*here you call BaalOnly functions to set up initial shares, loot, shamans, periods, etc.*/
         ) = abi.decode(_initializationParams, (string, string, address, bytes));
         name = _name; /*initialize Baal `name` with erc20 accounting*/
         symbol = _symbol; /*initialize Baal `symbol` with erc20 accounting*/
@@ -204,7 +204,7 @@ contract Baal is Executor, Initializable {
         status = 1; /*initialize 'reentrancy guard' status*/
     }
 
-    /// @notice Delegates Baal voting weight only on initialization for summoners
+    /// @notice Delegates Baal voting weight only on initialization for summoners.
     function delegateSummoners(
         address[] memory _delegators,
         address[] memory _delegatees
@@ -393,7 +393,7 @@ contract Baal is Executor, Initializable {
     // ********************
     // PROCESSING FUNCTIONS
     // ********************
-    /// @notice Process `proposal` & execute internal functions based on `flag`[#].
+    /// @notice Process `proposal` & execute internal functions.
     /// @param proposal Number of proposal in `proposals` mapping to process for execution.
     /// @param revertOnFailure Optionally revert if actions fail to process - useful to move past stuck actions
     function processProposal(uint256 proposal, bool revertOnFailure) external nonReentrant {
@@ -432,7 +432,7 @@ contract Baal is Executor, Initializable {
         );
     }
 
-    /// @notice Baal only function to mint shares
+    /// @notice Baal-only function to mint shares.
     function mintShares(address[] calldata to, uint96[] calldata amount)
         external
         baalOnly
@@ -443,7 +443,7 @@ contract Baal is Executor, Initializable {
         }
     }
 
-    /// @notice Baal only function to mint loot
+    /// @notice Baal-only function to mint loot.
     function mintLoot(address[] calldata to, uint96[] calldata amount)
         external
         baalOnly
@@ -454,14 +454,14 @@ contract Baal is Executor, Initializable {
         }
     }
 
-    /// @notice Baal only function to convert shares to loot
+    /// @notice Baal-only function to convert shares to loot.
     function convertSharesToLoot(address to) external baalOnly {
         uint96 removedBalance = uint96(balanceOf[to]); /*gas-optimize variable*/
         _burnShares(to, removedBalance); /*burn all of `to` `shares` & convert into `loot`*/
         _mintLoot(to, removedBalance); /*mint equivalent `loot`*/
     }
 
-    /// @notice Baal only function to change periods
+    /// @notice Baal-only function to change periods.
     function setPeriods(bytes memory _periodData) external baalOnly {
         (
             uint32 min,
@@ -477,12 +477,12 @@ contract Baal is Executor, Initializable {
         sharesPaused = pauseShares; /*set pause `shares` transfers on sixth `value`*/
     }
 
-    /// @notice Baal only function to set flash fee numerator
+    /// @notice Baal-only function to set flash fee numerator.
     function setFlashFeeNumerator(uint32 _flashFeeNumerator) external baalOnly {
         flashFeeNumerator = _flashFeeNumerator;
     }
 
-    /// @notice Baal only function to set shaman status
+    /// @notice Baal-only function to set shaman status.
     function setShamans(address[] calldata _shamans, bool enabled)
         external
         baalOnly
@@ -492,7 +492,7 @@ contract Baal is Executor, Initializable {
         }
     }
 
-    /// @notice Baal only function to whitelist guildToken
+    /// @notice Baal-only function to whitelist guildToken.
     function setGuildTokens(address[] calldata _tokens) external baalOnly {
         for (uint256 i; i < _tokens.length; i++) {
             if (guildTokens.length != MAX_GUILD_TOKEN_COUNT)
@@ -500,7 +500,7 @@ contract Baal is Executor, Initializable {
         }
     }
 
-    /// @notice Baal only function to remove guildToken
+    /// @notice Baal-only function to remove guildToken
     function unsetGuildTokens(uint256[] calldata _tokenIndexes)
         external
         baalOnly
