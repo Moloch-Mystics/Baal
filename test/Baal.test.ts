@@ -136,6 +136,8 @@ describe('Baal contract', function () {
       account: summoner.address,
       data: selfTransferAction,
       details: 'all hail baal',
+      expiration: 0,
+      revertOnFailure: true
     }
   })
 
@@ -202,7 +204,7 @@ describe('Baal contract', function () {
     it('happy case', async function () {
       const countBefore = await baal.proposalCount()
 
-      await baal.submitProposal(proposal.votingPeriod, proposal.data, ethers.utils.id(proposal.details))
+      await baal.submitProposal(proposal.votingPeriod, proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
 
       const countAfter = await baal.proposalCount()
       expect(countAfter).to.equal(countBefore.add(1))
@@ -210,20 +212,20 @@ describe('Baal contract', function () {
 
     it('require fail - voting period too low', async function () {
       expect(
-        baal.submitProposal(deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS - 100, proposal.data, ethers.utils.id(proposal.details))
+        baal.submitProposal(deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS - 100, proposal.data,proposal.expiration, ethers.utils.id(proposal.details))
       ).to.be.revertedWith(revertMessages.submitProposalVotingPeriod)
     })
 
     it('require fail - voting period too high', async function () {
       expect(
-        baal.submitProposal(deploymentConfig.MAX_VOTING_PERIOD_IN_SECONDS + 100, proposal.data, ethers.utils.id(proposal.details))
+        baal.submitProposal(deploymentConfig.MAX_VOTING_PERIOD_IN_SECONDS + 100, proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
       ).to.be.revertedWith(revertMessages.submitProposalVotingPeriod)
     })
   })
 
   describe('submitVote', function () {
     beforeEach(async function () {
-      await baal.submitProposal(proposal.votingPeriod, proposal.data, ethers.utils.id(proposal.details))
+      await baal.submitProposal(proposal.votingPeriod, proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
     })
 
     it('happy case - yes vote', async function () {
@@ -251,10 +253,10 @@ describe('Baal contract', function () {
   describe('processProposal', function () {
     it('happy case yes wins', async function () {
       const beforeProcessed = await baal.proposals(1)
-      await baal.submitProposal(proposal.votingPeriod, proposal.data, ethers.utils.id(proposal.details))
+      await baal.submitProposal(proposal.votingPeriod, proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
       await baal.submitVote(1, yes)
       await moveForwardPeriods(2)
-      await baal.processProposal(1)
+      await baal.processProposal(1, proposal.revertOnFailure)
       const afterProcessed = await baal.proposals(1)
       expect(afterProcessed).to.deep.equal(beforeProcessed)
       expect(await baal.proposalsPassed(1)).to.equal(true)
@@ -262,34 +264,34 @@ describe('Baal contract', function () {
 
     it('happy case no wins', async function () {
       const beforeProcessed = await baal.proposals(1)
-      await baal.submitProposal(proposal.votingPeriod, proposal.data, ethers.utils.id(proposal.details))
+      await baal.submitProposal(proposal.votingPeriod, proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
       await baal.submitVote(1, no)
       await moveForwardPeriods(2)
-      await baal.processProposal(1)
+      await baal.processProposal(1, proposal.revertOnFailure)
       const afterProcessed = await baal.proposals(1)
       expect(afterProcessed).to.deep.equal(beforeProcessed)
       expect(await baal.proposalsPassed(1)).to.equal(false)
     })
 
     it('require fail - proposal does not exist', async function () {
-      await baal.submitProposal(proposal.votingPeriod, proposal.data, ethers.utils.id(proposal.details))
+      await baal.submitProposal(proposal.votingPeriod, proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
       await baal.submitVote(1, yes)
-      expect(baal.processProposal(2)).to.be.revertedWith('!exist')
+      expect(baal.processProposal(2, proposal.revertOnFailure)).to.be.revertedWith('!exist')
     })
 
     it('require fail - voting period has not ended', async function () {
-      await baal.submitProposal(proposal.votingPeriod, proposal.data, ethers.utils.id(proposal.details))
+      await baal.submitProposal(proposal.votingPeriod, proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
       await baal.submitVote(1, yes)
-      await baal.submitProposal(proposal.votingPeriod, proposal.data, ethers.utils.id(proposal.details))
+      await baal.submitProposal(proposal.votingPeriod, proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
       await baal.submitVote(2, yes)
       await moveForwardPeriods(2)
-      expect(baal.processProposal(2)).to.be.revertedWith('prev!processed')
+      expect(baal.processProposal(2, proposal.revertOnFailure)).to.be.revertedWith('prev!processed')
     })
   })
 
   describe('ragequit', function () {
     beforeEach(async function () {
-      await baal.submitProposal(proposal.votingPeriod, proposal.data, ethers.utils.id(proposal.details))
+      await baal.submitProposal(proposal.votingPeriod, proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
     })
 
     it('happy case - full ragequit', async function () {
@@ -332,7 +334,7 @@ describe('Baal contract', function () {
 
   describe('getPriorVotes', function () {
     beforeEach(async function () {
-      await baal.submitProposal(proposal.votingPeriod, proposal.data, ethers.utils.id(proposal.details))
+      await baal.submitProposal(proposal.votingPeriod, proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
     })
 
     it('happy case - yes vote', async function () {

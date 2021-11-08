@@ -56,7 +56,7 @@ interface BaalInterface extends ethers.utils.Interface {
     "onERC1155Received(address,address,uint256,uint256,bytes)": FunctionFragment;
     "onERC721Received(address,address,uint256,bytes)": FunctionFragment;
     "permit(address,address,uint96,uint256,uint8,bytes32,bytes32)": FunctionFragment;
-    "processProposal(uint256)": FunctionFragment;
+    "processProposal(uint256,bool)": FunctionFragment;
     "proposalCount()": FunctionFragment;
     "proposals(uint256)": FunctionFragment;
     "proposalsPassed(uint256)": FunctionFragment;
@@ -69,7 +69,7 @@ interface BaalInterface extends ethers.utils.Interface {
     "shamans(address)": FunctionFragment;
     "sharesPaused()": FunctionFragment;
     "sponsorProposal(uint256)": FunctionFragment;
-    "submitProposal(uint32,bytes,string)": FunctionFragment;
+    "submitProposal(uint32,bytes,uint256,string)": FunctionFragment;
     "submitVote(uint256,bool)": FunctionFragment;
     "submitVoteWithSig(uint256,bool,uint8,bytes32,bytes32)": FunctionFragment;
     "symbol()": FunctionFragment;
@@ -209,7 +209,7 @@ interface BaalInterface extends ethers.utils.Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "processProposal",
-    values: [BigNumberish]
+    values: [BigNumberish, boolean]
   ): string;
   encodeFunctionData(
     functionFragment: "proposalCount",
@@ -255,7 +255,7 @@ interface BaalInterface extends ethers.utils.Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "submitProposal",
-    values: [BigNumberish, BytesLike, string]
+    values: [BigNumberish, BytesLike, BigNumberish, string]
   ): string;
   encodeFunctionData(
     functionFragment: "submitVote",
@@ -440,9 +440,10 @@ interface BaalInterface extends ethers.utils.Interface {
     "DelegateChanged(address,address,address)": EventFragment;
     "DelegateVotesChanged(address,uint256,uint256)": EventFragment;
     "ProcessProposal(uint256)": EventFragment;
+    "ProcessingFailed(uint256)": EventFragment;
     "Ragequit(address,address,uint96,uint96)": EventFragment;
     "SponsorProposal(address,uint256,uint256)": EventFragment;
-    "SubmitProposal(uint256,uint256,bytes,string)": EventFragment;
+    "SubmitProposal(uint256,uint256,bytes,uint256,string)": EventFragment;
     "SubmitVote(address,uint256,uint256,bool)": EventFragment;
     "SummonComplete(bool,bool,uint256,uint256,uint256,string,string,address[],address[],address[],uint96[],uint96[])": EventFragment;
     "Transfer(address,address,uint256)": EventFragment;
@@ -453,6 +454,7 @@ interface BaalInterface extends ethers.utils.Interface {
   getEvent(nameOrSignatureOrTopic: "DelegateChanged"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "DelegateVotesChanged"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "ProcessProposal"): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "ProcessingFailed"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Ragequit"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "SponsorProposal"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "SubmitProposal"): EventFragment;
@@ -948,11 +950,13 @@ export class Baal extends Contract {
 
     processProposal(
       proposal: BigNumberish,
+      revertOnFailure: boolean,
       overrides?: Overrides
     ): Promise<ContractTransaction>;
 
-    "processProposal(uint256)"(
+    "processProposal(uint256,bool)"(
       proposal: BigNumberish,
+      revertOnFailure: boolean,
       overrides?: Overrides
     ): Promise<ContractTransaction>;
 
@@ -974,6 +978,8 @@ export class Baal extends Contract {
       yesVotes: BigNumber;
       noVotes: BigNumber;
       proposalData: string;
+      actionFailed: boolean;
+      expiration: BigNumber;
       details: string;
       0: number;
       1: number;
@@ -981,7 +987,9 @@ export class Baal extends Contract {
       3: BigNumber;
       4: BigNumber;
       5: string;
-      6: string;
+      6: boolean;
+      7: BigNumber;
+      8: string;
     }>;
 
     "proposals(uint256)"(
@@ -994,6 +1002,8 @@ export class Baal extends Contract {
       yesVotes: BigNumber;
       noVotes: BigNumber;
       proposalData: string;
+      actionFailed: boolean;
+      expiration: BigNumber;
       details: string;
       0: number;
       1: number;
@@ -1001,7 +1011,9 @@ export class Baal extends Contract {
       3: BigNumber;
       4: BigNumber;
       5: string;
-      6: string;
+      6: boolean;
+      7: BigNumber;
+      8: string;
     }>;
 
     proposalsPassed(
@@ -1119,13 +1131,15 @@ export class Baal extends Contract {
     submitProposal(
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
+      expiration: BigNumberish,
       details: string,
       overrides?: Overrides
     ): Promise<ContractTransaction>;
 
-    "submitProposal(uint32,bytes,string)"(
+    "submitProposal(uint32,bytes,uint256,string)"(
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
+      expiration: BigNumberish,
       details: string,
       overrides?: Overrides
     ): Promise<ContractTransaction>;
@@ -1594,11 +1608,13 @@ export class Baal extends Contract {
 
   processProposal(
     proposal: BigNumberish,
+    revertOnFailure: boolean,
     overrides?: Overrides
   ): Promise<ContractTransaction>;
 
-  "processProposal(uint256)"(
+  "processProposal(uint256,bool)"(
     proposal: BigNumberish,
+    revertOnFailure: boolean,
     overrides?: Overrides
   ): Promise<ContractTransaction>;
 
@@ -1616,6 +1632,8 @@ export class Baal extends Contract {
     yesVotes: BigNumber;
     noVotes: BigNumber;
     proposalData: string;
+    actionFailed: boolean;
+    expiration: BigNumber;
     details: string;
     0: number;
     1: number;
@@ -1623,7 +1641,9 @@ export class Baal extends Contract {
     3: BigNumber;
     4: BigNumber;
     5: string;
-    6: string;
+    6: boolean;
+    7: BigNumber;
+    8: string;
   }>;
 
   "proposals(uint256)"(
@@ -1636,6 +1656,8 @@ export class Baal extends Contract {
     yesVotes: BigNumber;
     noVotes: BigNumber;
     proposalData: string;
+    actionFailed: boolean;
+    expiration: BigNumber;
     details: string;
     0: number;
     1: number;
@@ -1643,7 +1665,9 @@ export class Baal extends Contract {
     3: BigNumber;
     4: BigNumber;
     5: string;
-    6: string;
+    6: boolean;
+    7: BigNumber;
+    8: string;
   }>;
 
   proposalsPassed(
@@ -1743,13 +1767,15 @@ export class Baal extends Contract {
   submitProposal(
     votingPeriod: BigNumberish,
     proposalData: BytesLike,
+    expiration: BigNumberish,
     details: string,
     overrides?: Overrides
   ): Promise<ContractTransaction>;
 
-  "submitProposal(uint32,bytes,string)"(
+  "submitProposal(uint32,bytes,uint256,string)"(
     votingPeriod: BigNumberish,
     proposalData: BytesLike,
+    expiration: BigNumberish,
     details: string,
     overrides?: Overrides
   ): Promise<ContractTransaction>;
@@ -2207,11 +2233,13 @@ export class Baal extends Contract {
 
     processProposal(
       proposal: BigNumberish,
+      revertOnFailure: boolean,
       overrides?: CallOverrides
     ): Promise<void>;
 
-    "processProposal(uint256)"(
+    "processProposal(uint256,bool)"(
       proposal: BigNumberish,
+      revertOnFailure: boolean,
       overrides?: CallOverrides
     ): Promise<void>;
 
@@ -2229,6 +2257,8 @@ export class Baal extends Contract {
       yesVotes: BigNumber;
       noVotes: BigNumber;
       proposalData: string;
+      actionFailed: boolean;
+      expiration: BigNumber;
       details: string;
       0: number;
       1: number;
@@ -2236,7 +2266,9 @@ export class Baal extends Contract {
       3: BigNumber;
       4: BigNumber;
       5: string;
-      6: string;
+      6: boolean;
+      7: BigNumber;
+      8: string;
     }>;
 
     "proposals(uint256)"(
@@ -2249,6 +2281,8 @@ export class Baal extends Contract {
       yesVotes: BigNumber;
       noVotes: BigNumber;
       proposalData: string;
+      actionFailed: boolean;
+      expiration: BigNumber;
       details: string;
       0: number;
       1: number;
@@ -2256,7 +2290,9 @@ export class Baal extends Contract {
       3: BigNumber;
       4: BigNumber;
       5: string;
-      6: string;
+      6: boolean;
+      7: BigNumber;
+      8: string;
     }>;
 
     proposalsPassed(
@@ -2356,13 +2392,15 @@ export class Baal extends Contract {
     submitProposal(
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
+      expiration: BigNumberish,
       details: string,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
-    "submitProposal(uint32,bytes,string)"(
+    "submitProposal(uint32,bytes,uint256,string)"(
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
+      expiration: BigNumberish,
       details: string,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
@@ -2479,6 +2517,8 @@ export class Baal extends Contract {
 
     ProcessProposal(proposal: BigNumberish | null): EventFilter;
 
+    ProcessingFailed(proposal: BigNumberish | null): EventFilter;
+
     Ragequit(
       member: string | null,
       to: null,
@@ -2496,6 +2536,7 @@ export class Baal extends Contract {
       proposal: BigNumberish | null,
       votingPeriod: null,
       proposalData: null,
+      expiration: null,
       details: null
     ): EventFilter;
 
@@ -2860,11 +2901,13 @@ export class Baal extends Contract {
 
     processProposal(
       proposal: BigNumberish,
+      revertOnFailure: boolean,
       overrides?: Overrides
     ): Promise<BigNumber>;
 
-    "processProposal(uint256)"(
+    "processProposal(uint256,bool)"(
       proposal: BigNumberish,
+      revertOnFailure: boolean,
       overrides?: Overrides
     ): Promise<BigNumber>;
 
@@ -2982,13 +3025,15 @@ export class Baal extends Contract {
     submitProposal(
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
+      expiration: BigNumberish,
       details: string,
       overrides?: Overrides
     ): Promise<BigNumber>;
 
-    "submitProposal(uint32,bytes,string)"(
+    "submitProposal(uint32,bytes,uint256,string)"(
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
+      expiration: BigNumberish,
       details: string,
       overrides?: Overrides
     ): Promise<BigNumber>;
@@ -3449,11 +3494,13 @@ export class Baal extends Contract {
 
     processProposal(
       proposal: BigNumberish,
+      revertOnFailure: boolean,
       overrides?: Overrides
     ): Promise<PopulatedTransaction>;
 
-    "processProposal(uint256)"(
+    "processProposal(uint256,bool)"(
       proposal: BigNumberish,
+      revertOnFailure: boolean,
       overrides?: Overrides
     ): Promise<PopulatedTransaction>;
 
@@ -3574,13 +3621,15 @@ export class Baal extends Contract {
     submitProposal(
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
+      expiration: BigNumberish,
       details: string,
       overrides?: Overrides
     ): Promise<PopulatedTransaction>;
 
-    "submitProposal(uint32,bytes,string)"(
+    "submitProposal(uint32,bytes,uint256,string)"(
       votingPeriod: BigNumberish,
       proposalData: BytesLike,
+      expiration: BigNumberish,
       details: string,
       overrides?: Overrides
     ): Promise<PopulatedTransaction>;

@@ -92,6 +92,7 @@ contract Baal is Executor, Initializable {
         uint256 indexed proposal,
         uint256 votingPeriod,
         bytes proposalData,
+        uint256 expiration,
         string details
     ); /*emits after proposal is submitted*/
     event SponsorProposal(
@@ -106,6 +107,7 @@ contract Baal is Executor, Initializable {
         bool indexed approved
     ); /*emits after vote is submitted on proposal*/
     event ProcessProposal(uint256 indexed proposal); /*emits when proposal is processed & executed*/
+    event ProcessingFailed(uint256 indexed proposal); /*emits when proposal is processed & executed*/
     event Ragequit(
         address indexed member,
         address to,
@@ -164,6 +166,8 @@ contract Baal is Executor, Initializable {
         uint96 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
         uint96 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
         bytes proposalData; /*raw data associated with state updates*/
+        bool actionFailed; /*label if proposal processed but action failed TODO gas optimize*/
+        uint256 expiration; /*time after which proposal should be considered invalid. 0 if no expiration*/
         string details; /*human-readable context for proposal*/
     }
 
@@ -252,6 +256,7 @@ contract Baal is Executor, Initializable {
     function submitProposal(
         uint32 votingPeriod,
         bytes calldata proposalData,
+        uint256 expiration,
         string calldata details
     ) external nonReentrant returns (uint256 proposal) {
         require(
@@ -271,11 +276,19 @@ contract Baal is Executor, Initializable {
                 0,
                 0,
                 proposalData,
+                false,
+                expiration,
                 details
             );
         }
 
-        emit SubmitProposal(proposal, votingPeriod, proposalData, details); /*emit event reflecting proposal submission*/
+        emit SubmitProposal(
+            proposal,
+            votingPeriod,
+            proposalData,
+            expiration,
+            details
+        ); /*emit event reflecting proposal submission*/
     }
 
     /// @notice Sponsor proposal to Baal `members` for approval within voting period.
@@ -382,7 +395,8 @@ contract Baal is Executor, Initializable {
     // ********************
     /// @notice Process `proposal` & execute internal functions.
     /// @param proposal Number of proposal in `proposals` mapping to process for execution.
-    function processProposal(uint256 proposal) external nonReentrant {
+    /// @param revertOnFailure Optionally revert if actions fail to process - useful to move past stuck actions
+    function processProposal(uint256 proposal, bool revertOnFailure) external nonReentrant {
         Proposal storage prop = proposals[proposal]; /*alias `proposal` storage pointers*/
 
         _processingReady(proposal, prop); /*validate `proposal` processing requirements*/
@@ -390,25 +404,31 @@ contract Baal is Executor, Initializable {
         /*check if `proposal` approved by simple majority of members*/
         if (prop.yesVotes > prop.noVotes) {
             proposalsPassed[proposal] = true; /*flag that proposal passed - allows minion-like extensions*/
-            processActionProposal(prop); /*execute 'action'*/
+            bool success = processActionProposal(prop); /*execute 'action'*/
+            if (revertOnFailure) require(success, "call failure");
+            if (!success) prop.actionFailed = true;
         }
 
-        delete proposals[proposal]; /*delete given proposal struct details for gas refund & the commons*/
+        if (prop.actionFailed) {
+            emit ProcessingFailed(proposal); /*emits when proposal is processed & executed*/
+        } else {
+            delete proposals[proposal]; /*delete given proposal struct details for gas refund & the commons*/
 
-        emit ProcessProposal(proposal); /*emit event reflecting that given proposal processed*/
+            emit ProcessProposal(proposal); /*emit event reflecting that given proposal processed*/
+        }
     }
 
-    /// @notice Internal function to process 'action' proposal.
-    function processActionProposal(Proposal memory prop) private {
-        require(
-            execute(
-                multisendLibrary,
-                0,
-                prop.proposalData,
-                Enum.Operation.DelegateCall,
-                gasleft()
-            ),
-            "call failure"
+    /// @notice Internal function to process 'action'[0] proposal.
+    function processActionProposal(Proposal memory prop)
+        private
+        returns (bool success)
+    {
+        success = execute(
+            multisendLibrary,
+            0,
+            prop.proposalData,
+            Enum.Operation.DelegateCall,
+            gasleft()
         );
     }
 
@@ -1023,8 +1043,9 @@ contract Baal is Executor, Initializable {
     {
         unchecked {
             require(proposal <= proposalCount, "!exist"); /*check proposal exists*/
-            require(proposals[proposal - 1].votingEnds == 0, "prev!processed"); /*check previous proposal has processed by deletion*/
+            require(proposals[proposal - 1].votingEnds == 0 || proposals[proposal - 1].actionFailed, "prev!processed"); /*check previous proposal has processed by deletion or with failed action*/
             require(proposals[proposal].votingEnds != 0, "processed"); /*check given proposal has been sponsored & not yet processed by deletion*/
+            require(proposals[proposal].expiration == 0 || proposals[proposal].expiration > block.timestamp, "expired"); /*check given proposal action has not expired */
             if (singleSummoner) return true; /*if single member, process early*/
             if (prop.yesVotes > totalSupply / 2) return true; /*process early if majority member support*/
             require(prop.votingEnds + gracePeriod <= block.timestamp, "!ended"); /*check voting period has ended*/
