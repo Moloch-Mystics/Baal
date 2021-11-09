@@ -1,4 +1,4 @@
-}// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: UNLICENSED
 /*
 ███   ██   ██   █     
 █  █  █ █  █ █  █     
