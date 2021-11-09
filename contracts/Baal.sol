@@ -89,7 +89,6 @@ interface IShaman {
 contract Baal is Executor, Initializable {
     bool public lootPaused; /*tracks transferability of `loot` economic weight - amendable through 'period'[2] proposal*/
     bool public sharesPaused; /*tracks transferability of erc20 `shares` - amendable through 'period'[2] proposal*/
-    bool singleSummoner; /*internal flag to gauge speedy proposal processing*/
 
     uint8 public constant decimals = 18; /*unit scaling factor in erc20 `shares` accounting - '18' is default to match ETH & common erc20s*/
     uint16 constant MAX_GUILD_TOKEN_COUNT = 400; /*maximum number of whitelistable tokens subject to {ragequit}*/
@@ -1183,7 +1182,6 @@ contract Baal is Executor, Initializable {
             require(proposals[proposal - 1].votingEnds == 0 || proposals[proposal - 1].actionFailed, "prev!processed"); /*check previous proposal has processed by deletion or with failed action*/
             require(proposals[proposal].votingEnds != 0, "processed"); /*check given proposal has been sponsored & not yet processed by deletion*/
             require(proposals[proposal].expiration == 0 || proposals[proposal].expiration > block.timestamp, "expired"); /*check given proposal action has not expired */
-            if (singleSummoner) return true; /*if single member, process early*/
             if (prop.yesVotes > totalSupply / 2) return true; /*process early if majority member support*/
             require(prop.votingEnds + gracePeriod <= block.timestamp, "!ended"); /*check voting period has ended*/
             ready = true; /*otherwise, process if voting period done*/
