@@ -9,3 +9,5 @@ export { TestErc20Factory } from "./TestErc20Factory";
 export type { TestErc20 } from "./TestErc20";
 export { RageQuitBankFactory } from "./RageQuitBankFactory";
 export type { RageQuitBank } from "./RageQuitBank";
+export { ShamanMinterFactory } from "./ShamanMinterFactory";
+export type { ShamanMinter } from "./ShamanMinter";

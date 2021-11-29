@@ -208,6 +208,11 @@ contract Baal is Executor, Initializable {
         _;
     }
 
+    modifier baalOrShamanOnly() {
+        require(msg.sender == address(this) || shamans[msg.sender], "!shaman or !baal"); /*check `shaman` is approved*/
+        _;
+    }
+
     struct Checkpoint {
         /*Baal checkpoint for marking number of delegated votes*/
         uint32 fromTimeStamp; /*unix time for referencing voting balance*/
@@ -274,37 +279,6 @@ contract Baal is Executor, Initializable {
     ) external initializer baalOnly {
         for (uint256 i; i < _delegators.length; i++) {
             _delegate(_delegators[i], _delegatees[i]); /*delegate `summoners` voting weights to themselves - this saves a step before voting*/
-        }
-    }
-
-    /// @notice Execute membership action to mint or burn `shares` and/or `loot` against whitelisted `shamans` in consideration of user & given amounts.
-    /// @param shaman Whitelisted contract to trigger action.
-    /// @param loot Economic weight involved in external call.
-    /// @param shares Voting weight involved in external call.
-    /// @param mint Confirm whether action involves 'mint' or 'burn' action - if `false`, perform burn.
-    /// @return lootOut sharesOut Membership updates derived from action.
-    function memberAction(
-        address shaman,
-        uint96 loot,
-        uint96 shares,
-        bool mint
-    ) external payable nonReentrant returns (uint96 lootOut, uint96 sharesOut) {
-        require(shamans[shaman], "!shaman"); /*check `shaman` is approved*/
-
-        (lootOut, sharesOut) = IShaman(shaman).memberAction{value: msg.value}(
-            msg.sender,
-            loot,
-            shares
-        ); /*fetch 'reaction' per inputs*/
-
-        if (mint) {
-            /*execute `mint` actions*/
-            if (lootOut != 0) _mintLoot(msg.sender, lootOut); /*add `loot` to user account & Baal total*/
-            if (sharesOut != 0) _mintShares(msg.sender, sharesOut); /*add `shares` to user account & Baal total with erc20 accounting*/
-        } else {
-            /*otherwise, execute `burn` actions*/
-            if (lootOut != 0) _burnLoot(msg.sender, lootOut); /*subtract `loot` from user account & Baal total*/
-            if (sharesOut != 0) _burnShares(msg.sender, sharesOut); /*subtract `shares` from user account & Baal total with erc20 accounting*/
         }
     }
 
@@ -495,10 +469,10 @@ contract Baal is Executor, Initializable {
         );
     }
 
-    /// @notice Baal-only function to mint shares.
+    /// @notice Baal-or-shaman-only function to mint shares.
     function mintShares(address[] calldata to, uint96[] calldata amount)
         external
-        baalOnly
+        baalOrShamanOnly
     {
         require(to.length == amount.length, "!array parity"); /*check array lengths match*/
         for (uint256 i = 0; i < to.length; i++) {
@@ -506,10 +480,10 @@ contract Baal is Executor, Initializable {
         }
     }
 
-    /// @notice Baal-only function to mint loot.
+    /// @notice Baal-or-shaman-only function to mint loot.
     function mintLoot(address[] calldata to, uint96[] calldata amount)
         external
-        baalOnly
+        baalOrShamanOnly
     {
         require(to.length == amount.length, "!array parity"); /*check array lengths match*/
         for (uint256 i = 0; i < to.length; i++) {

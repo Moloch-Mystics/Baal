@@ -186,19 +186,19 @@ describe('Baal contract', function () {
     })
   })
 
-  describe('memberAction', function () {
-    it('happy case - verify loot', async function () {
-      await baal.memberAction(shaman.address, loot / 2, shares / 2, true)
-      const lootData = await baal.members(summoner.address)
-      expect(lootData.loot).to.equal(1000)
-    })
+  // describe('memberAction', function () {
+  //   it('happy case - verify loot', async function () {
+  //     await baal.memberAction(shaman.address, loot / 2, shares / 2, true)
+  //     const lootData = await baal.members(summoner.address)
+  //     expect(lootData.loot).to.equal(1000)
+  //   })
 
-    it('happy case - verify shares', async function () {
-      await baal.memberAction(shaman.address, loot / 2, shares / 2, true)
-      const sharesData = await baal.balanceOf(summoner.address)
-      expect(sharesData).to.equal(200)
-    })
-  })
+  //   it('happy case - verify shares', async function () {
+  //     await baal.memberAction(shaman.address, loot / 2, shares / 2, true)
+  //     const sharesData = await baal.balanceOf(summoner.address)
+  //     expect(sharesData).to.equal(200)
+  //   })
+  // })
 
   describe('submitProposal', function () {
     it('happy case', async function () {
