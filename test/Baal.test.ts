@@ -9,6 +9,7 @@ import { RageQuitBank } from '../src/types/RageQuitBank'
 import { MultiSend } from '../src/types/MultiSend'
 import { encodeMultiAction } from '../src/util'
 import { BigNumber } from '@ethersproject/bignumber'
+import { buildContractCall } from '@gnosis.pm/safe-contracts'
 
 use(solidity)
 
@@ -53,6 +54,7 @@ const deploymentConfig = {
   GRACE_PERIOD_IN_SECONDS: 43200,
   MIN_VOTING_PERIOD_IN_SECONDS: 172800,
   MAX_VOTING_PERIOD_IN_SECONDS: 432000,
+  PROPOSAL_OFFERING: 0,
   TOKEN_NAME: 'wrapped ETH',
   TOKEN_SYMBOL: 'WETH',
 }
@@ -94,11 +96,12 @@ describe('Baal contract', function () {
     const abiCoder = ethers.utils.defaultAbiCoder
 
     const periods = abiCoder.encode(
-      ['uint32', 'uint32', 'uint32', 'bool', 'bool'],
+      ['uint32', 'uint32', 'uint32', 'uint256', 'bool', 'bool'],
       [
         deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS,
         deploymentConfig.MAX_VOTING_PERIOD_IN_SECONDS,
         deploymentConfig.GRACE_PERIOD_IN_SECONDS,
+        deploymentConfig.PROPOSAL_OFFERING,
         lootPaused,
         sharesPaused,
       ]
@@ -156,6 +159,9 @@ describe('Baal contract', function () {
 
       const maxVotingPeriod = await baal.maxVotingPeriod()
       expect(maxVotingPeriod).to.equal(deploymentConfig.MAX_VOTING_PERIOD_IN_SECONDS)
+
+      const proposalOffering = await baal.proposalOffering()
+      expect(proposalOffering).to.equal(deploymentConfig.PROPOSAL_OFFERING)
 
       const name = await baal.name()
       expect(name).to.equal(deploymentConfig.TOKEN_NAME)

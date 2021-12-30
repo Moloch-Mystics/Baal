@@ -14,6 +14,7 @@ import {
   Contract,
   ContractTransaction,
   Overrides,
+  PayableOverrides,
   CallOverrides,
 } from "@ethersproject/contracts";
 import { BytesLike } from "@ethersproject/bytes";
@@ -25,6 +26,8 @@ interface BaalInterface extends ethers.utils.Interface {
     "allowance(address,address)": FunctionFragment;
     "approve(address,uint256)": FunctionFragment;
     "balanceOf(address)": FunctionFragment;
+    "burnLoot(address[],uint96[])": FunctionFragment;
+    "burnShares(address[],uint96[])": FunctionFragment;
     "checkpoints(address,uint256)": FunctionFragment;
     "claim()": FunctionFragment;
     "convertSharesToLoot(address)": FunctionFragment;
@@ -57,6 +60,7 @@ interface BaalInterface extends ethers.utils.Interface {
     "permit(address,address,uint96,uint256,uint8,bytes32,bytes32)": FunctionFragment;
     "processProposal(uint256,bool)": FunctionFragment;
     "proposalCount()": FunctionFragment;
+    "proposalOffering()": FunctionFragment;
     "proposals(uint256)": FunctionFragment;
     "proposalsPassed(uint256)": FunctionFragment;
     "ragequit(address,uint96,uint96)": FunctionFragment;
@@ -91,6 +95,14 @@ interface BaalInterface extends ethers.utils.Interface {
     values: [string, BigNumberish]
   ): string;
   encodeFunctionData(functionFragment: "balanceOf", values: [string]): string;
+  encodeFunctionData(
+    functionFragment: "burnLoot",
+    values: [string[], BigNumberish[]]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "burnShares",
+    values: [string[], BigNumberish[]]
+  ): string;
   encodeFunctionData(
     functionFragment: "checkpoints",
     values: [string, BigNumberish]
@@ -214,6 +226,10 @@ interface BaalInterface extends ethers.utils.Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "proposalOffering",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "proposals",
     values: [BigNumberish]
   ): string;
@@ -294,6 +310,8 @@ interface BaalInterface extends ethers.utils.Interface {
   decodeFunctionResult(functionFragment: "allowance", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "burnLoot", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "burnShares", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "checkpoints",
     data: BytesLike
@@ -380,6 +398,10 @@ interface BaalInterface extends ethers.utils.Interface {
     functionFragment: "proposalCount",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "proposalOffering",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "proposals", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "proposalsPassed",
@@ -447,9 +469,9 @@ interface BaalInterface extends ethers.utils.Interface {
     "SponsorProposal(address,uint256,uint256)": EventFragment;
     "SubmitProposal(uint256,uint256,bytes,uint256,string)": EventFragment;
     "SubmitVote(address,uint256,uint256,bool)": EventFragment;
-    "SummonComplete(bool,bool,uint256,uint256,uint256,string,string,address[],address[],address[],uint96[],uint96[])": EventFragment;
+    "SummonComplete(bool,bool,uint256,uint256,uint256,uint256,string,string,address[],address[],address[],uint96[],uint96[])": EventFragment;
     "Transfer(address,address,uint256)": EventFragment;
-    "TransferLoot(address,address,uint96)": EventFragment;
+    "TransferLoot(address,address,uint256)": EventFragment;
   };
 
   getEvent(nameOrSignatureOrTopic: "Approval"): EventFragment;
@@ -521,6 +543,30 @@ export class Baal extends Contract {
     ): Promise<{
       0: BigNumber;
     }>;
+
+    burnLoot(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
+    "burnLoot(address[],uint96[])"(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
+    burnShares(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
+
+    "burnShares(address[],uint96[])"(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<ContractTransaction>;
 
     checkpoints(
       arg0: string,
@@ -964,6 +1010,14 @@ export class Baal extends Contract {
       0: BigNumber;
     }>;
 
+    proposalOffering(overrides?: CallOverrides): Promise<{
+      0: BigNumber;
+    }>;
+
+    "proposalOffering()"(overrides?: CallOverrides): Promise<{
+      0: BigNumber;
+    }>;
+
     proposals(
       arg0: BigNumberish,
       overrides?: CallOverrides
@@ -1129,7 +1183,7 @@ export class Baal extends Contract {
       proposalData: BytesLike,
       expiration: BigNumberish,
       details: string,
-      overrides?: Overrides
+      overrides?: PayableOverrides
     ): Promise<ContractTransaction>;
 
     "submitProposal(uint32,bytes,uint256,string)"(
@@ -1137,7 +1191,7 @@ export class Baal extends Contract {
       proposalData: BytesLike,
       expiration: BigNumberish,
       details: string,
-      overrides?: Overrides
+      overrides?: PayableOverrides
     ): Promise<ContractTransaction>;
 
     submitVote(
@@ -1299,6 +1353,30 @@ export class Baal extends Contract {
     arg0: string,
     overrides?: CallOverrides
   ): Promise<BigNumber>;
+
+  burnLoot(
+    to: string[],
+    amount: BigNumberish[],
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
+  "burnLoot(address[],uint96[])"(
+    to: string[],
+    amount: BigNumberish[],
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
+  burnShares(
+    to: string[],
+    amount: BigNumberish[],
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
+
+  "burnShares(address[],uint96[])"(
+    to: string[],
+    amount: BigNumberish[],
+    overrides?: Overrides
+  ): Promise<ContractTransaction>;
 
   checkpoints(
     arg0: string,
@@ -1629,6 +1707,10 @@ export class Baal extends Contract {
 
   "proposalCount()"(overrides?: CallOverrides): Promise<BigNumber>;
 
+  proposalOffering(overrides?: CallOverrides): Promise<BigNumber>;
+
+  "proposalOffering()"(overrides?: CallOverrides): Promise<BigNumber>;
+
   proposals(
     arg0: BigNumberish,
     overrides?: CallOverrides
@@ -1776,7 +1858,7 @@ export class Baal extends Contract {
     proposalData: BytesLike,
     expiration: BigNumberish,
     details: string,
-    overrides?: Overrides
+    overrides?: PayableOverrides
   ): Promise<ContractTransaction>;
 
   "submitProposal(uint32,bytes,uint256,string)"(
@@ -1784,7 +1866,7 @@ export class Baal extends Contract {
     proposalData: BytesLike,
     expiration: BigNumberish,
     details: string,
-    overrides?: Overrides
+    overrides?: PayableOverrides
   ): Promise<ContractTransaction>;
 
   submitVote(
@@ -1919,6 +2001,30 @@ export class Baal extends Contract {
       arg0: string,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
+
+    burnLoot(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    "burnLoot(address[],uint96[])"(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    burnShares(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    "burnShares(address[],uint96[])"(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: CallOverrides
+    ): Promise<void>;
 
     checkpoints(
       arg0: string,
@@ -2243,6 +2349,10 @@ export class Baal extends Contract {
 
     "proposalCount()"(overrides?: CallOverrides): Promise<BigNumber>;
 
+    proposalOffering(overrides?: CallOverrides): Promise<BigNumber>;
+
+    "proposalOffering()"(overrides?: CallOverrides): Promise<BigNumber>;
+
     proposals(
       arg0: BigNumberish,
       overrides?: CallOverrides
@@ -2563,6 +2673,7 @@ export class Baal extends Contract {
       gracePeriod: null,
       minVotingPeriod: null,
       maxVotingPeriod: null,
+      proposalOffering: null,
       name: null,
       symbol: null,
       guildTokens: null,
@@ -2611,6 +2722,30 @@ export class Baal extends Contract {
     "balanceOf(address)"(
       arg0: string,
       overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
+    burnLoot(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<BigNumber>;
+
+    "burnLoot(address[],uint96[])"(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<BigNumber>;
+
+    burnShares(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<BigNumber>;
+
+    "burnShares(address[],uint96[])"(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
     ): Promise<BigNumber>;
 
     checkpoints(
@@ -2916,6 +3051,10 @@ export class Baal extends Contract {
 
     "proposalCount()"(overrides?: CallOverrides): Promise<BigNumber>;
 
+    proposalOffering(overrides?: CallOverrides): Promise<BigNumber>;
+
+    "proposalOffering()"(overrides?: CallOverrides): Promise<BigNumber>;
+
     proposals(
       arg0: BigNumberish,
       overrides?: CallOverrides
@@ -3028,7 +3167,7 @@ export class Baal extends Contract {
       proposalData: BytesLike,
       expiration: BigNumberish,
       details: string,
-      overrides?: Overrides
+      overrides?: PayableOverrides
     ): Promise<BigNumber>;
 
     "submitProposal(uint32,bytes,uint256,string)"(
@@ -3036,7 +3175,7 @@ export class Baal extends Contract {
       proposalData: BytesLike,
       expiration: BigNumberish,
       details: string,
-      overrides?: Overrides
+      overrides?: PayableOverrides
     ): Promise<BigNumber>;
 
     submitVote(
@@ -3177,6 +3316,30 @@ export class Baal extends Contract {
     "balanceOf(address)"(
       arg0: string,
       overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    burnLoot(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    "burnLoot(address[],uint96[])"(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    burnShares(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
+    ): Promise<PopulatedTransaction>;
+
+    "burnShares(address[],uint96[])"(
+      to: string[],
+      amount: BigNumberish[],
+      overrides?: Overrides
     ): Promise<PopulatedTransaction>;
 
     checkpoints(
@@ -3511,6 +3674,12 @@ export class Baal extends Contract {
 
     "proposalCount()"(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
+    proposalOffering(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    "proposalOffering()"(
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
     proposals(
       arg0: BigNumberish,
       overrides?: CallOverrides
@@ -3626,7 +3795,7 @@ export class Baal extends Contract {
       proposalData: BytesLike,
       expiration: BigNumberish,
       details: string,
-      overrides?: Overrides
+      overrides?: PayableOverrides
     ): Promise<PopulatedTransaction>;
 
     "submitProposal(uint32,bytes,uint256,string)"(
@@ -3634,7 +3803,7 @@ export class Baal extends Contract {
       proposalData: BytesLike,
       expiration: BigNumberish,
       details: string,
-      overrides?: Overrides
+      overrides?: PayableOverrides
     ): Promise<PopulatedTransaction>;
 
     submitVote(

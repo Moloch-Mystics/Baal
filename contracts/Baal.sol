@@ -75,15 +75,6 @@ library Base64 {
     }
 }
 
-/// @notice Interface for Baal {memberAction} that adjusts member `shares` & `loot`.
-interface IShaman {
-    function memberAction(
-        address member,
-        uint96 loot,
-        uint96 shares
-    ) external payable returns (uint96 lootOut, uint96 sharesOut);
-}
-
 /// @title Baal ';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
 contract Baal is Executor, Initializable {
@@ -101,6 +92,7 @@ contract Baal is Executor, Initializable {
     uint32 public minVotingPeriod; /*minimum period for voting in seconds - amendable through 'period'[2] proposal*/
     uint32 public maxVotingPeriod; /*maximum period for voting in seconds - amendable through 'period'[2] proposal*/
     uint256 public proposalCount; /*counter for total `proposals` submitted*/
+    uint256 public proposalOffering; /* non-member proposal offering*/
     uint256 status; /*internal reentrancy check tracking value*/
 
     string public name; /*'name' for erc20 `shares` accounting*/
@@ -143,6 +135,7 @@ contract Baal is Executor, Initializable {
         uint256 gracePeriod,
         uint256 minVotingPeriod,
         uint256 maxVotingPeriod,
+        uint256 proposalOffering,
         string name,
         string symbol,
         address[] guildTokens,
@@ -182,8 +175,16 @@ contract Baal is Executor, Initializable {
         address indexed spender,
         uint256 amount
     ); /*emits when Baal `shares` are approved for pulls with erc20 accounting*/
-    event Transfer(address indexed from, address indexed to, uint256 amount); /*emits when Baal `shares` are minted, burned or transferred with erc20 accounting*/
-    event TransferLoot(address indexed from, address indexed to, uint96 amount); /*emits when Baal `loot` is minted, burned or transferred*/
+    event Transfer(
+        address indexed from, 
+        address indexed to, 
+        uint256 amount
+        ); /*emits when Baal `shares` are minted, burned or transferred with erc20 accounting*/
+    event TransferLoot(
+        address indexed from, 
+        address indexed to, 
+        uint256 amount
+        ); /*emits when Baal `loot` is minted, burned or transferred*/
     event DelegateChanged(
         address indexed delegator,
         address indexed fromDelegate,
@@ -295,11 +296,16 @@ contract Baal is Executor, Initializable {
         bytes calldata proposalData,
         uint256 expiration,
         string calldata details
-    ) external nonReentrant returns (uint256 proposal) {
+    ) external payable nonReentrant returns (uint256 proposal) {
         require(
             minVotingPeriod <= votingPeriod && votingPeriod <= maxVotingPeriod,
             "!votingPeriod"
         ); /*check voting period is within Baal bounds*/
+
+        require(
+            msg.value == proposalOffering, 
+            "Baal requires an offering"
+        );
 
         bool selfSponsor; /*plant sponsor flag*/
         if (balanceOf[msg.sender] != 0) selfSponsor = true; /*if a member, self-sponsor*/
@@ -480,6 +486,17 @@ contract Baal is Executor, Initializable {
         }
     }
 
+        /// @notice Baal-or-shaman-only function to burn shares.
+    function burnShares(address[] calldata to, uint96[] calldata amount)
+        external
+        baalOrShamanOnly
+    {
+        require(to.length == amount.length, "!array parity"); /*check array lengths match*/
+        for (uint256 i = 0; i < to.length; i++) {
+            _burnShares(to[i], amount[i]); /*grant `to` `amount` `shares`*/
+        }
+    }
+
     /// @notice Baal-or-shaman-only function to mint loot.
     function mintLoot(address[] calldata to, uint96[] calldata amount)
         external
@@ -488,6 +505,17 @@ contract Baal is Executor, Initializable {
         require(to.length == amount.length, "!array parity"); /*check array lengths match*/
         for (uint256 i = 0; i < to.length; i++) {
             _mintLoot(to[i], amount[i]); /*grant `to` `amount` `shares`*/
+        }
+    }
+
+    /// @notice Baal-or-shaman-only function to burn loot.
+    function burnLoot(address[] calldata to, uint96[] calldata amount)
+        external
+        baalOrShamanOnly
+    {
+        require(to.length == amount.length, "!array parity"); /*check array lengths match*/
+        for (uint256 i = 0; i < to.length; i++) {
+            _burnLoot(to[i], amount[i]); /*grant `to` `amount` `shares`*/
         }
     }
 
@@ -504,12 +532,14 @@ contract Baal is Executor, Initializable {
             uint32 min,
             uint32 max,
             uint32 grace,
+            uint256 newOffering,
             bool pauseLoot,
             bool pauseShares
-        ) = abi.decode(_periodData, (uint32, uint32, uint32, bool, bool));
+        ) = abi.decode(_periodData, (uint32, uint32, uint32, uint256, bool, bool));
         if (min != 0) minVotingPeriod = min; /*if positive, reset min. voting periods to first `value`*/
         if (max != 0) maxVotingPeriod = max; /*if positive, reset max. voting periods to second `value`*/
         if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to third `value`*/
+        proposalOffering = newOffering; /*set new proposal offering amount */ 
         lootPaused = pauseLoot; /*set pause `loot` transfers on fifth `value`*/
         sharesPaused = pauseShares; /*set pause `shares` transfers on sixth `value`*/
     }
