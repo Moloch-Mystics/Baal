@@ -1186,7 +1186,6 @@ contract Baal is Executor, Initializable {
             require(proposals[proposal - 1].votingEnds == 0 || proposals[proposal - 1].actionFailed, "prev!processed"); /*check previous proposal has processed by deletion or with failed action*/
             require(proposals[proposal].votingEnds != 0, "processed"); /*check given proposal has been sponsored & not yet processed by deletion*/
             require(proposals[proposal].expiration == 0 || proposals[proposal].expiration > block.timestamp, "expired"); /*check given proposal action has not expired */
-            if (prop.yesVotes > totalSupply / 2) return true; /*process early if majority member support*/
             require(prop.votingEnds + gracePeriod <= block.timestamp, "!ended"); /*check voting period has ended*/
             ready = true; /*otherwise, process if voting period done*/
         }
