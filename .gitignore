@@ -3,3 +3,4 @@ artifacts/
 cache/
 .DS_Store
 *.swp
+src/types/
