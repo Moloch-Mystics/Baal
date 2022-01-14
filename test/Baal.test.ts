@@ -130,7 +130,7 @@ describe('Baal contract', function () {
     await baal.setUp(encodedInitParams)
 
     await shaman.init(baal.address)
-    
+
     const selfTransferAction = encodeMultiAction(multisend, ['0x'], [baal.address], [BigNumber.from(0)], [0])
 
     proposal = {
@@ -140,7 +140,7 @@ describe('Baal contract', function () {
       data: selfTransferAction,
       details: 'all hail baal',
       expiration: 0,
-      revertOnFailure: true
+      revertOnFailure: true,
     }
   })
 
@@ -184,7 +184,7 @@ describe('Baal contract', function () {
       const summonerData = await baal.members(summoner.address)
       expect(summonerData.loot).to.equal(500)
       expect(summonerData.highestIndexYesVote).to.equal(0)
-      
+
       expect(await baal.balanceOf(summoner.address)).to.equal(100)
 
       const totalLoot = await baal.totalLoot()
@@ -206,6 +206,35 @@ describe('Baal contract', function () {
   //   })
   // })
 
+  describe.only('shaman actions', function () {
+    it('allows a proposal to enable a shaman', async function () {
+      expect(await baal.shamans(summoner.address)).to.be.false
+      const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [[summoner.address], true])
+      const enableShamanEncoded = encodeMultiAction(multisend, [enableShamanAction], [baal.address], [BigNumber.from(0)], [0])
+      await baal.submitProposal(proposal.votingPeriod, enableShamanEncoded, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, yes)
+      await moveForwardPeriods(2)
+      await baal.processProposal(1, proposal.revertOnFailure)
+
+      expect(await baal.shamans(summoner.address)).to.be.true
+    })
+    it('allows a shaman to mint shares', async function () {
+      const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [[applicant.address], true])
+      const enableShamanEncoded = encodeMultiAction(multisend, [enableShamanAction], [baal.address], [BigNumber.from(0)], [0])
+      await baal.submitProposal(proposal.votingPeriod, enableShamanEncoded, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, yes)
+      await moveForwardPeriods(2)
+      await baal.processProposal(1, proposal.revertOnFailure)
+
+      // what we're testing
+      expect(await baal.balanceOf(summoner.address)).to.equal(100)
+      const baalAsAppliant = await baal.connect(applicant)
+      await baalAsAppliant.mintShares([summoner.address], [100])
+      expect(await baal.balanceOf(summoner.address)).to.equal(200)
+
+    })
+  })
+
   describe('submitProposal', function () {
     it('happy case', async function () {
       const countBefore = await baal.proposalCount()
@@ -218,13 +247,23 @@ describe('Baal contract', function () {
 
     it('require fail - voting period too low', async function () {
       expect(
-        baal.submitProposal(deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS - 100, proposal.data,proposal.expiration, ethers.utils.id(proposal.details))
+        baal.submitProposal(
+          deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS - 100,
+          proposal.data,
+          proposal.expiration,
+          ethers.utils.id(proposal.details)
+        )
       ).to.be.revertedWith(revertMessages.submitProposalVotingPeriod)
     })
 
     it('require fail - voting period too high', async function () {
       expect(
-        baal.submitProposal(deploymentConfig.MAX_VOTING_PERIOD_IN_SECONDS + 100, proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+        baal.submitProposal(
+          deploymentConfig.MAX_VOTING_PERIOD_IN_SECONDS + 100,
+          proposal.data,
+          proposal.expiration,
+          ethers.utils.id(proposal.details)
+        )
       ).to.be.revertedWith(revertMessages.submitProposalVotingPeriod)
     })
   })
