@@ -18,6 +18,7 @@ const _shares = ['1'];
 const _loot = ['1'];
 const _minVoting = 60;
 const _maxVoting = 600;
+const _proposalOffering = 1;
 const _name = "TestBaal";
 const _symbol = "BAALTO";
 
@@ -54,6 +55,7 @@ async function main() {
         _shares,
         _minVoting,
         _maxVoting,
+		_proposalOffering,
         _name,
         _symbol,
         false,
