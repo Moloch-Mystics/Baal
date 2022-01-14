@@ -112,14 +112,14 @@ describe('Baal contract', function () {
     const setShaman = await baal.interface.encodeFunctionData('setShamans', [[shaman.address], true])
     const mintShares = await baal.interface.encodeFunctionData('mintShares', [[summoner.address], [shares]])
     const mintLoot = await baal.interface.encodeFunctionData('mintLoot', [[summoner.address], [loot]])
-    const delegateSummoners = await baal.interface.encodeFunctionData('delegateSummoners', [[summoner.address], [summoner.address]])
+    // const delegateSummoners = await baal.interface.encodeFunctionData('delegateSummoners', [[summoner.address], [summoner.address]])
 
     const initalizationActions = encodeMultiAction(
       multisend,
-      [setPeriods, setGuildTokens, setShaman, mintShares, mintLoot, delegateSummoners],
-      [baal.address, baal.address, baal.address, baal.address, baal.address, baal.address],
-      [BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0)],
-      [0, 0, 0, 0, 0, 0]
+      [setPeriods, setGuildTokens, setShaman, mintShares, mintLoot],
+      [baal.address, baal.address, baal.address, baal.address, baal.address],
+      [BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0)],
+      [0, 0, 0, 0, 0]
     )
 
     const encodedInitParams = abiCoder.encode(
@@ -239,6 +239,7 @@ describe('Baal contract', function () {
       const prop = await baal.proposals(1)
       const nCheckpoints = await baal.numCheckpoints(summoner.address)
       const votes = (await baal.checkpoints(summoner.address, nCheckpoints.sub(1))).votes
+      const priorVotes = await baal.getPriorVotes(summoner.address, prop.votingStarts)
       expect(prop.yesVotes).to.equal(votes)
     })
 

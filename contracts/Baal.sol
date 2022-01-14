@@ -18,11 +18,12 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 /// @author Brecht Devos - <brecht@loopring.org>
 /// @notice Provides a function for encoding some bytes in base64
 library Base64 {
-    string internal constant TABLE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    string internal constant TABLE =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
     function encode(bytes memory data) internal pure returns (string memory) {
-        if (data.length == 0) return '';
-        
+        if (data.length == 0) return "";
+
         // load the table into memory
         string memory table = TABLE;
 
@@ -35,42 +36,61 @@ library Base64 {
         assembly {
             // set the actual output length
             mstore(result, encodedLen)
-            
+
             // prepare the lookup table
             let tablePtr := add(table, 1)
-            
+
             // input ptr
             let dataPtr := data
             let endPtr := add(dataPtr, mload(data))
-            
+
             // result ptr, jump over length
             let resultPtr := add(result, 32)
-            
+
             // run over the input, 3 bytes at a time
-            for {} lt(dataPtr, endPtr) {}
-            {
-               dataPtr := add(dataPtr, 3)
-               
-               // read 3 bytes
-               let input := mload(dataPtr)
-               
-               // write 4 characters
-               mstore(resultPtr, shl(248, mload(add(tablePtr, and(shr(18, input), 0x3F)))))
-               resultPtr := add(resultPtr, 1)
-               mstore(resultPtr, shl(248, mload(add(tablePtr, and(shr(12, input), 0x3F)))))
-               resultPtr := add(resultPtr, 1)
-               mstore(resultPtr, shl(248, mload(add(tablePtr, and(shr( 6, input), 0x3F)))))
-               resultPtr := add(resultPtr, 1)
-               mstore(resultPtr, shl(248, mload(add(tablePtr, and(        input,  0x3F)))))
-               resultPtr := add(resultPtr, 1)
+            for {
+
+            } lt(dataPtr, endPtr) {
+
+            } {
+                dataPtr := add(dataPtr, 3)
+
+                // read 3 bytes
+                let input := mload(dataPtr)
+
+                // write 4 characters
+                mstore(
+                    resultPtr,
+                    shl(248, mload(add(tablePtr, and(shr(18, input), 0x3F))))
+                )
+                resultPtr := add(resultPtr, 1)
+                mstore(
+                    resultPtr,
+                    shl(248, mload(add(tablePtr, and(shr(12, input), 0x3F))))
+                )
+                resultPtr := add(resultPtr, 1)
+                mstore(
+                    resultPtr,
+                    shl(248, mload(add(tablePtr, and(shr(6, input), 0x3F))))
+                )
+                resultPtr := add(resultPtr, 1)
+                mstore(
+                    resultPtr,
+                    shl(248, mload(add(tablePtr, and(input, 0x3F))))
+                )
+                resultPtr := add(resultPtr, 1)
             }
-            
+
             // padding with '='
             switch mod(mload(data), 3)
-            case 1 { mstore(sub(resultPtr, 2), shl(240, 0x3d3d)) }
-            case 2 { mstore(sub(resultPtr, 1), shl(248, 0x3d)) }
+            case 1 {
+                mstore(sub(resultPtr, 2), shl(240, 0x3d3d))
+            }
+            case 2 {
+                mstore(sub(resultPtr, 1), shl(248, 0x3d))
+            }
         }
-        
+
         return result;
     }
 }
@@ -128,7 +148,7 @@ contract Baal is Executor, Initializable {
     mapping(address => bool) public shamans; /*maps contracts approved in 'whitelist'[3] proposals for {memberAction} that mint or burn `shares`*/
 
     mapping(uint256 => address) private _owners; /*maps token ID to owner*/
-    
+
     event SummonComplete(
         bool lootPaused,
         bool sharesPaused,
@@ -175,16 +195,12 @@ contract Baal is Executor, Initializable {
         address indexed spender,
         uint256 amount
     ); /*emits when Baal `shares` are approved for pulls with erc20 accounting*/
-    event Transfer(
-        address indexed from, 
-        address indexed to, 
-        uint256 amount
-        ); /*emits when Baal `shares` are minted, burned or transferred with erc20 accounting*/
+    event Transfer(address indexed from, address indexed to, uint256 amount); /*emits when Baal `shares` are minted, burned or transferred with erc20 accounting*/
     event TransferLoot(
-        address indexed from, 
-        address indexed to, 
+        address indexed from,
+        address indexed to,
         uint256 amount
-        ); /*emits when Baal `loot` is minted, burned or transferred*/
+    ); /*emits when Baal `loot` is minted, burned or transferred*/
     event DelegateChanged(
         address indexed delegator,
         address indexed fromDelegate,
@@ -210,7 +226,10 @@ contract Baal is Executor, Initializable {
     }
 
     modifier baalOrShamanOnly() {
-        require(msg.sender == address(this) || shamans[msg.sender], "!shaman or !baal"); /*check `shaman` is approved*/
+        require(
+            msg.sender == address(this) || shamans[msg.sender],
+            "!shaman or !baal"
+        ); /*check `shaman` is approved*/
         _;
     }
 
@@ -279,7 +298,7 @@ contract Baal is Executor, Initializable {
         address[] memory _delegatees
     ) external initializer baalOnly {
         for (uint256 i; i < _delegators.length; i++) {
-            _delegate(_delegators[i], _delegatees[i]); /*delegate `summoners` voting weights to themselves - this saves a step before voting*/
+            _delegate(_delegators[i], _delegatees[i]); /*optionally delegate `summoners` voting weights to specified address during initialization*/
         }
     }
 
@@ -302,10 +321,7 @@ contract Baal is Executor, Initializable {
             "!votingPeriod"
         ); /*check voting period is within Baal bounds*/
 
-        require(
-            msg.value == proposalOffering, 
-            "Baal requires an offering"
-        );
+        require(msg.value == proposalOffering, "Baal requires an offering");
 
         bool selfSponsor; /*plant sponsor flag*/
         if (balanceOf[msg.sender] != 0) selfSponsor = true; /*if a member, self-sponsor*/
@@ -439,7 +455,10 @@ contract Baal is Executor, Initializable {
     /// @notice Process `proposal` & execute internal functions.
     /// @param proposal Number of proposal in `proposals` mapping to process for execution.
     /// @param revertOnFailure Optionally revert if actions fail to process - useful to move past stuck actions
-    function processProposal(uint256 proposal, bool revertOnFailure) external nonReentrant {
+    function processProposal(uint256 proposal, bool revertOnFailure)
+        external
+        nonReentrant
+    {
         Proposal storage prop = proposals[proposal]; /*alias `proposal` storage pointers*/
 
         _processingReady(proposal, prop); /*validate `proposal` processing requirements*/
@@ -486,7 +505,7 @@ contract Baal is Executor, Initializable {
         }
     }
 
-        /// @notice Baal-or-shaman-only function to burn shares.
+    /// @notice Baal-or-shaman-only function to burn shares.
     function burnShares(address[] calldata to, uint96[] calldata amount)
         external
         baalOrShamanOnly
@@ -535,11 +554,14 @@ contract Baal is Executor, Initializable {
             uint256 newOffering,
             bool pauseLoot,
             bool pauseShares
-        ) = abi.decode(_periodData, (uint32, uint32, uint32, uint256, bool, bool));
+        ) = abi.decode(
+                _periodData,
+                (uint32, uint32, uint32, uint256, bool, bool)
+            );
         if (min != 0) minVotingPeriod = min; /*if positive, reset min. voting periods to first `value`*/
         if (max != 0) maxVotingPeriod = max; /*if positive, reset max. voting periods to second `value`*/
         if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to third `value`*/
-        proposalOffering = newOffering; /*set new proposal offering amount */ 
+        proposalOffering = newOffering; /*set new proposal offering amount */
         lootPaused = pauseLoot; /*set pause `loot` transfers on fifth `value`*/
         sharesPaused = pauseShares; /*set pause `shares` transfers on sixth `value`*/
     }
@@ -916,7 +938,7 @@ contract Baal is Executor, Initializable {
         ); /*get Baal token balance - 'balanceOf(address)'*/
         max = abi.decode(balanceData, (uint256)); /*decode Baal token balance for calculation*/
     }
-    
+
     /************
     NFT FUNCTIONS
     ************/
@@ -928,30 +950,35 @@ contract Baal is Executor, Initializable {
         virtual
         returns (string memory uri)
     {
-        require(
-            _owners[_tokenId] != address(0),
-            "!token"
-        );
+        require(_owners[_tokenId] != address(0), "!token");
         uri = string(_constructTokenURI(_tokenId));
     }
 
-    function ownerOf(uint256 _tokenId) public view virtual returns (address owner) {
+    function ownerOf(uint256 _tokenId)
+        public
+        view
+        virtual
+        returns (address owner)
+    {
         owner = _owners[_tokenId];
         require(owner != address(0), "!token");
     }
-    
+
     function tokenId() public view returns (uint256 _tokenId) {
         _tokenId = uint256(keccak256(abi.encodePacked(msg.sender)));
         require(_owners[_tokenId] != address(0), "!token");
     }
-    
+
     /// @notice Enable member to register Baal NFT metadata.
     function claim() public {
         uint256 _tokenId = uint256(keccak256(abi.encodePacked(msg.sender)));
         require(_owners[_tokenId] == address(0), "claimed");
-        
+
         Member storage _member = members[msg.sender];
-        require(_member.loot > 0 || balanceOf[msg.sender] > 0, "!shares or loot");
+        require(
+            _member.loot > 0 || balanceOf[msg.sender] > 0,
+            "!shares or loot"
+        );
         _owners[_tokenId] = msg.sender;
     }
 
@@ -966,21 +993,20 @@ contract Baal is Executor, Initializable {
         address _address = _owners[_tokenId];
         Member storage _member = members[_address];
 
-        string memory _nftName = string(
-            abi.encodePacked("Baal ", name)
-        );
+        string memory _nftName = string(abi.encodePacked("Baal ", name));
 
-        string memory _baalMetadataSVGs =
-                string(abi.encodePacked(
-                    '<text dominant-baseline="middle" text-anchor="middle" fill="white" x="50%" y="20px">',
-                    Strings.toString(balanceOf[_address] / 1 ether),
-                    ' Shares',
-                    "</text>",
-                    '<text dominant-baseline="middle" text-anchor="middle" fill="white" x="50%" y="40px">',
-                    Strings.toString(_member.loot / 1 ether),
-                    ' Loot',
-                    "</text>"
-                ));
+        string memory _baalMetadataSVGs = string(
+            abi.encodePacked(
+                '<text dominant-baseline="middle" text-anchor="middle" fill="white" x="50%" y="20px">',
+                Strings.toString(balanceOf[_address] / 1 ether),
+                " Shares",
+                "</text>",
+                '<text dominant-baseline="middle" text-anchor="middle" fill="white" x="50%" y="40px">',
+                Strings.toString(_member.loot / 1 ether),
+                " Loot",
+                "</text>"
+            )
+        );
 
         bytes memory svg = abi.encodePacked(
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet" style="font:14px serif"><rect width="400" height="400" fill="black" />',
@@ -993,23 +1019,22 @@ contract Baal is Executor, Initializable {
             Base64.encode(bytes(svg))
         );
 
-        uri =
-            string(
-                abi.encodePacked(
-                    "data:application/json;base64,",
-                    Base64.encode(
-                        bytes(
-                            abi.encodePacked(
-                                '{"name":"',
-                                _nftName,
-                                '", "image":"',
-                                _image,
-                                '", "description": "Illustrious member of Baal. Dynamically generated NFT showing member voting weight"}'
-                            )
+        uri = string(
+            abi.encodePacked(
+                "data:application/json;base64,",
+                Base64.encode(
+                    bytes(
+                        abi.encodePacked(
+                            '{"name":"',
+                            _nftName,
+                            '", "image":"',
+                            _image,
+                            '", "description": "Illustrious member of Baal. Dynamically generated NFT showing member voting weight"}'
                         )
                     )
                 )
-            );
+            )
+        );
     }
 
     /***************
@@ -1164,6 +1189,9 @@ contract Baal is Executor, Initializable {
     function _mintShares(address to, uint96 shares) private {
         unchecked {
             if (totalSupply + shares <= type(uint96).max / 2) {
+                if (balanceOf[to] == 0 && numCheckpoints[to] == 0)
+                    delegates[to] = to; /*If recipient is receiving their first shares, delegate to themself to save having to do this transaction after*/
+
                 balanceOf[to] += shares; /*add `shares` for `to` account*/
 
                 totalSupply += shares; /*add to total Baal `shares`*/
@@ -1183,9 +1211,17 @@ contract Baal is Executor, Initializable {
     {
         unchecked {
             require(proposal <= proposalCount, "!exist"); /*check proposal exists*/
-            require(proposals[proposal - 1].votingEnds == 0 || proposals[proposal - 1].actionFailed, "prev!processed"); /*check previous proposal has processed by deletion or with failed action*/
+            require(
+                proposals[proposal - 1].votingEnds == 0 ||
+                    proposals[proposal - 1].actionFailed,
+                "prev!processed"
+            ); /*check previous proposal has processed by deletion or with failed action*/
             require(proposals[proposal].votingEnds != 0, "processed"); /*check given proposal has been sponsored & not yet processed by deletion*/
-            require(proposals[proposal].expiration == 0 || proposals[proposal].expiration > block.timestamp, "expired"); /*check given proposal action has not expired */
+            require(
+                proposals[proposal].expiration == 0 ||
+                    proposals[proposal].expiration > block.timestamp,
+                "expired"
+            ); /*check given proposal action has not expired */
             require(prop.votingEnds + gracePeriod <= block.timestamp, "!ended"); /*check voting period has ended*/
             ready = true; /*otherwise, process if voting period done*/
         }
