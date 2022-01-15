@@ -1,10 +1,33 @@
 # Baal 👺
 
+*This is the most recent collaborative repository for Moloch V3, codename Baal. (Jan 13, 2022).  This message will change when the repository is depricated.*
+
 Baal is a minimal yet composable DAO template continuing work from the [`Moloch`](https://github.com/MolochVentures/moloch), [`Minion`](https://github.com/raid-guild/moloch-minion) and [`Compound`](https://github.com/compound-finance/compound-protocol/tree/master/contracts/Governance) frameworks to make it easier for people to combine and command crypto assets with intuitive membership games.
 
 *Guilds, venture clubs and control panels can benefit from Baal:* 
 
 <p align="center"><img src="https://media.giphy.com/media/rgwNTGFUbNTgsgiYha/giphy.gif"></p>
+
+## Setup
+
+If you are going to just use this project feel free to clone it.  If you would like to submit any pull requests please create an issue or work on a current issue and fork the repo.  The two main groups that are contributing to this project are [DaoHaus](https://discord.com/channels/709210493549674598) and [MetaCartel](https://discord.com/channels/702325961433284609).
+
+### Setup Environment:
+
+`npm install` - to install all of the components for the project
+
+### Building:
+
+This project uses the [hardhat](https://hardhat.org/) ethereum tools for solidity compiling and running a virtual ethereum environment for testing.
+
+`npx hardhat compile` - will compile the solidity code and generate your contract artifacts (in the /artifacts directory)
+
+### Testing:
+
+If you are looking to work on unit tests for this project be sure to read the README file in the test directory.
+
+`npx hardhat test` - run the unit tests
+
 
 ## Interfaces Supported
 
