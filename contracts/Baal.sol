@@ -166,6 +166,7 @@ contract Baal is Executor, Initializable {
     ); /*emits after Baal summoning*/
     event SubmitProposal(
         uint256 indexed proposal,
+        bytes32 indexed proposalDataHash,
         uint256 votingPeriod,
         bytes proposalData,
         uint256 expiration,
@@ -253,7 +254,7 @@ contract Baal is Executor, Initializable {
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
         uint96 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
         uint96 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
-        bytes proposalData; /*raw data associated with state updates*/
+        bytes32 proposalDataHash; /*hash of raw data associated with state updates*/
         bool actionFailed; /*label if proposal processed but action failed TODO gas optimize*/
         uint256 expiration; /*time after which proposal should be considered invalid. 0 if no expiration*/
         string details; /*human-readable context for proposal*/
@@ -326,6 +327,8 @@ contract Baal is Executor, Initializable {
         bool selfSponsor; /*plant sponsor flag*/
         if (balanceOf[msg.sender] != 0) selfSponsor = true; /*if a member, self-sponsor*/
 
+        bytes32 proposalDataHash = hashOperation(proposalData);
+
         unchecked {
             proposalCount++; /*increment proposal counter*/
             proposals[proposalCount] = Proposal( /*push params into proposal struct - start voting period timer if member submission*/
@@ -334,7 +337,7 @@ contract Baal is Executor, Initializable {
                 selfSponsor ? uint32(block.timestamp) + votingPeriod : 0,
                 0,
                 0,
-                proposalData,
+                proposalDataHash,
                 false,
                 expiration,
                 details
@@ -343,6 +346,7 @@ contract Baal is Executor, Initializable {
 
         emit SubmitProposal(
             proposal,
+            proposalDataHash,
             votingPeriod,
             proposalData,
             expiration,
@@ -455,7 +459,7 @@ contract Baal is Executor, Initializable {
     /// @notice Process `proposal` & execute internal functions.
     /// @param proposal Number of proposal in `proposals` mapping to process for execution.
     /// @param revertOnFailure Optionally revert if actions fail to process - useful to move past stuck actions
-    function processProposal(uint256 proposal, bool revertOnFailure)
+    function processProposal(uint256 proposal, bool revertOnFailure, bytes calldata proposalData)
         external
         nonReentrant
     {
@@ -463,10 +467,13 @@ contract Baal is Executor, Initializable {
 
         _processingReady(proposal, prop); /*validate `proposal` processing requirements*/
 
+        // check that the proposalData matches the stored hash
+        require(hashOperation(proposalData) == prop.proposalDataHash, "incorrect calldata");
+
         /*check if `proposal` approved by simple majority of members*/
         if (prop.yesVotes > prop.noVotes) {
             proposalsPassed[proposal] = true; /*flag that proposal passed - allows minion-like extensions*/
-            bool success = processActionProposal(prop); /*execute 'action'*/
+            bool success = processActionProposal(proposalData); /*execute 'action'*/
             if (revertOnFailure) require(success, "call failure");
             if (!success) prop.actionFailed = true;
         }
@@ -481,14 +488,14 @@ contract Baal is Executor, Initializable {
     }
 
     /// @notice Internal function to process 'action'[0] proposal.
-    function processActionProposal(Proposal memory prop)
+    function processActionProposal(bytes memory proposalData)
         private
         returns (bool success)
     {
         success = execute(
             multisendLibrary,
             0,
-            prop.proposalData,
+            proposalData,
             Enum.Operation.DelegateCall,
             gasleft()
         );
@@ -1071,6 +1078,16 @@ contract Baal is Executor, Initializable {
         bytes calldata
     ) external pure returns (bytes4 sig) {
         sig = 0xbc197c81; /*'onERC1155BatchReceived(address,address,uint[],uint[],bytes)'*/
+    }
+
+    /// @notice Returns the keccak256 hash of calldata
+    function hashOperation(bytes memory _transactions)
+        public
+        pure
+        virtual
+        returns (bytes32 hash)
+    {
+        return keccak256(abi.encode(_transactions));
     }
 
     /// @notice Deposits ETH sent to Baal.

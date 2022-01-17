@@ -332,7 +332,7 @@ describe("Baal contract", function () {
       );
       await baal.submitVote(1, yes);
       await moveForwardPeriods(2);
-      await baal.processProposal(1, proposal.revertOnFailure);
+      await baal.processProposal(1, proposal.revertOnFailure, proposal.data);
       const afterProcessed = await baal.proposals(1);
       expect(afterProcessed).to.deep.equal(beforeProcessed);
       expect(await baal.proposalsPassed(1)).to.equal(true);
@@ -348,7 +348,7 @@ describe("Baal contract", function () {
       );
       await baal.submitVote(1, no);
       await moveForwardPeriods(2);
-      await baal.processProposal(1, proposal.revertOnFailure);
+      await baal.processProposal(1, proposal.revertOnFailure, proposal.data);
       const afterProcessed = await baal.proposals(1);
       expect(afterProcessed).to.deep.equal(beforeProcessed);
       expect(await baal.proposalsPassed(1)).to.equal(false);
@@ -363,7 +363,7 @@ describe("Baal contract", function () {
       );
       await baal.submitVote(1, yes);
       expect(
-        baal.processProposal(2, proposal.revertOnFailure)
+        baal.processProposal(2, proposal.revertOnFailure, proposal.data)
       ).to.be.revertedWith("!exist");
     });
 
@@ -384,8 +384,30 @@ describe("Baal contract", function () {
       await baal.submitVote(2, yes);
       await moveForwardPeriods(2);
       expect(
-        baal.processProposal(2, proposal.revertOnFailure)
+        baal.processProposal(2, proposal.revertOnFailure, proposal.data)
       ).to.be.revertedWith("prev!processed");
+    });
+
+    it("require fail - proposal data mismatch on processing", async function () {
+      const beforeProcessed = await baal.proposals(1);
+      await baal.submitProposal(
+        proposal.votingPeriod,
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      const badSelfTransferAction = encodeMultiAction(
+        multisend,
+        ["0xbeefbabe"],
+        [baal.address],
+        [BigNumber.from(0)],
+        [0]
+      );
+      await baal.submitVote(1, yes);
+      await moveForwardPeriods(2);
+      expect(
+        baal.processProposal(1, proposal.revertOnFailure, badSelfTransferAction)
+      ).to.be.revertedWith("incorrect calldata");
     });
   });
 
