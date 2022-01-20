@@ -220,19 +220,19 @@ describe('Baal contract', function () {
     it ('sad case - shaman is not whitelisted', async function (){
       expect(await baal.shamans(summoner.address)).to.be.false
       
-      expect(
+      await expect(
         baal.mintShares([summoner.address], [100])
       ).to.be.revertedWith(revertMessages.notShamanOrBaal)
 
-      expect(
+      await expect(
         baal.burnShares([summoner.address], [100])
       ).to.be.revertedWith(revertMessages.notShamanOrBaal)
 
-      expect(
+      await expect(
         baal.mintLoot([summoner.address], [100])
       ).to.be.revertedWith(revertMessages.notShamanOrBaal)
 
-      expect(
+      await expect(
         baal.burnLoot([summoner.address], [100])
       ).to.be.revertedWith(revertMessages.notShamanOrBaal)
     })
