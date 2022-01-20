@@ -30,6 +30,7 @@ const revertMessages = {
   submitProposalFlag: '!flag',
   submitVoteTimeEnded: 'ended',
   proposalMisnumbered: '!exist',
+  notShamanOrBaal: '!shaman or !baal'
 }
 
 const zeroAddress = '0x0000000000000000000000000000000000000000'
@@ -216,14 +217,35 @@ describe('Baal contract', function () {
   // })
 
   describe.only('shaman actions', function () {
-    it('allows a proposal to enable a shaman', async function () {
+    it ('sad case - shaman is not whitelisted', async function (){
       expect(await baal.shamans(summoner.address)).to.be.false
+      
+      expect(
+        baal.mintShares([summoner.address], [100])
+      ).to.be.revertedWith(revertMessages.notShamanOrBaal)
+
+      expect(
+        baal.burnShares([summoner.address], [100])
+      ).to.be.revertedWith(revertMessages.notShamanOrBaal)
+
+      expect(
+        baal.mintLoot([summoner.address], [100])
+      ).to.be.revertedWith(revertMessages.notShamanOrBaal)
+
+      expect(
+        baal.burnLoot([summoner.address], [100])
+      ).to.be.revertedWith(revertMessages.notShamanOrBaal)
+    })
+
+    it('happy case - allows a proposal to enable a shaman', async function () {
+      expect(await baal.shamans(summoner.address)).to.be.false
+
       await enableShaman(baal, summoner, multisend, proposal)
 
       expect(await baal.shamans(summoner.address)).to.be.true
     })
 
-    it('allows a shaman to mint shares', async function () {
+    it('happy case - allows a shaman to mint shares', async function () {
       await enableShaman(baal, applicant, multisend, proposal)
 
       expect(await baal.balanceOf(summoner.address)).to.equal(100)
