@@ -224,12 +224,7 @@ describe('Baal contract', function () {
     })
 
     it('allows a shaman to mint shares', async function () {
-      const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [[applicant.address], true])
-      const enableShamanEncoded = encodeMultiAction(multisend, [enableShamanAction], [baal.address], [BigNumber.from(0)], [0])
-      await baal.submitProposal(proposal.votingPeriod, enableShamanEncoded, proposal.expiration, ethers.utils.id(proposal.details))
-      await baal.submitVote(1, yes)
-      await moveForwardPeriods(2)
-      await baal.processProposal(1, proposal.revertOnFailure)
+      await enableShaman(baal, applicant, multisend, proposal)
 
       // what we're testing
       expect(await baal.balanceOf(summoner.address)).to.equal(100)
