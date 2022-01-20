@@ -226,7 +226,6 @@ describe('Baal contract', function () {
     it('allows a shaman to mint shares', async function () {
       await enableShaman(baal, applicant, multisend, proposal)
 
-      // what we're testing
       expect(await baal.balanceOf(summoner.address)).to.equal(100)
       const baalAsAppliant = await baal.connect(applicant)
       await baalAsAppliant.mintShares([summoner.address], [100])
