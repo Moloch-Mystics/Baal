@@ -50,6 +50,15 @@ async function moveForwardPeriods(periods: number) {
   return true
 }
 
+async function enableShaman(baal: Baal, summoner: SignerWithAddress, multisend: MultiSend, proposal: { [key: string]: any }) {
+  const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [[summoner.address], true])
+  const enableShamanEncoded = encodeMultiAction(multisend, [enableShamanAction], [baal.address], [BigNumber.from(0)], [0])
+  await baal.submitProposal(proposal.votingPeriod, enableShamanEncoded, proposal.expiration, ethers.utils.id(proposal.details))
+  await baal.submitVote(1, true)
+  await moveForwardPeriods(2)
+  await baal.processProposal(1, proposal.revertOnFailure)
+}
+
 const deploymentConfig = {
   GRACE_PERIOD_IN_SECONDS: 43200,
   MIN_VOTING_PERIOD_IN_SECONDS: 172800,
@@ -209,15 +218,11 @@ describe('Baal contract', function () {
   describe.only('shaman actions', function () {
     it('allows a proposal to enable a shaman', async function () {
       expect(await baal.shamans(summoner.address)).to.be.false
-      const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [[summoner.address], true])
-      const enableShamanEncoded = encodeMultiAction(multisend, [enableShamanAction], [baal.address], [BigNumber.from(0)], [0])
-      await baal.submitProposal(proposal.votingPeriod, enableShamanEncoded, proposal.expiration, ethers.utils.id(proposal.details))
-      await baal.submitVote(1, yes)
-      await moveForwardPeriods(2)
-      await baal.processProposal(1, proposal.revertOnFailure)
+      await enableShaman(baal, summoner, multisend, proposal)
 
       expect(await baal.shamans(summoner.address)).to.be.true
     })
+
     it('allows a shaman to mint shares', async function () {
       const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [[applicant.address], true])
       const enableShamanEncoded = encodeMultiAction(multisend, [enableShamanAction], [baal.address], [BigNumber.from(0)], [0])
