@@ -245,7 +245,7 @@ describe('Baal contract', function () {
       expect(await baal.shamans(summoner.address)).to.be.true
     })
 
-    it('happy case - allows a new shaman to mint shares', async function () {
+    it('happy case - allows a shaman to mint shares', async function () {
       await enableShaman(baal, applicant, multisend, proposal)
 
       expect(await baal.balanceOf(summoner.address)).to.equal(100)
