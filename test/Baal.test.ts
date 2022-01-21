@@ -72,12 +72,14 @@ const deploymentConfig = {
 
 describe('Baal contract', function () {
   let baal: Baal
+  let baalAsShaman: Baal
   let weth: TestErc20
   let shaman: RageQuitBank
   let multisend: MultiSend
 
-  let applicant: SignerWithAddress
   let summoner: SignerWithAddress
+  let applicant: SignerWithAddress
+  let signingShaman: SignerWithAddress
 
   let proposal: { [key: string]: any }
 
@@ -93,7 +95,7 @@ describe('Baal contract', function () {
     const BaalContract = await ethers.getContractFactory('Baal')
     const ShamanContract = await ethers.getContractFactory('RageQuitBank')
     const MultisendContract = await ethers.getContractFactory('MultiSend')
-    ;[summoner, applicant] = await ethers.getSigners()
+    ;[summoner, applicant, signingShaman] = await ethers.getSigners()
 
     const ERC20 = await ethers.getContractFactory('TestERC20')
     weth = (await ERC20.deploy('WETH', 'WETH', 10000000)) as TestErc20
@@ -120,7 +122,7 @@ describe('Baal contract', function () {
 
     const setPeriods = await baal.interface.encodeFunctionData('setPeriods', [periods])
     const setGuildTokens = await baal.interface.encodeFunctionData('setGuildTokens', [[weth.address]])
-    const setShaman = await baal.interface.encodeFunctionData('setShamans', [[shaman.address], true])
+    const setShaman = await baal.interface.encodeFunctionData('setShamans', [[shaman.address, signingShaman.address], true])
     const mintShares = await baal.interface.encodeFunctionData('mintShares', [[summoner.address], [shares]])
     const mintLoot = await baal.interface.encodeFunctionData('mintLoot', [[summoner.address], [loot]])
     // const delegateSummoners = await baal.interface.encodeFunctionData('delegateSummoners', [[summoner.address], [summoner.address]])
@@ -153,6 +155,8 @@ describe('Baal contract', function () {
       expiration: 0,
       revertOnFailure: true,
     }
+
+    baalAsShaman = baal.connect(signingShaman)
   })
 
   describe('constructor', function () {
@@ -186,8 +190,11 @@ describe('Baal contract', function () {
       const sharesPaused = await baal.sharesPaused()
       expect(sharesPaused).to.be.false
 
-      const shamans = await baal.shamans(shaman.address)
-      expect(shamans).to.be.true
+      const shamanEnabled = await baal.shamans(shaman.address)
+      expect(shamanEnabled).to.be.true
+
+      const signingShamanEnabled = await baal.shamans(signingShaman.address)
+      expect(signingShamanEnabled).to.be.true
 
       const guildTokens = await baal.getGuildTokens()
       expect(guildTokens[0]).to.equal(weth.address)
@@ -270,38 +277,26 @@ describe('Baal contract', function () {
     })
 
     it('happy case - allows a shaman to mint shares', async function () {
-      await enableShaman(baal, applicant, multisend, proposal)
-      const baalAsApplicant = await baal.connect(applicant)
-
       expect(await baal.balanceOf(summoner.address)).to.equal(100)
-      await baalAsApplicant.mintShares([summoner.address], [100])
+      await baalAsShaman.mintShares([summoner.address], [100])
       expect(await baal.balanceOf(summoner.address)).to.equal(shares + 100)
     })
 
     it ('happy case - allows a shaman to burn shares', async function () {
-      await enableShaman(baal, applicant, multisend, proposal)
-      const baalAsApplicant = await baal.connect(applicant)
-
       expect(await baal.balanceOf(summoner.address)).to.equal(100)
-      await baalAsApplicant.burnShares([summoner.address], [100])
+      await baalAsShaman.burnShares([summoner.address], [100])
       expect(await baal.balanceOf(summoner.address)).to.equal(shares - 100)
     })
 
     it('happy case - allows a shaman to mint loot', async function() {
-      await enableShaman(baal, applicant, multisend, proposal)
-      const baalAsApplicant = await baal.connect(applicant)
-
       expect((await (baal.members(summoner.address))).loot).to.equal(loot)
-      await baalAsApplicant.mintLoot([summoner.address], [100])
+      await baalAsShaman.mintLoot([summoner.address], [100])
       expect((await (baal.members(summoner.address))).loot).to.equal(loot + 100)
     })
 
     it ('happy case - allows a shaman to burn loot', async function () {
-      await enableShaman(baal, applicant, multisend, proposal)
-      const baalAsApplicant = await baal.connect(applicant)
-
       expect((await (baal.members(summoner.address))).loot).to.equal(loot)
-      await baalAsApplicant.burnLoot([summoner.address], [100])
+      await baalAsShaman.burnLoot([summoner.address], [100])
       expect((await (baal.members(summoner.address))).loot).to.equal(loot - 100)
     })
   })
