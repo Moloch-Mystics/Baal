@@ -30,7 +30,8 @@ const revertMessages = {
   submitProposalFlag: '!flag',
   submitVoteTimeEnded: 'ended',
   proposalMisnumbered: '!exist',
-  notShamanOrBaal: '!shaman or !baal'
+  notShamanOrBaal: '!shaman or !baal',
+  arrayParity: '!array parity'
 }
 
 const zeroAddress = '0x0000000000000000000000000000000000000000'
@@ -235,6 +236,43 @@ describe('Baal contract', function () {
       await expect(
         baal.burnLoot([summoner.address], [100])
       ).to.be.revertedWith(revertMessages.notShamanOrBaal)
+    })
+
+    it('sad case - minting and burning array parity', async function () {
+      await enableShaman(baal, applicant, multisend, proposal)
+      const baalAsApplicant = await baal.connect(applicant)
+      
+      await expect(
+        baalAsApplicant.mintShares([summoner.address, applicant.address], [0])
+      ).to.be.revertedWith(revertMessages.arrayParity)
+
+      await expect(
+        baalAsApplicant.burnShares([summoner.address, applicant.address], [0])
+      ).to.be.revertedWith(revertMessages.arrayParity)
+
+      await expect(
+        baalAsApplicant.mintLoot([summoner.address, applicant.address], [0])
+      ).to.be.revertedWith(revertMessages.arrayParity)
+
+      await expect(
+        baalAsApplicant.burnLoot([summoner.address, applicant.address], [0])
+      ).to.be.revertedWith(revertMessages.arrayParity)
+
+      await expect(
+        baalAsApplicant.mintShares([summoner.address], [0, 100])
+      ).to.be.revertedWith(revertMessages.arrayParity)
+
+      await expect(
+        baalAsApplicant.burnShares([summoner.address], [0, 100])
+      ).to.be.revertedWith(revertMessages.arrayParity)
+
+      await expect(
+        baalAsApplicant.mintLoot([summoner.address], [0, 100])
+      ).to.be.revertedWith(revertMessages.arrayParity)
+
+      await expect(
+        baalAsApplicant.burnLoot([summoner.address], [0, 100])
+      ).to.be.revertedWith(revertMessages.arrayParity)
     })
 
     it('happy case - allows a proposal to enable a shaman', async function () {
