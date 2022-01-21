@@ -247,12 +247,38 @@ describe('Baal contract', function () {
 
     it('happy case - allows a shaman to mint shares', async function () {
       await enableShaman(baal, applicant, multisend, proposal)
+      const baalAsApplicant = await baal.connect(applicant)
 
       expect(await baal.balanceOf(summoner.address)).to.equal(100)
-      const baalAsApplicant = await baal.connect(applicant)
       await baalAsApplicant.mintShares([summoner.address], [100])
-      expect(await baal.balanceOf(summoner.address)).to.equal(200)
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares + 100)
+    })
 
+    it ('happy case - allows a shaman to burn shares', async function () {
+      await enableShaman(baal, applicant, multisend, proposal)
+      const baalAsApplicant = await baal.connect(applicant)
+
+      expect(await baal.balanceOf(summoner.address)).to.equal(100)
+      await baalAsApplicant.burnShares([summoner.address], [100])
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares - 100)
+    })
+
+    it('happy case - allows a shaman to mint loot', async function() {
+      await enableShaman(baal, applicant, multisend, proposal)
+      const baalAsApplicant = await baal.connect(applicant)
+
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot)
+      await baalAsApplicant.mintLoot([summoner.address], [100])
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot + 100)
+    })
+
+    it ('happy case - allows a shaman to burn loot', async function () {
+      await enableShaman(baal, applicant, multisend, proposal)
+      const baalAsApplicant = await baal.connect(applicant)
+
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot)
+      await baalAsApplicant.burnLoot([summoner.address], [100])
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot - 100)
     })
   })
 
