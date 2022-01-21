@@ -14,6 +14,10 @@ import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
+interface IEIP_TBD {
+    function daoURI() external view returns (string memory); 
+}
+
 /// @title Base64
 /// @author Brecht Devos - <brecht@loopring.org>
 /// @notice Provides a function for encoding some bytes in base64
@@ -97,7 +101,7 @@ library Base64 {
 
 /// @title Baal ';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
-contract Baal is Executor, Initializable {
+contract Baal is Executor, Initializable, IEIP_TBD {
     bool public lootPaused; /*tracks transferability of `loot` economic weight - amendable through 'period'[2] proposal*/
     bool public sharesPaused; /*tracks transferability of erc20 `shares` - amendable through 'period'[2] proposal*/
 
@@ -117,6 +121,8 @@ contract Baal is Executor, Initializable {
 
     string public name; /*'name' for erc20 `shares` accounting*/
     string public symbol; /*'symbol' for erc20 `shares` accounting*/
+
+    string private _daoURI; /*URI for DAO consitution, members, proposals, etc*/
 
     bytes32 constant DOMAIN_TYPEHASH =
         keccak256(
@@ -551,6 +557,11 @@ contract Baal is Executor, Initializable {
         _burnShares(to, removedBalance); /*burn all of `to` `shares` & convert into `loot`*/
         _mintLoot(to, removedBalance); /*mint equivalent `loot`*/
     }
+    
+    /// @notice Baal-only function to change DAO URI
+    function setDaoUri(string memory _newUri) external baalOnly {
+        _daoURI = _newUri;
+    }
 
     /// @notice Baal-only function to change periods.
     function setPeriods(bytes memory _periodData) external baalOnly {
@@ -884,6 +895,12 @@ contract Baal is Executor, Initializable {
                 ? checkpoints[account][nCheckpoints - 1].votes
                 : 0;
         }
+    }
+
+
+    /// @notice Returns the current DAO URI
+    function daoURI() external view override returns (string memory) {
+        return _daoURI;
     }
 
     /// @notice Returns the prior number of `votes` for `account` as of `timeStamp`.
