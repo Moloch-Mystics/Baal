@@ -249,8 +249,8 @@ describe('Baal contract', function () {
       await enableShaman(baal, applicant, multisend, proposal)
 
       expect(await baal.balanceOf(summoner.address)).to.equal(100)
-      const baalAsAppliant = await baal.connect(applicant)
-      await baalAsAppliant.mintShares([summoner.address], [100])
+      const baalAsApplicant = await baal.connect(applicant)
+      await baalAsApplicant.mintShares([summoner.address], [100])
       expect(await baal.balanceOf(summoner.address)).to.equal(200)
 
     })
