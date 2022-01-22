@@ -277,27 +277,39 @@ describe('Baal contract', function () {
     })
 
     it('happy case - allows a shaman to mint shares', async function () {
-      expect(await baal.balanceOf(summoner.address)).to.equal(100)
-      await baalAsShaman.mintShares([summoner.address], [100])
-      expect(await baal.balanceOf(summoner.address)).to.equal(shares + 100)
+      const minting = 100
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares)
+      await expect(
+        baalAsShaman.mintShares([summoner.address], [minting])
+      ).to.emit(baal, 'Transfer').withArgs(zeroAddress, summoner.address, minting)
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares + minting)
     })
 
     it ('happy case - allows a shaman to burn shares', async function () {
-      expect(await baal.balanceOf(summoner.address)).to.equal(100)
-      await baalAsShaman.burnShares([summoner.address], [100])
-      expect(await baal.balanceOf(summoner.address)).to.equal(shares - 100)
+      const burning = 100;
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares)
+      await expect(
+        baalAsShaman.burnShares([summoner.address], [burning])
+      ).to.emit(baal, 'Transfer').withArgs(summoner.address, zeroAddress, burning)
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares - burning)
     })
 
     it('happy case - allows a shaman to mint loot', async function() {
+      const minting = 100
       expect((await (baal.members(summoner.address))).loot).to.equal(loot)
-      await baalAsShaman.mintLoot([summoner.address], [100])
-      expect((await (baal.members(summoner.address))).loot).to.equal(loot + 100)
+      await expect(
+        baalAsShaman.mintLoot([summoner.address], [minting])
+      ).to.emit(baal, 'TransferLoot').withArgs(zeroAddress, summoner.address, minting)
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot + minting)
     })
 
     it ('happy case - allows a shaman to burn loot', async function () {
+      const burning = 100;
       expect((await (baal.members(summoner.address))).loot).to.equal(loot)
-      await baalAsShaman.burnLoot([summoner.address], [100])
-      expect((await (baal.members(summoner.address))).loot).to.equal(loot - 100)
+      await expect(
+        baalAsShaman.burnLoot([summoner.address], [burning])
+      ).to.emit(baal, 'TransferLoot').withArgs(summoner.address, zeroAddress, burning)
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot - burning)
     })
   })
 
