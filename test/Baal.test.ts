@@ -30,6 +30,8 @@ const revertMessages = {
   submitProposalFlag: '!flag',
   submitVoteTimeEnded: 'ended',
   proposalMisnumbered: '!exist',
+  notShamanOrBaal: '!shaman or !baal',
+  arrayParity: '!array parity'
 }
 
 const zeroAddress = '0x0000000000000000000000000000000000000000'
@@ -50,6 +52,15 @@ async function moveForwardPeriods(periods: number) {
   return true
 }
 
+async function enableShaman(baal: Baal, summoner: SignerWithAddress, multisend: MultiSend, proposal: { [key: string]: any }) {
+  const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [[summoner.address], true])
+  const enableShamanEncoded = encodeMultiAction(multisend, [enableShamanAction], [baal.address], [BigNumber.from(0)], [0])
+  await baal.submitProposal(proposal.votingPeriod, enableShamanEncoded, proposal.expiration, ethers.utils.id(proposal.details))
+  await baal.submitVote(1, true)
+  await moveForwardPeriods(2)
+  await baal.processProposal(1, proposal.revertOnFailure)
+}
+
 const deploymentConfig = {
   GRACE_PERIOD_IN_SECONDS: 43200,
   MIN_VOTING_PERIOD_IN_SECONDS: 172800,
@@ -61,12 +72,14 @@ const deploymentConfig = {
 
 describe('Baal contract', function () {
   let baal: Baal
+  let baalAsShaman: Baal
   let weth: TestErc20
   let shaman: RageQuitBank
   let multisend: MultiSend
 
-  let applicant: SignerWithAddress
   let summoner: SignerWithAddress
+  let applicant: SignerWithAddress
+  let signingShaman: SignerWithAddress
 
   let proposal: { [key: string]: any }
 
@@ -82,7 +95,7 @@ describe('Baal contract', function () {
     const BaalContract = await ethers.getContractFactory('Baal')
     const ShamanContract = await ethers.getContractFactory('RageQuitBank')
     const MultisendContract = await ethers.getContractFactory('MultiSend')
-    ;[summoner, applicant] = await ethers.getSigners()
+    ;[summoner, applicant, signingShaman] = await ethers.getSigners()
 
     const ERC20 = await ethers.getContractFactory('TestERC20')
     weth = (await ERC20.deploy('WETH', 'WETH', 10000000)) as TestErc20
@@ -109,7 +122,7 @@ describe('Baal contract', function () {
 
     const setPeriods = await baal.interface.encodeFunctionData('setPeriods', [periods])
     const setGuildTokens = await baal.interface.encodeFunctionData('setGuildTokens', [[weth.address]])
-    const setShaman = await baal.interface.encodeFunctionData('setShamans', [[shaman.address], true])
+    const setShaman = await baal.interface.encodeFunctionData('setShamans', [[shaman.address, signingShaman.address], true])
     const mintShares = await baal.interface.encodeFunctionData('mintShares', [[summoner.address], [shares]])
     const mintLoot = await baal.interface.encodeFunctionData('mintLoot', [[summoner.address], [loot]])
     // const delegateSummoners = await baal.interface.encodeFunctionData('delegateSummoners', [[summoner.address], [summoner.address]])
@@ -142,6 +155,8 @@ describe('Baal contract', function () {
       expiration: 0,
       revertOnFailure: true,
     }
+
+    baalAsShaman = baal.connect(signingShaman)
   })
 
   describe('constructor', function () {
@@ -175,8 +190,11 @@ describe('Baal contract', function () {
       const sharesPaused = await baal.sharesPaused()
       expect(sharesPaused).to.be.false
 
-      const shamans = await baal.shamans(shaman.address)
-      expect(shamans).to.be.true
+      const shamanEnabled = await baal.shamans(shaman.address)
+      expect(shamanEnabled).to.be.true
+
+      const signingShamanEnabled = await baal.shamans(signingShaman.address)
+      expect(signingShamanEnabled).to.be.true
 
       const guildTokens = await baal.getGuildTokens()
       expect(guildTokens[0]).to.equal(weth.address)
@@ -192,46 +210,106 @@ describe('Baal contract', function () {
     })
   })
 
-  // describe('memberAction', function () {
-  //   it('happy case - verify loot', async function () {
-  //     await baal.memberAction(shaman.address, loot / 2, shares / 2, true)
-  //     const lootData = await baal.members(summoner.address)
-  //     expect(lootData.loot).to.equal(1000)
-  //   })
-
-  //   it('happy case - verify shares', async function () {
-  //     await baal.memberAction(shaman.address, loot / 2, shares / 2, true)
-  //     const sharesData = await baal.balanceOf(summoner.address)
-  //     expect(sharesData).to.equal(200)
-  //   })
-  // })
-
   describe.only('shaman actions', function () {
-    it('allows a proposal to enable a shaman', async function () {
+    it ('sad case - shaman is not whitelisted', async function (){
       expect(await baal.shamans(summoner.address)).to.be.false
-      const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [[summoner.address], true])
-      const enableShamanEncoded = encodeMultiAction(multisend, [enableShamanAction], [baal.address], [BigNumber.from(0)], [0])
-      await baal.submitProposal(proposal.votingPeriod, enableShamanEncoded, proposal.expiration, ethers.utils.id(proposal.details))
-      await baal.submitVote(1, yes)
-      await moveForwardPeriods(2)
-      await baal.processProposal(1, proposal.revertOnFailure)
+      
+      await expect(
+        baal.mintShares([summoner.address], [100])
+      ).to.be.revertedWith(revertMessages.notShamanOrBaal)
+
+      await expect(
+        baal.burnShares([summoner.address], [100])
+      ).to.be.revertedWith(revertMessages.notShamanOrBaal)
+
+      await expect(
+        baal.mintLoot([summoner.address], [100])
+      ).to.be.revertedWith(revertMessages.notShamanOrBaal)
+
+      await expect(
+        baal.burnLoot([summoner.address], [100])
+      ).to.be.revertedWith(revertMessages.notShamanOrBaal)
+    })
+
+    it('sad case - minting and burning array parity', async function () {
+      await enableShaman(baal, applicant, multisend, proposal)
+      const baalAsApplicant = await baal.connect(applicant)
+      
+      await expect(
+        baalAsApplicant.mintShares([summoner.address, applicant.address], [0])
+      ).to.be.revertedWith(revertMessages.arrayParity)
+
+      await expect(
+        baalAsApplicant.burnShares([summoner.address, applicant.address], [0])
+      ).to.be.revertedWith(revertMessages.arrayParity)
+
+      await expect(
+        baalAsApplicant.mintLoot([summoner.address, applicant.address], [0])
+      ).to.be.revertedWith(revertMessages.arrayParity)
+
+      await expect(
+        baalAsApplicant.burnLoot([summoner.address, applicant.address], [0])
+      ).to.be.revertedWith(revertMessages.arrayParity)
+
+      await expect(
+        baalAsApplicant.mintShares([summoner.address], [0, 100])
+      ).to.be.revertedWith(revertMessages.arrayParity)
+
+      await expect(
+        baalAsApplicant.burnShares([summoner.address], [0, 100])
+      ).to.be.revertedWith(revertMessages.arrayParity)
+
+      await expect(
+        baalAsApplicant.mintLoot([summoner.address], [0, 100])
+      ).to.be.revertedWith(revertMessages.arrayParity)
+
+      await expect(
+        baalAsApplicant.burnLoot([summoner.address], [0, 100])
+      ).to.be.revertedWith(revertMessages.arrayParity)
+    })
+
+    it('happy case - allows a proposal to enable a shaman', async function () {
+      expect(await baal.shamans(summoner.address)).to.be.false
+
+      await enableShaman(baal, summoner, multisend, proposal)
 
       expect(await baal.shamans(summoner.address)).to.be.true
     })
-    it('allows a shaman to mint shares', async function () {
-      const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [[applicant.address], true])
-      const enableShamanEncoded = encodeMultiAction(multisend, [enableShamanAction], [baal.address], [BigNumber.from(0)], [0])
-      await baal.submitProposal(proposal.votingPeriod, enableShamanEncoded, proposal.expiration, ethers.utils.id(proposal.details))
-      await baal.submitVote(1, yes)
-      await moveForwardPeriods(2)
-      await baal.processProposal(1, proposal.revertOnFailure)
 
-      // what we're testing
-      expect(await baal.balanceOf(summoner.address)).to.equal(100)
-      const baalAsAppliant = await baal.connect(applicant)
-      await baalAsAppliant.mintShares([summoner.address], [100])
-      expect(await baal.balanceOf(summoner.address)).to.equal(200)
+    it('happy case - allows a shaman to mint shares', async function () {
+      const minting = 100
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares)
+      await expect(
+        baalAsShaman.mintShares([summoner.address], [minting])
+      ).to.emit(baal, 'Transfer').withArgs(zeroAddress, summoner.address, minting)
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares + minting)
+    })
 
+    it ('happy case - allows a shaman to burn shares', async function () {
+      const burning = 100;
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares)
+      await expect(
+        baalAsShaman.burnShares([summoner.address], [burning])
+      ).to.emit(baal, 'Transfer').withArgs(summoner.address, zeroAddress, burning)
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares - burning)
+    })
+
+    it('happy case - allows a shaman to mint loot', async function() {
+      const minting = 100
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot)
+      await expect(
+        baalAsShaman.mintLoot([summoner.address], [minting])
+      ).to.emit(baal, 'TransferLoot').withArgs(zeroAddress, summoner.address, minting)
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot + minting)
+    })
+
+    it ('happy case - allows a shaman to burn loot', async function () {
+      const burning = 100;
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot)
+      await expect(
+        baalAsShaman.burnLoot([summoner.address], [burning])
+      ).to.emit(baal, 'TransferLoot').withArgs(summoner.address, zeroAddress, burning)
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot - burning)
     })
   })
 
