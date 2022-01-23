@@ -18,6 +18,7 @@ use(solidity);
 //   .should();
 
 const revertMessages = {
+  molochAlreadyInitialized: "Initializable: contract is already initialized",
   molochConstructorShamanCannotBe0: "shaman cannot be 0",
   molochConstructorGuildTokenCannotBe0: "guildToken cannot be 0",
   molochConstructorSummonerCannotBe0: "summoner cannot be 0",
@@ -61,14 +62,17 @@ const deploymentConfig = {
 
 describe("Baal contract", function () {
   let baal: Baal;
+  let shamanBaal: Baal;
   let weth: TestErc20;
-  let shaman: RageQuitBank;
   let multisend: MultiSend;
 
   let applicant: SignerWithAddress;
   let summoner: SignerWithAddress;
+  let shaman: SignerWithAddress;
 
   let proposal: { [key: string]: any };
+
+  let encodedInitParams: any;
 
   const loot = 500;
   const shares = 100;
@@ -80,18 +84,16 @@ describe("Baal contract", function () {
 
   beforeEach(async function () {
     const BaalContract = await ethers.getContractFactory("Baal");
-    const ShamanContract = await ethers.getContractFactory("RageQuitBank");
     const MultisendContract = await ethers.getContractFactory("MultiSend");
-    [summoner, applicant] = await ethers.getSigners();
+    [summoner, applicant, shaman] = await ethers.getSigners();
 
     const ERC20 = await ethers.getContractFactory("TestERC20");
     weth = (await ERC20.deploy("WETH", "WETH", 10000000)) as TestErc20;
 
-    shaman = (await ShamanContract.deploy()) as RageQuitBank;
-
     multisend = (await MultisendContract.deploy()) as MultiSend;
 
     baal = (await BaalContract.deploy()) as Baal;
+    shamanBaal = baal.connect(shaman); // needed to send txns to baal as the shaman
 
     const abiCoder = ethers.utils.defaultAbiCoder;
 
@@ -142,7 +144,7 @@ describe("Baal contract", function () {
       [0, 0, 0, 0, 0]
     );
 
-    const encodedInitParams = abiCoder.encode(
+    encodedInitParams = abiCoder.encode(
       ["string", "string", "address", "bytes"],
       [
         deploymentConfig.TOKEN_NAME,
@@ -153,8 +155,6 @@ describe("Baal contract", function () {
     );
 
     await baal.setUp(encodedInitParams);
-
-    await shaman.init(baal.address);
 
     const selfTransferAction = encodeMultiAction(
       multisend,
@@ -225,7 +225,37 @@ describe("Baal contract", function () {
       const totalLoot = await baal.totalLoot();
       expect(totalLoot).to.equal(500);
     });
+
+    it("require fail - initializer (setup) cant be called twice", async function() {
+      expect(
+        baal.setUp(encodedInitParams)
+      ).to.be.revertedWith(revertMessages.molochAlreadyInitialized);
+    })
   });
+
+  describe("shaman actions", function () {
+    it("mint shares", async function() {
+      await shamanBaal.mintShares([summoner.address], [69]);
+      expect(await shamanBaal.balanceOf(summoner.address)).to.equal(169);
+    })
+
+    it("burn shares", async function() {
+      await shamanBaal.burnShares([summoner.address], [69]);
+      expect(await shamanBaal.balanceOf(summoner.address)).to.equal(31);
+    })
+
+    it("mint loot", async function() {
+      await shamanBaal.mintLoot([summoner.address], [69]);
+      const summonerData = await baal.members(summoner.address);
+      expect(summonerData.loot).to.equal(569);
+    })
+
+    it("burn loot", async function() {
+      await shamanBaal.burnLoot([summoner.address], [69]);
+      const summonerData = await baal.members(summoner.address);
+      expect(summonerData.loot).to.equal(431);
+    })
+  })
 
   // describe('memberAction', function () {
   //   it('happy case - verify loot', async function () {

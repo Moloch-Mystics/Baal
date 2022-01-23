@@ -735,6 +735,7 @@ contract Baal is Executor, Initializable {
 
         unchecked {
             balanceOf[to] += amount;
+
         }
 
         _moveDelegates(delegates[msg.sender], delegates[to], amount);
