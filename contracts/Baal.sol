@@ -14,6 +14,15 @@ import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
+import "./LootERC20.sol";
+
+interface ILoot {
+    function mint(address recipient, uint256 amount) external;
+    function burn(address account, uint256 amount) external;
+    function balanceOf(address account) external view returns (uint256);
+    function totalSupply() external view returns (uint256);
+}
+
 /// @title Base64
 /// @author Brecht Devos - <brecht@loopring.org>
 /// @notice Provides a function for encoding some bytes in base64
@@ -104,8 +113,9 @@ contract Baal is Executor, Initializable {
     uint8 public constant decimals = 18; /*unit scaling factor in erc20 `shares` accounting - '18' is default to match ETH & common erc20s*/
     uint16 constant MAX_GUILD_TOKEN_COUNT = 400; /*maximum number of whitelistable tokens subject to {ragequit}*/
 
-    uint96 public totalLoot; /*counter for total `loot` economic weight held by `members`*/
-    uint96 public totalSupply; /*counter for total `members` voting `shares` with erc20 accounting*/
+    ILoot public lootToken; /*Sub ERC20 for loot mgmt*/
+
+    uint256 public totalSupply; /*counter for total `members` voting `shares` with erc20 accounting*/
 
     uint32 public flashFeeNumerator; /*tracks 'fee' numerator for {flashLoan} in {flashFee} - e.g., '1 = 0.0001%'*/
     uint32 public gracePeriod; /*time delay after proposal voting period for processing*/
@@ -161,8 +171,8 @@ contract Baal is Executor, Initializable {
         address[] guildTokens,
         address[] shamans,
         address[] summoners,
-        uint96[] loot,
-        uint96[] shares
+        uint256[] loot,
+        uint256[] shares
     ); /*emits after Baal summoning*/
     event SubmitProposal(
         uint256 indexed proposal,
@@ -188,8 +198,8 @@ contract Baal is Executor, Initializable {
     event Ragequit(
         address indexed member,
         address to,
-        uint96 indexed lootToBurn,
-        uint96 indexed sharesToBurn
+        uint256 indexed lootToBurn,
+        uint256 indexed sharesToBurn
     ); /*emits when users burn Baal `shares` and/or `loot` for given `to` account*/
     event Approval(
         address indexed owner,
@@ -237,12 +247,11 @@ contract Baal is Executor, Initializable {
     struct Checkpoint {
         /*Baal checkpoint for marking number of delegated votes*/
         uint32 fromTimeStamp; /*unix time for referencing voting balance*/
-        uint96 votes; /*votes at given unix time*/
+        uint256 votes; /*votes at given unix time*/
     }
 
     struct Member {
         /*Baal membership details*/
-        uint96 loot; /*economic weight held by `members` - can be set on summoning & adjusted via {memberAction}*/
         uint256 highestIndexYesVote; /*highest proposal index on which a member `approved`*/
         mapping(uint256 => bool) voted; /*maps voting decisions on proposals by `members` account*/
     }
@@ -252,8 +261,8 @@ contract Baal is Executor, Initializable {
         uint32 votingPeriod; /*time for voting in seconds*/
         uint32 votingStarts; /*starting time for proposal in seconds since unix epoch*/
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
-        uint96 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
-        uint96 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
+        uint256 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
+        uint256 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
         bytes32 proposalDataHash; /*hash of raw data associated with state updates*/
         bool actionFailed; /*label if proposal processed but action failed TODO gas optimize*/
         uint256 expiration; /*time after which proposal should be considered invalid. 0 if no expiration*/
@@ -266,11 +275,14 @@ contract Baal is Executor, Initializable {
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
             string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
+            address _loot,
             address _multisendLibrary, /*address of multisend library*/
             bytes memory _initializationMultisendData /*here you call BaalOnly functions to set up initial shares, loot, shamans, periods, etc.*/
-        ) = abi.decode(_initializationParams, (string, string, address, bytes));
+        ) = abi.decode(_initializationParams, (string, string, address, address, bytes));
         name = _name; /*initialize Baal `name` with erc20 accounting*/
         symbol = _symbol; /*initialize Baal `symbol` with erc20 accounting*/
+        
+        lootToken = ILoot(_loot);
 
         multisendLibrary = _multisendLibrary;
 
@@ -378,7 +390,7 @@ contract Baal is Executor, Initializable {
     function submitVote(uint256 proposal, bool approved) external nonReentrant {
         Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
 
-        uint96 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
+        uint256 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
 
         require(prop.votingEnds >= block.timestamp, "ended"); /*check voting period has not ended*/
         require(!members[msg.sender].voted[proposal], "voted"); /*check vote not already cast*/
@@ -432,7 +444,7 @@ contract Baal is Executor, Initializable {
 
         require(signatory != address(0), "!signatory"); /*check signer is not null*/
 
-        uint96 balance = getPriorVotes(signatory, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
+        uint256 balance = getPriorVotes(signatory, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
 
         require(prop.votingEnds >= block.timestamp, "ended"); /*check voting period has not ended*/
         require(!members[signatory].voted[proposal], "voted"); /*check vote not already cast*/
@@ -459,16 +471,20 @@ contract Baal is Executor, Initializable {
     /// @notice Process `proposal` & execute internal functions.
     /// @param proposal Number of proposal in `proposals` mapping to process for execution.
     /// @param revertOnFailure Optionally revert if actions fail to process - useful to move past stuck actions
-    function processProposal(uint256 proposal, bool revertOnFailure, bytes calldata proposalData)
-        external
-        nonReentrant
-    {
+    function processProposal(
+        uint256 proposal,
+        bool revertOnFailure,
+        bytes calldata proposalData
+    ) external nonReentrant {
         Proposal storage prop = proposals[proposal]; /*alias `proposal` storage pointers*/
 
         _processingReady(proposal, prop); /*validate `proposal` processing requirements*/
 
         // check that the proposalData matches the stored hash
-        require(hashOperation(proposalData) == prop.proposalDataHash, "incorrect calldata");
+        require(
+            hashOperation(proposalData) == prop.proposalDataHash,
+            "incorrect calldata"
+        );
 
         /*check if `proposal` approved by simple majority of members*/
         if (prop.yesVotes > prop.noVotes) {
@@ -502,7 +518,7 @@ contract Baal is Executor, Initializable {
     }
 
     /// @notice Baal-or-shaman-only function to mint shares.
-    function mintShares(address[] calldata to, uint96[] calldata amount)
+    function mintShares(address[] calldata to, uint256[] calldata amount)
         external
         baalOrShamanOnly
     {
@@ -513,7 +529,7 @@ contract Baal is Executor, Initializable {
     }
 
     /// @notice Baal-or-shaman-only function to burn shares.
-    function burnShares(address[] calldata to, uint96[] calldata amount)
+    function burnShares(address[] calldata to, uint256[] calldata amount)
         external
         baalOrShamanOnly
     {
@@ -524,7 +540,7 @@ contract Baal is Executor, Initializable {
     }
 
     /// @notice Baal-or-shaman-only function to mint loot.
-    function mintLoot(address[] calldata to, uint96[] calldata amount)
+    function mintLoot(address[] calldata to, uint256[] calldata amount)
         external
         baalOrShamanOnly
     {
@@ -535,7 +551,7 @@ contract Baal is Executor, Initializable {
     }
 
     /// @notice Baal-or-shaman-only function to burn loot.
-    function burnLoot(address[] calldata to, uint96[] calldata amount)
+    function burnLoot(address[] calldata to, uint256[] calldata amount)
         external
         baalOrShamanOnly
     {
@@ -547,7 +563,7 @@ contract Baal is Executor, Initializable {
 
     /// @notice Baal-only function to convert shares to loot.
     function convertSharesToLoot(address to) external baalOnly {
-        uint96 removedBalance = uint96(balanceOf[to]); /*gas-optimize variable*/
+        uint256 removedBalance = balanceOf[to]; /*gas-optimize variable*/
         _burnShares(to, removedBalance); /*burn all of `to` `shares` & convert into `loot`*/
         _mintLoot(to, removedBalance); /*mint equivalent `loot`*/
     }
@@ -680,7 +696,7 @@ contract Baal is Executor, Initializable {
     function permit(
         address owner,
         address spender,
-        uint96 amount,
+        uint256 amount,
         uint256 deadline,
         uint8 v,
         bytes32 r,
@@ -725,7 +741,7 @@ contract Baal is Executor, Initializable {
     /// @param to The address of destination account.
     /// @param amount The number of `shares` tokens to transfer.
     /// @return success Whether or not the transfer succeeded.
-    function transfer(address to, uint96 amount)
+    function transfer(address to, uint256 amount)
         external
         returns (bool success)
     {
@@ -752,7 +768,7 @@ contract Baal is Executor, Initializable {
     function transferFrom(
         address from,
         address to,
-        uint96 amount
+        uint256 amount
     ) external returns (bool success) {
         require(!sharesPaused, "!transferable");
 
@@ -771,21 +787,6 @@ contract Baal is Executor, Initializable {
         emit Transfer(from, to, amount);
 
         success = true;
-    }
-
-    /// @notice Transfer `amount` `loot` from user to `to`.
-    /// @param to The address of destination account.
-    /// @param amount The sum of loot to transfer.
-    function transferLoot(address to, uint96 amount) external {
-        require(!lootPaused, "!transferable");
-
-        members[msg.sender].loot -= amount;
-
-        unchecked {
-            members[to].loot += amount;
-        }
-
-        emit TransferLoot(msg.sender, to, amount);
     }
 
     /// @notice Flashloan ability that conforms to `IERC3156FlashLender`, as defined in 'https://eips.ethereum.org/EIPS/eip-3156'.
@@ -831,8 +832,8 @@ contract Baal is Executor, Initializable {
     /// @param sharesToBurn Baal voting weight to burn.
     function ragequit(
         address to,
-        uint96 lootToBurn,
-        uint96 sharesToBurn
+        uint256 lootToBurn,
+        uint256 sharesToBurn
     ) external nonReentrant {
         require(
             proposals[members[msg.sender].highestIndexYesVote].votingEnds == 0,
@@ -846,7 +847,7 @@ contract Baal is Executor, Initializable {
             uint256 balance = abi.decode(balanceData, (uint256)); /*decode Baal token balances for calculation*/
 
             uint256 amountToRagequit = ((lootToBurn + sharesToBurn) * balance) /
-                (totalSupply + totalLoot); /*calculate 'fair shair' claims*/
+                (totalSupply + totalLoot()); /*calculate 'fair shair' claims*/
 
             if (amountToRagequit != 0) {
                 /*gas optimization to allow higher maximum token limit*/
@@ -876,7 +877,7 @@ contract Baal is Executor, Initializable {
     function getCurrentVotes(address account)
         external
         view
-        returns (uint96 votes)
+        returns (uint256 votes)
     {
         uint256 nCheckpoints = numCheckpoints[account];
         unchecked {
@@ -893,7 +894,7 @@ contract Baal is Executor, Initializable {
     function getPriorVotes(address account, uint256 timeStamp)
         public
         view
-        returns (uint96 votes)
+        returns (uint256 votes)
     {
         require(timeStamp < block.timestamp, "!determined");
 
@@ -983,7 +984,7 @@ contract Baal is Executor, Initializable {
 
         Member storage _member = members[msg.sender];
         require(
-            _member.loot > 0 || balanceOf[msg.sender] > 0,
+            lootToken.balanceOf(msg.sender) > 0 || balanceOf[msg.sender] > 0,
             "!shares or loot"
         );
         _owners[_tokenId] = msg.sender;
@@ -1009,7 +1010,7 @@ contract Baal is Executor, Initializable {
                 " Shares",
                 "</text>",
                 '<text dominant-baseline="middle" text-anchor="middle" fill="white" x="50%" y="40px">',
-                Strings.toString(_member.loot / 1 ether),
+                Strings.toString(lootToken.balanceOf(_address) / 1 ether),
                 " Loot",
                 "</text>"
             )
@@ -1047,6 +1048,10 @@ contract Baal is Executor, Initializable {
     /***************
     HELPER FUNCTIONS
     ***************/
+
+    function totalLoot() public view returns (uint256) {
+        return lootToken.totalSupply();
+    }
 
     /// @notice Returns confirmation for 'safe' ERC-721 (NFT) transfers to Baal.
     function onERC721Received(
@@ -1102,7 +1107,7 @@ contract Baal is Executor, Initializable {
         _moveDelegates(
             currentDelegate,
             delegatee,
-            uint96(balanceOf[delegator])
+            uint256(balanceOf[delegator])
         );
 
         emit DelegateChanged(delegator, currentDelegate, delegatee);
@@ -1112,25 +1117,25 @@ contract Baal is Executor, Initializable {
     function _moveDelegates(
         address srcRep,
         address dstRep,
-        uint96 amount
+        uint256 amount
     ) private {
         unchecked {
             if (srcRep != dstRep && amount != 0) {
                 if (srcRep != address(0)) {
                     uint256 srcRepNum = numCheckpoints[srcRep];
-                    uint96 srcRepOld = srcRepNum != 0
+                    uint256 srcRepOld = srcRepNum != 0
                         ? checkpoints[srcRep][srcRepNum - 1].votes
                         : 0;
-                    uint96 srcRepNew = srcRepOld - amount;
+                    uint256 srcRepNew = srcRepOld - amount;
                     _writeCheckpoint(srcRep, srcRepNum, srcRepOld, srcRepNew);
                 }
 
                 if (dstRep != address(0)) {
                     uint256 dstRepNum = numCheckpoints[dstRep];
-                    uint96 dstRepOld = dstRepNum != 0
+                    uint256 dstRepOld = dstRepNum != 0
                         ? checkpoints[dstRep][dstRepNum - 1].votes
                         : 0;
-                    uint96 dstRepNew = dstRepOld + amount;
+                    uint256 dstRepNew = dstRepOld + amount;
                     _writeCheckpoint(dstRep, dstRepNum, dstRepOld, dstRepNew);
                 }
             }
@@ -1141,8 +1146,8 @@ contract Baal is Executor, Initializable {
     function _writeCheckpoint(
         address delegatee,
         uint256 nCheckpoints,
-        uint96 oldVotes,
-        uint96 newVotes
+        uint256 oldVotes,
+        uint256 newVotes
     ) private {
         uint32 timeStamp = uint32(block.timestamp);
 
@@ -1166,18 +1171,14 @@ contract Baal is Executor, Initializable {
     }
 
     /// @notice Burn function for Baal `loot`.
-    function _burnLoot(address from, uint96 loot) private {
-        members[from].loot -= loot; /*subtract `loot` for `from` account*/
-
-        unchecked {
-            totalLoot -= loot; /*subtract from total Baal `loot`*/
-        }
+    function _burnLoot(address from, uint256 loot) private {
+        lootToken.burn(from, loot);
 
         emit TransferLoot(from, address(0), loot); /*emit event reflecting burn of `loot`*/
     }
 
     /// @notice Burn function for Baal `shares`.
-    function _burnShares(address from, uint96 shares) private {
+    function _burnShares(address from, uint256 shares) private {
         balanceOf[from] -= shares; /*subtract `shares` for `from` account*/
 
         unchecked {
@@ -1190,22 +1191,15 @@ contract Baal is Executor, Initializable {
     }
 
     /// @notice Minting function for Baal `loot`.
-    function _mintLoot(address to, uint96 loot) private {
-        unchecked {
-            if (totalSupply + loot <= type(uint96).max / 2) {
-                members[to].loot += loot; /*add `loot` for `to` account*/
-
-                totalLoot += loot; /*add to total Baal `loot`*/
-
-                emit TransferLoot(address(0), to, loot); /*emit event reflecting mint of `loot`*/
-            }
-        }
+    function _mintLoot(address to, uint256 loot) private {
+        lootToken.mint(to, loot);
+        emit TransferLoot(address(0), to, loot); /*emit event reflecting mint of `loot`*/
     }
 
     /// @notice Minting function for Baal `shares`.
-    function _mintShares(address to, uint96 shares) private {
+    function _mintShares(address to, uint256 shares) private {
         unchecked {
-            if (totalSupply + shares <= type(uint96).max / 2) {
+            if (totalSupply + shares <= type(uint256).max / 2) {
                 if (balanceOf[to] == 0 && numCheckpoints[to] == 0)
                     delegates[to] = to; /*If recipient is receiving their first shares, delegate to themself to save having to do this transaction after*/
 
