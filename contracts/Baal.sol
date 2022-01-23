@@ -148,11 +148,6 @@ contract Baal is Executor, Initializable {
         status = 1;
     }
 
-    modifier baalOnly() {
-        require(msg.sender == address(this), "!baal");
-        _;
-    }
-
     modifier baalOrShamanOnly() {
         require(
             msg.sender == address(this) || shamans[msg.sender],
@@ -220,16 +215,6 @@ contract Baal is Executor, Initializable {
         );
 
         status = 1; /*initialize 'reentrancy guard' status*/
-    }
-
-    /// @notice Delegates Baal voting weight only on initialization for summoners.
-    function delegateSummoners(
-        address[] memory _delegators,
-        address[] memory _delegatees
-    ) external initializer baalOnly {
-        for (uint256 i; i < _delegators.length; i++) {
-            _delegate(_delegators[i], _delegatees[i]); /*optionally delegate `summoners` voting weights to specified address during initialization*/
-        }
     }
 
     /*****************
@@ -479,14 +464,14 @@ contract Baal is Executor, Initializable {
     }
 
     /// @notice Baal-only function to convert shares to loot.
-    function convertSharesToLoot(address to) external baalOnly {
+    function convertSharesToLoot(address to) external baalOrShamanOnly {
         uint256 removedBalance = balanceOf[to]; /*gas-optimize variable*/
         _burnShares(to, removedBalance); /*burn all of `to` `shares` & convert into `loot`*/
         _mintLoot(to, removedBalance); /*mint equivalent `loot`*/
     }
 
     /// @notice Baal-only function to change periods.
-    function setPeriods(bytes memory _periodData) external baalOnly {
+    function setPeriods(bytes memory _periodData) external baalOrShamanOnly {
         (
             uint32 min,
             uint32 max,
@@ -509,7 +494,7 @@ contract Baal is Executor, Initializable {
     /// @notice Baal-only function to set shaman status.
     function setShamans(address[] calldata _shamans, bool enabled)
         external
-        baalOnly
+        baalOrShamanOnly
     {
         for (uint256 i; i < _shamans.length; i++) {
             shamans[_shamans[i]] = enabled;
@@ -517,7 +502,7 @@ contract Baal is Executor, Initializable {
     }
 
     /// @notice Baal-only function to whitelist guildToken.
-    function setGuildTokens(address[] calldata _tokens) external baalOnly {
+    function setGuildTokens(address[] calldata _tokens) external baalOrShamanOnly {
         for (uint256 i; i < _tokens.length; i++) {
             if (guildTokens.length != MAX_GUILD_TOKEN_COUNT)
                 guildTokens.push(_tokens[i]); /*push account to `guildTokens` array if within 'MAX'*/
@@ -527,7 +512,7 @@ contract Baal is Executor, Initializable {
     /// @notice Baal-only function to remove guildToken
     function unsetGuildTokens(uint256[] calldata _tokenIndexes)
         external
-        baalOnly
+        baalOrShamanOnly
     {
         for (uint256 i; i < _tokenIndexes.length; i++) {
             guildTokens[_tokenIndexes[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
