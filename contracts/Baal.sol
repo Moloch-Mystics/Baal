@@ -145,6 +145,7 @@ contract Baal is Executor, Initializable {
     mapping(uint256 => Proposal) public proposals; /*maps `proposalCount` to struct details*/
     mapping(uint256 => bool) public proposalsPassed; /*maps `proposalCount` to approval status - separated out as struct is deleted, and this value can be used by minion-like contracts*/
     mapping(address => bool) public shamans; /*maps contracts approved in 'whitelist'[3] proposals for {memberAction} that mint or burn `shares`*/
+    mapping(address => bool) public guildTokensEnabled; /*maps guild token addresses -> enabled status (prevents duplicates in guildTokens[]) */
 
     mapping(uint256 => address) private _owners; /*maps token ID to owner*/
 
@@ -287,6 +288,9 @@ contract Baal is Executor, Initializable {
             ),
             "call failure"
         );
+
+        require(totalSupply > 0, "shares != 0");
+
 
         status = 1; /*initialize 'reentrancy guard' status*/
     }
@@ -580,8 +584,14 @@ contract Baal is Executor, Initializable {
     /// @notice Baal-only function to whitelist guildToken.
     function setGuildTokens(address[] calldata _tokens) external baalOnly {
         for (uint256 i; i < _tokens.length; i++) {
-            if (guildTokens.length != MAX_GUILD_TOKEN_COUNT)
-                guildTokens.push(_tokens[i]); /*push account to `guildTokens` array if within 'MAX'*/
+            address token = _tokens[i];
+            if (guildTokensEnabled[token]) {
+                continue; // prevent duplicate tokens
+            }
+
+            if (guildTokens.length < MAX_GUILD_TOKEN_COUNT)
+                guildTokens.push(token); /*push account to `guildTokens` array if within 'MAX'*/
+                guildTokensEnabled[token] = true;
         }
     }
 
@@ -591,8 +601,11 @@ contract Baal is Executor, Initializable {
         baalOnly
     {
         for (uint256 i; i < _tokenIndexes.length; i++) {
+            address token = guildTokens[_tokenIndexes[i]];
+            guildTokensEnabled[token] = false; // disable the token
             guildTokens[_tokenIndexes[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
             guildTokens.pop(); /*pop account from `guildTokens` array*/
+            
         }
     }
 

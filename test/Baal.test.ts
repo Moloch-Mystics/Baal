@@ -155,7 +155,7 @@ describe("Baal contract", function () {
     encodedInitParams = await getBaalParams(
       baal, 
       multisend, 
-      deploymentConfig, 
+      deploymentConfig,
       false, false, 
       [[weth.address]], 
       [[shaman.address], true], 
