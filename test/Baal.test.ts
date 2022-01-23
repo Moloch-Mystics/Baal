@@ -262,6 +262,7 @@ describe("Baal contract", function () {
   describe("submitProposal", function () {
     it("happy case", async function () {
       // note - this also tests that members can submit proposals without offering tribute
+      // note - this also tests that member proposals are self-sponsored (bc votingStarts != 0)
       const countBefore = await baal.proposalCount();
 
       await baal.submitProposal(
@@ -572,7 +573,8 @@ describe("Baal contract - tribute required", function () {
   });
 
   describe("submitProposal", function () {
-    it("happy case - tribute is accepted", async function() {
+    it("happy case - tribute is accepted, not self-sponsored", async function() {
+      // note - this also tests that the proposal is NOT sponsored
       const countBefore = await baal.proposalCount();
 
       await shamanBaal.submitProposal(
@@ -580,6 +582,23 @@ describe("Baal contract - tribute required", function () {
         proposal.expiration,
         ethers.utils.id(proposal.details),
         { value: 69 }
+      );
+
+      const countAfter = await baal.proposalCount();
+      expect(countAfter).to.equal(countBefore + 1);
+
+      const proposalData = await baal.proposals(1);
+      expect(proposalData.id).to.equal(1)
+      expect(proposalData.votingStarts).to.equal(0)
+    })
+
+    it("happy case - member can submit without tribute", async function() {
+      const countBefore = await baal.proposalCount();
+
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
       );
 
       const countAfter = await baal.proposalCount();
