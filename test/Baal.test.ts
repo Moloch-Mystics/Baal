@@ -186,8 +186,6 @@ describe("Baal contract", function () {
 
   describe("constructor", function () {
     it("verify deployment parameters", async function () {
-      const now = await blockTime();
-
       const decimals = await baal.decimals();
       expect(decimals).to.equal(18);
 
@@ -261,7 +259,7 @@ describe("Baal contract", function () {
     })
   })
 
-  describe("submitProposal", function () {
+  describe.only("submitProposal", function () {
     it("happy case", async function () {
       const countBefore = await baal.proposalCount();
 
@@ -271,8 +269,21 @@ describe("Baal contract", function () {
         ethers.utils.id(proposal.details)
       );
 
+      const now = await blockTime()
+
       const countAfter = await baal.proposalCount();
-      expect(countAfter).to.equal(countBefore.add(1));
+      expect(countAfter).to.equal(countBefore + 1);
+
+      const proposalData = await baal.proposals(1);
+      expect(proposalData.id).to.equal(1)
+      expect(proposalData.votingStarts).to.equal(now)
+      expect(proposalData.votingEnds).to.equal(now + deploymentConfig.VOTING_PERIOD_IN_SECONDS)
+      expect(proposalData.yesVotes).to.equal(0)
+      expect(proposalData.noVotes).to.equal(0)
+      expect(proposalData.actionFailed).to.equal(false)
+      expect(proposalData.expiration).to.equal(proposal.expiration)
+      expect(proposalData.details).to.equal(ethers.utils.id(proposal.details))
+      // TODO test data hash is accurate 
     });
   });
 
@@ -572,7 +583,7 @@ describe("Baal contract - tribute required", function () {
       );
 
       const countAfter = await baal.proposalCount();
-      expect(countAfter).to.equal(countBefore.add(1));
+      expect(countAfter).to.equal(countBefore + 1);
     })
 
     it("require fail - no tribute offered", async function() {

@@ -110,7 +110,7 @@ contract Baal is Executor, Initializable {
     uint32 public flashFeeNumerator; /*tracks 'fee' numerator for {flashLoan} in {flashFee} - e.g., '1 = 0.0001%'*/
     uint32 public gracePeriod; /*time delay after proposal voting period for processing*/
     uint32 public votingPeriod; /* voting period in seconds - amendable through 'period'[2] proposal*/
-    uint256 public proposalCount; /*counter for total `proposals` submitted*/
+    uint32 public proposalCount; /*counter for total `proposals` submitted*/
     uint256 public proposalOffering; /* non-member proposal offering*/
     uint256 status; /*internal reentrancy check tracking value*/
 
@@ -248,7 +248,7 @@ contract Baal is Executor, Initializable {
 
     struct Proposal {
         /*Baal proposal details*/
-        uint32 votingPeriod; /*time for voting in seconds*/
+        uint32 id; /*id of this proposal, used in existence checks (increments from 1)*/
         uint32 votingStarts; /*starting time for proposal in seconds since unix epoch*/
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
         uint96 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
@@ -316,7 +316,7 @@ contract Baal is Executor, Initializable {
         bytes calldata proposalData,
         uint256 expiration,
         string calldata details
-    ) external payable nonReentrant returns (uint256 proposal) {
+    ) external payable nonReentrant returns (uint256) {
         require(msg.value == proposalOffering, "Baal requires an offering");
 
         bool selfSponsor; /*plant sponsor flag*/
@@ -327,7 +327,7 @@ contract Baal is Executor, Initializable {
         unchecked {
             proposalCount++; /*increment proposal counter*/
             proposals[proposalCount] = Proposal( /*push params into proposal struct - start voting period timer if member submission*/
-                votingPeriod,
+                proposalCount,
                 selfSponsor ? uint32(block.timestamp) : 0,
                 selfSponsor ? uint32(block.timestamp) + votingPeriod : 0,
                 0,
@@ -340,13 +340,15 @@ contract Baal is Executor, Initializable {
         }
 
         emit SubmitProposal(
-            proposal,
+            proposalCount,
             proposalDataHash,
             votingPeriod,
             proposalData,
             expiration,
             details
         ); /*emit event reflecting proposal submission*/
+
+        return proposalCount;
     }
 
     /// @notice Sponsor proposal to Baal `members` for approval within voting period.
@@ -355,13 +357,13 @@ contract Baal is Executor, Initializable {
         Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
 
         require(balanceOf[msg.sender] != 0, "!member"); /*check 'membership' - required to sponsor proposal*/
-        require(prop.votingPeriod != 0, "!exist"); /*check proposal existence*/
+        require(prop.id != 0, "!exist"); /*check proposal existence*/
         require(prop.votingStarts == 0, "sponsored"); /*check proposal not already sponsored*/
 
         prop.votingStarts = uint32(block.timestamp);
 
         unchecked {
-            prop.votingEnds = uint32(block.timestamp) + prop.votingPeriod;
+            prop.votingEnds = uint32(block.timestamp) + votingPeriod;
         }
 
         emit SponsorProposal(msg.sender, proposal, block.timestamp);
