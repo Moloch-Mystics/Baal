@@ -259,8 +259,9 @@ describe("Baal contract", function () {
     })
   })
 
-  describe.only("submitProposal", function () {
+  describe("submitProposal", function () {
     it("happy case", async function () {
+      // note - this also tests that members can submit proposals without offering tribute
       const countBefore = await baal.proposalCount();
 
       await baal.submitProposal(
@@ -538,7 +539,6 @@ describe("Baal contract - tribute required", function () {
     baal = (await BaalContract.deploy()) as Baal;
     shamanBaal = baal.connect(shaman); // needed to send txns to baal as the shaman
 
-
     const encodedInitParams = await getBaalParams(
       baal, 
       multisend, 
@@ -575,7 +575,7 @@ describe("Baal contract - tribute required", function () {
     it("happy case - tribute is accepted", async function() {
       const countBefore = await baal.proposalCount();
 
-      await baal.submitProposal(
+      await shamanBaal.submitProposal(
         proposal.data,
         proposal.expiration,
         ethers.utils.id(proposal.details),
@@ -588,7 +588,7 @@ describe("Baal contract - tribute required", function () {
 
     it("require fail - no tribute offered", async function() {
       expect(
-        baal.submitProposal(
+        shamanBaal.submitProposal(
           proposal.data,
           proposal.expiration,
           ethers.utils.id(proposal.details)

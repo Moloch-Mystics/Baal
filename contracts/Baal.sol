@@ -317,10 +317,12 @@ contract Baal is Executor, Initializable {
         uint256 expiration,
         string calldata details
     ) external payable nonReentrant returns (uint256) {
-        require(msg.value == proposalOffering, "Baal requires an offering");
-
-        bool selfSponsor; /*plant sponsor flag*/
-        if (balanceOf[msg.sender] != 0) selfSponsor = true; /*if a member, self-sponsor*/
+        bool selfSponsor = false; /*plant sponsor flag*/
+        if (balanceOf[msg.sender] != 0) {
+            selfSponsor = true; /*if a member, self-sponsor*/
+        } else {
+            require(msg.value == proposalOffering, "Baal requires an offering");
+        }
 
         bytes32 proposalDataHash = hashOperation(proposalData);
 
