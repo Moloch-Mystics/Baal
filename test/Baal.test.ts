@@ -27,6 +27,9 @@ const revertMessages = {
   submitProposalArrayMax: "array max",
   submitProposalFlag: "!flag",
   submitVoteTimeEnded: "ended",
+  sponsorProposalMember: "!member",
+  sponsorProposalExists: "!exist",
+  sponsorProposalSponsored: "sponsored",
   proposalMisnumbered: "!exist",
 };
 
@@ -287,6 +290,58 @@ describe("Baal contract", function () {
       expect(proposalData.details).to.equal(ethers.utils.id(proposal.details))
       // TODO test data hash is accurate 
     });
+  });
+
+  describe("sponsorProposal", function () {
+    it("happy case", async function () {
+      await shamanBaal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+
+      const proposalData = await baal.proposals(1);
+      expect(proposalData.votingStarts).to.equal(0)
+      
+      await baal.sponsorProposal(1)
+      const now = await blockTime()
+      const proposalDataSponsored = await baal.proposals(1);
+      expect(proposalDataSponsored.votingStarts).to.equal(now)
+      expect(proposalDataSponsored.votingEnds).to.equal(now + deploymentConfig.VOTING_PERIOD_IN_SECONDS)
+    });
+
+    it("require fail - not member", async function() {
+      await shamanBaal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+
+      expect(
+        shamanBaal.sponsorProposal(1)
+      ).to.be.revertedWith(revertMessages.sponsorProposalMember)
+    })
+
+    it("require fail - proposal doesnt exist", async function() {
+      expect(
+        baal.sponsorProposal(1)
+      ).to.be.revertedWith(revertMessages.sponsorProposalExists)
+    })
+
+    it("require fail - already sponsored", async function() {
+      await shamanBaal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+
+      const proposalData = await baal.proposals(1);
+      expect(proposalData.votingStarts).to.equal(0)
+      await baal.sponsorProposal(1)
+      expect(
+        baal.sponsorProposal(1)
+      ).to.be.revertedWith(revertMessages.sponsorProposalSponsored)
+    })
   });
 
   describe("submitVote", function () {
