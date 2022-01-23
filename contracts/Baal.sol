@@ -109,8 +109,7 @@ contract Baal is Executor, Initializable {
 
     uint32 public flashFeeNumerator; /*tracks 'fee' numerator for {flashLoan} in {flashFee} - e.g., '1 = 0.0001%'*/
     uint32 public gracePeriod; /*time delay after proposal voting period for processing*/
-    uint32 public minVotingPeriod; /*minimum period for voting in seconds - amendable through 'period'[2] proposal*/
-    uint32 public maxVotingPeriod; /*maximum period for voting in seconds - amendable through 'period'[2] proposal*/
+    uint32 public votingPeriod; /* voting period in seconds - amendable through 'period'[2] proposal*/
     uint256 public proposalCount; /*counter for total `proposals` submitted*/
     uint256 public proposalOffering; /* non-member proposal offering*/
     uint256 status; /*internal reentrancy check tracking value*/
@@ -153,8 +152,7 @@ contract Baal is Executor, Initializable {
         bool lootPaused,
         bool sharesPaused,
         uint256 gracePeriod,
-        uint256 minVotingPeriod,
-        uint256 maxVotingPeriod,
+        uint256 votingPeriod,
         uint256 proposalOffering,
         string name,
         string symbol,
@@ -307,21 +305,14 @@ contract Baal is Executor, Initializable {
     PROPOSAL FUNCTIONS
     *****************/
     /// @notice Submit proposal to Baal `members` for approval within given voting period.
-    /// @param votingPeriod Voting period in seconds.
     /// @param proposalData Multisend encoded transactions or proposal data
     /// @param details Context for proposal.
     /// @return proposal Count for submitted proposal.
     function submitProposal(
-        uint32 votingPeriod,
         bytes calldata proposalData,
         uint256 expiration,
         string calldata details
     ) external payable nonReentrant returns (uint256 proposal) {
-        require(
-            minVotingPeriod <= votingPeriod && votingPeriod <= maxVotingPeriod,
-            "!votingPeriod"
-        ); /*check voting period is within Baal bounds*/
-
         require(msg.value == proposalOffering, "Baal requires an offering");
 
         bool selfSponsor; /*plant sponsor flag*/
@@ -555,19 +546,17 @@ contract Baal is Executor, Initializable {
     /// @notice Baal-only function to change periods.
     function setPeriods(bytes memory _periodData) external baalOnly {
         (
-            uint32 min,
-            uint32 max,
+            uint32 voting,
             uint32 grace,
             uint256 newOffering,
             bool pauseLoot,
             bool pauseShares
         ) = abi.decode(
                 _periodData,
-                (uint32, uint32, uint32, uint256, bool, bool)
+                (uint32, uint32, uint256, bool, bool)
             );
-        if (min != 0) minVotingPeriod = min; /*if positive, reset min. voting periods to first `value`*/
-        if (max != 0) maxVotingPeriod = max; /*if positive, reset max. voting periods to second `value`*/
-        if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to third `value`*/
+        if (voting != 0) votingPeriod = voting; /*if positive, reset min. voting periods to first `value`*/
+        if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to second `value`*/
         proposalOffering = newOffering; /*set new proposal offering amount */
         lootPaused = pauseLoot; /*set pause `loot` transfers on fifth `value`*/
         sharesPaused = pauseShares; /*set pause `shares` transfers on sixth `value`*/

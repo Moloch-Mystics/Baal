@@ -46,15 +46,14 @@ async function blockNumber() {
 }
 
 async function moveForwardPeriods(periods: number) {
-  const goToTime = deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS * periods;
+  const goToTime = deploymentConfig.VOTING_PERIOD_IN_SECONDS * periods;
   await ethers.provider.send("evm_increaseTime", [goToTime]);
   return true;
 }
 
 const deploymentConfig = {
   GRACE_PERIOD_IN_SECONDS: 43200,
-  MIN_VOTING_PERIOD_IN_SECONDS: 172800,
-  MAX_VOTING_PERIOD_IN_SECONDS: 432000,
+  VOTING_PERIOD_IN_SECONDS: 432000,
   PROPOSAL_OFFERING: 0,
   TOKEN_NAME: "wrapped ETH",
   TOKEN_SYMBOL: "WETH",
@@ -98,10 +97,9 @@ describe("Baal contract", function () {
     const abiCoder = ethers.utils.defaultAbiCoder;
 
     const periods = abiCoder.encode(
-      ["uint32", "uint32", "uint32", "uint256", "bool", "bool"],
+      ["uint32", "uint32", "uint256", "bool", "bool"],
       [
-        deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS,
-        deploymentConfig.MAX_VOTING_PERIOD_IN_SECONDS,
+        deploymentConfig.VOTING_PERIOD_IN_SECONDS,
         deploymentConfig.GRACE_PERIOD_IN_SECONDS,
         deploymentConfig.PROPOSAL_OFFERING,
         lootPaused,
@@ -185,14 +183,9 @@ describe("Baal contract", function () {
       const gracePeriod = await baal.gracePeriod();
       expect(gracePeriod).to.equal(deploymentConfig.GRACE_PERIOD_IN_SECONDS);
 
-      const minVotingPeriod = await baal.minVotingPeriod();
-      expect(minVotingPeriod).to.equal(
-        deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS
-      );
-
-      const maxVotingPeriod = await baal.maxVotingPeriod();
-      expect(maxVotingPeriod).to.equal(
-        deploymentConfig.MAX_VOTING_PERIOD_IN_SECONDS
+      const votingPeriod = await baal.votingPeriod();
+      expect(votingPeriod).to.equal(
+        deploymentConfig.VOTING_PERIOD_IN_SECONDS
       );
 
       const proposalOffering = await baal.proposalOffering();
@@ -257,26 +250,11 @@ describe("Baal contract", function () {
     })
   })
 
-  // describe('memberAction', function () {
-  //   it('happy case - verify loot', async function () {
-  //     await baal.memberAction(shaman.address, loot / 2, shares / 2, true)
-  //     const lootData = await baal.members(summoner.address)
-  //     expect(lootData.loot).to.equal(1000)
-  //   })
-
-  //   it('happy case - verify shares', async function () {
-  //     await baal.memberAction(shaman.address, loot / 2, shares / 2, true)
-  //     const sharesData = await baal.balanceOf(summoner.address)
-  //     expect(sharesData).to.equal(200)
-  //   })
-  // })
-
   describe("submitProposal", function () {
     it("happy case", async function () {
       const countBefore = await baal.proposalCount();
 
       await baal.submitProposal(
-        proposal.votingPeriod,
         proposal.data,
         proposal.expiration,
         ethers.utils.id(proposal.details)
@@ -285,34 +263,11 @@ describe("Baal contract", function () {
       const countAfter = await baal.proposalCount();
       expect(countAfter).to.equal(countBefore.add(1));
     });
-
-    it("require fail - voting period too low", async function () {
-      expect(
-        baal.submitProposal(
-          deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS - 100,
-          proposal.data,
-          proposal.expiration,
-          ethers.utils.id(proposal.details)
-        )
-      ).to.be.revertedWith(revertMessages.submitProposalVotingPeriod);
-    });
-
-    it("require fail - voting period too high", async function () {
-      expect(
-        baal.submitProposal(
-          deploymentConfig.MAX_VOTING_PERIOD_IN_SECONDS + 100,
-          proposal.data,
-          proposal.expiration,
-          ethers.utils.id(proposal.details)
-        )
-      ).to.be.revertedWith(revertMessages.submitProposalVotingPeriod);
-    });
   });
 
   describe("submitVote", function () {
     beforeEach(async function () {
       await baal.submitProposal(
-        proposal.votingPeriod,
         proposal.data,
         proposal.expiration,
         ethers.utils.id(proposal.details)
@@ -355,7 +310,6 @@ describe("Baal contract", function () {
     it("happy case yes wins", async function () {
       const beforeProcessed = await baal.proposals(1);
       await baal.submitProposal(
-        proposal.votingPeriod,
         proposal.data,
         proposal.expiration,
         ethers.utils.id(proposal.details)
@@ -371,7 +325,6 @@ describe("Baal contract", function () {
     it("happy case no wins", async function () {
       const beforeProcessed = await baal.proposals(1);
       await baal.submitProposal(
-        proposal.votingPeriod,
         proposal.data,
         proposal.expiration,
         ethers.utils.id(proposal.details)
@@ -386,7 +339,6 @@ describe("Baal contract", function () {
 
     it("require fail - proposal does not exist", async function () {
       await baal.submitProposal(
-        proposal.votingPeriod,
         proposal.data,
         proposal.expiration,
         ethers.utils.id(proposal.details)
@@ -399,14 +351,12 @@ describe("Baal contract", function () {
 
     it("require fail - voting period has not ended", async function () {
       await baal.submitProposal(
-        proposal.votingPeriod,
         proposal.data,
         proposal.expiration,
         ethers.utils.id(proposal.details)
       );
       await baal.submitVote(1, yes);
       await baal.submitProposal(
-        proposal.votingPeriod,
         proposal.data,
         proposal.expiration,
         ethers.utils.id(proposal.details)
@@ -421,7 +371,6 @@ describe("Baal contract", function () {
     it("require fail - proposal data mismatch on processing", async function () {
       const beforeProcessed = await baal.proposals(1);
       await baal.submitProposal(
-        proposal.votingPeriod,
         proposal.data,
         proposal.expiration,
         ethers.utils.id(proposal.details)
@@ -444,7 +393,6 @@ describe("Baal contract", function () {
   describe("ragequit", function () {
     beforeEach(async function () {
       await baal.submitProposal(
-        proposal.votingPeriod,
         proposal.data,
         proposal.expiration,
         ethers.utils.id(proposal.details)
@@ -497,7 +445,6 @@ describe("Baal contract", function () {
   describe("getPriorVotes", function () {
     beforeEach(async function () {
       await baal.submitProposal(
-        proposal.votingPeriod,
         proposal.data,
         proposal.expiration,
         ethers.utils.id(proposal.details)
