@@ -19,12 +19,9 @@ use(solidity);
 
 const revertMessages = {
   molochAlreadyInitialized: "Initializable: contract is already initialized",
-  molochConstructorShamanCannotBe0: "shaman cannot be 0",
-  molochConstructorGuildTokenCannotBe0: "guildToken cannot be 0",
-  molochConstructorSummonerCannotBe0: "summoner cannot be 0",
   molochConstructorSharesCannotBe0: "shares cannot be 0",
-  molochConstructorMinVotingPeriodCannotBe0: "minVotingPeriod cannot be 0",
-  molochConstructorMaxVotingPeriodCannotBe0: "maxVotingPeriod cannot be 0",
+  molochConstructorVotingPeriodCannotBe0: "votingPeriod cannot be 0",
+  submitProposalOffering: "Baal requires an offering",
   submitProposalVotingPeriod: "!votingPeriod",
   submitProposalArrays: "!array parity",
   submitProposalArrayMax: "array max",
@@ -58,6 +55,67 @@ const deploymentConfig = {
   TOKEN_NAME: "wrapped ETH",
   TOKEN_SYMBOL: "WETH",
 };
+
+const getBaalParams = async function(
+  baal: Baal, 
+  multisend: MultiSend, 
+  config: { 
+    PROPOSAL_OFFERING: any; 
+    GRACE_PERIOD_IN_SECONDS: any; 
+    VOTING_PERIOD_IN_SECONDS: any; 
+    TOKEN_NAME: any; 
+    TOKEN_SYMBOL: any; 
+  }, 
+  lootPaused: boolean, sharesPaused: boolean, 
+  tokens: [string[]],
+  shamans: [string[], boolean],
+  shares: [string[], number[]], 
+  loots: [string[], number[]]
+) {
+  const abiCoder = ethers.utils.defaultAbiCoder;
+
+  const periods = abiCoder.encode(
+    ["uint32", "uint32", "uint256", "bool", "bool"],
+    [
+      config.VOTING_PERIOD_IN_SECONDS,
+      config.GRACE_PERIOD_IN_SECONDS,
+      config.PROPOSAL_OFFERING,
+      lootPaused,
+      sharesPaused,
+    ]
+  );
+
+  const setPeriods = await baal.interface.encodeFunctionData("setPeriods", [periods]);
+  const setGuildTokens = await baal.interface.encodeFunctionData("setGuildTokens", tokens);
+  const setShaman = await baal.interface.encodeFunctionData("setShamans", shamans);
+  const mintShares = await baal.interface.encodeFunctionData("mintShares", shares);
+  const mintLoot = await baal.interface.encodeFunctionData("mintLoot", loots);
+  // const delegateSummoners = await baal.interface.encodeFunctionData('delegateSummoners', [[summoner.address], [summoner.address]])
+
+  const initalizationActions = encodeMultiAction(
+    multisend,
+    [setPeriods, setGuildTokens, setShaman, mintShares, mintLoot],
+    [baal.address, baal.address, baal.address, baal.address, baal.address],
+    [
+      BigNumber.from(0),
+      BigNumber.from(0),
+      BigNumber.from(0),
+      BigNumber.from(0),
+      BigNumber.from(0),
+    ],
+    [0, 0, 0, 0, 0]
+  );
+
+  return abiCoder.encode(
+    ["string", "string", "address", "bytes"],
+    [
+      config.TOKEN_NAME,
+      config.TOKEN_SYMBOL,
+      multisend.address,
+      initalizationActions,
+    ]
+  );
+}
 
 describe("Baal contract", function () {
   let baal: Baal;
@@ -93,64 +151,17 @@ describe("Baal contract", function () {
 
     baal = (await BaalContract.deploy()) as Baal;
     shamanBaal = baal.connect(shaman); // needed to send txns to baal as the shaman
-
-    const abiCoder = ethers.utils.defaultAbiCoder;
-
-    const periods = abiCoder.encode(
-      ["uint32", "uint32", "uint256", "bool", "bool"],
-      [
-        deploymentConfig.VOTING_PERIOD_IN_SECONDS,
-        deploymentConfig.GRACE_PERIOD_IN_SECONDS,
-        deploymentConfig.PROPOSAL_OFFERING,
-        lootPaused,
-        sharesPaused,
-      ]
-    );
-
-    const setPeriods = await baal.interface.encodeFunctionData("setPeriods", [
-      periods,
-    ]);
-    const setGuildTokens = await baal.interface.encodeFunctionData(
-      "setGuildTokens",
-      [[weth.address]]
-    );
-    const setShaman = await baal.interface.encodeFunctionData("setShamans", [
-      [shaman.address],
-      true,
-    ]);
-    const mintShares = await baal.interface.encodeFunctionData("mintShares", [
-      [summoner.address],
-      [shares],
-    ]);
-    const mintLoot = await baal.interface.encodeFunctionData("mintLoot", [
-      [summoner.address],
-      [loot],
-    ]);
-    // const delegateSummoners = await baal.interface.encodeFunctionData('delegateSummoners', [[summoner.address], [summoner.address]])
-
-    const initalizationActions = encodeMultiAction(
-      multisend,
-      [setPeriods, setGuildTokens, setShaman, mintShares, mintLoot],
-      [baal.address, baal.address, baal.address, baal.address, baal.address],
-      [
-        BigNumber.from(0),
-        BigNumber.from(0),
-        BigNumber.from(0),
-        BigNumber.from(0),
-        BigNumber.from(0),
-      ],
-      [0, 0, 0, 0, 0]
-    );
-
-    encodedInitParams = abiCoder.encode(
-      ["string", "string", "address", "bytes"],
-      [
-        deploymentConfig.TOKEN_NAME,
-        deploymentConfig.TOKEN_SYMBOL,
-        multisend.address,
-        initalizationActions,
-      ]
-    );
+    
+    encodedInitParams = await getBaalParams(
+      baal, 
+      multisend, 
+      deploymentConfig, 
+      false, false, 
+      [[weth.address]], 
+      [[shaman.address], true], 
+      [[summoner.address], [shares]], 
+      [[summoner.address], [loot]]
+    )
 
     await baal.setUp(encodedInitParams);
 
@@ -481,3 +492,97 @@ describe("Baal contract", function () {
     });
   });
 });
+
+describe("Baal contract - tribute required", function () {
+  let customConfig = { ...deploymentConfig, PROPOSAL_OFFERING: 69 }
+
+  let baal: Baal;
+  let shamanBaal: Baal;
+  let weth: TestErc20;
+  let multisend: MultiSend;
+
+  let applicant: SignerWithAddress;
+  let summoner: SignerWithAddress;
+  let shaman: SignerWithAddress;
+
+  let proposal: { [key: string]: any };
+
+  let encodedInitParams: any;
+
+  const loot = 500;
+  const shares = 100;
+  const sharesPaused = false;
+  const lootPaused = false;
+
+  beforeEach(async function () {
+    const BaalContract = await ethers.getContractFactory("Baal");
+    const MultisendContract = await ethers.getContractFactory("MultiSend");
+    [summoner, applicant, shaman] = await ethers.getSigners();
+
+    const ERC20 = await ethers.getContractFactory("TestERC20");
+    weth = (await ERC20.deploy("WETH", "WETH", 10000000)) as TestErc20;
+
+    multisend = (await MultisendContract.deploy()) as MultiSend;
+
+    baal = (await BaalContract.deploy()) as Baal;
+    shamanBaal = baal.connect(shaman); // needed to send txns to baal as the shaman
+
+
+    const encodedInitParams = await getBaalParams(
+      baal, 
+      multisend, 
+      customConfig, 
+      false, false, 
+      [[weth.address]], 
+      [[shaman.address], true], 
+      [[summoner.address], [shares]], 
+      [[summoner.address], [loot]]
+    )
+
+    await baal.setUp(encodedInitParams);
+
+    const selfTransferAction = encodeMultiAction(
+      multisend,
+      ["0x"],
+      [baal.address],
+      [BigNumber.from(0)],
+      [0]
+    );
+
+    proposal = {
+      flag: 0,
+      votingPeriod: 175000,
+      account: summoner.address,
+      data: selfTransferAction,
+      details: "all hail baal",
+      expiration: 0,
+      revertOnFailure: true,
+    };
+  });
+
+  describe("submitProposal", function () {
+    it("happy case - tribute is accepted", async function() {
+      const countBefore = await baal.proposalCount();
+
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details),
+        { value: 69 }
+      );
+
+      const countAfter = await baal.proposalCount();
+      expect(countAfter).to.equal(countBefore.add(1));
+    })
+
+    it("require fail - no tribute offered", async function() {
+      expect(
+        baal.submitProposal(
+          proposal.data,
+          proposal.expiration,
+          ethers.utils.id(proposal.details)
+        )
+      ).to.be.revertedWith(revertMessages.submitProposalOffering);
+    })
+  })
+})
