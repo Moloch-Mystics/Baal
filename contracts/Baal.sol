@@ -12,7 +12,6 @@ pragma solidity >=0.8.0;
 import "@gnosis.pm/safe-contracts/contracts/base/Executor.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
 
 import "./LootERC20.sol";
 
@@ -21,87 +20,6 @@ interface ILoot {
     function burn(address account, uint256 amount) external;
     function balanceOf(address account) external view returns (uint256);
     function totalSupply() external view returns (uint256);
-}
-
-/// @title Base64
-/// @author Brecht Devos - <brecht@loopring.org>
-/// @notice Provides a function for encoding some bytes in base64
-library Base64 {
-    string internal constant TABLE =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-    function encode(bytes memory data) internal pure returns (string memory) {
-        if (data.length == 0) return "";
-
-        // load the table into memory
-        string memory table = TABLE;
-
-        // multiply by 4/3 rounded up
-        uint256 encodedLen = 4 * ((data.length + 2) / 3);
-
-        // add some extra buffer at the end required for the writing
-        string memory result = new string(encodedLen + 32);
-
-        assembly {
-            // set the actual output length
-            mstore(result, encodedLen)
-
-            // prepare the lookup table
-            let tablePtr := add(table, 1)
-
-            // input ptr
-            let dataPtr := data
-            let endPtr := add(dataPtr, mload(data))
-
-            // result ptr, jump over length
-            let resultPtr := add(result, 32)
-
-            // run over the input, 3 bytes at a time
-            for {
-
-            } lt(dataPtr, endPtr) {
-
-            } {
-                dataPtr := add(dataPtr, 3)
-
-                // read 3 bytes
-                let input := mload(dataPtr)
-
-                // write 4 characters
-                mstore(
-                    resultPtr,
-                    shl(248, mload(add(tablePtr, and(shr(18, input), 0x3F))))
-                )
-                resultPtr := add(resultPtr, 1)
-                mstore(
-                    resultPtr,
-                    shl(248, mload(add(tablePtr, and(shr(12, input), 0x3F))))
-                )
-                resultPtr := add(resultPtr, 1)
-                mstore(
-                    resultPtr,
-                    shl(248, mload(add(tablePtr, and(shr(6, input), 0x3F))))
-                )
-                resultPtr := add(resultPtr, 1)
-                mstore(
-                    resultPtr,
-                    shl(248, mload(add(tablePtr, and(input, 0x3F))))
-                )
-                resultPtr := add(resultPtr, 1)
-            }
-
-            // padding with '='
-            switch mod(mload(data), 3)
-            case 1 {
-                mstore(sub(resultPtr, 2), shl(240, 0x3d3d))
-            }
-            case 2 {
-                mstore(sub(resultPtr, 1), shl(248, 0x3d))
-            }
-        }
-
-        return result;
-    }
 }
 
 /// @title Baal ';_;'.
@@ -946,105 +864,7 @@ contract Baal is Executor, Initializable {
         ); /*get Baal token balance - 'balanceOf(address)'*/
         max = abi.decode(balanceData, (uint256)); /*decode Baal token balance for calculation*/
     }
-
-    /************
-    NFT FUNCTIONS
-    ************/
-    /// @notice Returns the json data associated with this token ID.
-    /// @param _tokenId The token ID.
-    function tokenURI(uint256 _tokenId)
-        external
-        view
-        virtual
-        returns (string memory uri)
-    {
-        require(_owners[_tokenId] != address(0), "!token");
-        uri = string(_constructTokenURI(_tokenId));
-    }
-
-    function ownerOf(uint256 _tokenId)
-        public
-        view
-        virtual
-        returns (address owner)
-    {
-        owner = _owners[_tokenId];
-        require(owner != address(0), "!token");
-    }
-
-    function tokenId() public view returns (uint256 _tokenId) {
-        _tokenId = uint256(keccak256(abi.encodePacked(msg.sender)));
-        require(_owners[_tokenId] != address(0), "!token");
-    }
-
-    /// @notice Enable member to register Baal NFT metadata.
-    function claim() public {
-        uint256 _tokenId = uint256(keccak256(abi.encodePacked(msg.sender)));
-        require(_owners[_tokenId] == address(0), "claimed");
-
-        Member storage _member = members[msg.sender];
-        require(
-            lootToken.balanceOf(msg.sender) > 0 || balanceOf[msg.sender] > 0,
-            "!shares or loot"
-        );
-        _owners[_tokenId] = msg.sender;
-    }
-
-    /// @notice Constructs the tokenURI, separated out from the public function as its a big function.
-    /// @dev Generates the json data URI and svg data URI that ends up sent when someone requests the tokenURI.
-    /// @param _tokenId the tokenId
-    function _constructTokenURI(uint256 _tokenId)
-        private
-        view
-        returns (string memory uri)
-    {
-        address _address = _owners[_tokenId];
-        Member storage _member = members[_address];
-
-        string memory _nftName = string(abi.encodePacked("Baal ", name));
-
-        string memory _baalMetadataSVGs = string(
-            abi.encodePacked(
-                '<text dominant-baseline="middle" text-anchor="middle" fill="white" x="50%" y="20px">',
-                Strings.toString(balanceOf[_address] / 1 ether),
-                " Shares",
-                "</text>",
-                '<text dominant-baseline="middle" text-anchor="middle" fill="white" x="50%" y="40px">',
-                Strings.toString(lootToken.balanceOf(_address) / 1 ether),
-                " Loot",
-                "</text>"
-            )
-        );
-
-        bytes memory svg = abi.encodePacked(
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet" style="font:14px serif"><rect width="400" height="400" fill="black" />',
-            _baalMetadataSVGs,
-            "</svg>"
-        );
-
-        bytes memory _image = abi.encodePacked(
-            "data:image/svg+xml;base64,",
-            Base64.encode(bytes(svg))
-        );
-
-        uri = string(
-            abi.encodePacked(
-                "data:application/json;base64,",
-                Base64.encode(
-                    bytes(
-                        abi.encodePacked(
-                            '{"name":"',
-                            _nftName,
-                            '", "image":"',
-                            _image,
-                            '", "description": "Illustrious member of Baal. Dynamically generated NFT showing member voting weight"}'
-                        )
-                    )
-                )
-            )
-        );
-    }
-
+    
     /***************
     HELPER FUNCTIONS
     ***************/
