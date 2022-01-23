@@ -12,19 +12,32 @@ pragma solidity >=0.8.0;
 import "@gnosis.pm/safe-contracts/contracts/base/Executor.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-
 import "./LootERC20.sol";
 
 interface ILoot {
+    function setUp(string memory _name, string memory _symbol) external;
     function mint(address recipient, uint256 amount) external;
     function burn(address account, uint256 amount) external;
     function balanceOf(address account) external view returns (uint256);
     function totalSupply() external view returns (uint256);
 }
 
+contract CloneFactory { // implementation of eip-1167 - see https://eips.ethereum.org/EIPS/eip-1167
+    function createClone(address target) internal returns (address result) {
+        bytes20 targetBytes = bytes20(target);
+        assembly {
+            let clone := mload(0x40)
+            mstore(clone, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000)
+            mstore(add(clone, 0x14), targetBytes)
+            mstore(add(clone, 0x28), 0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000)
+            result := create(0, clone, 0x37)
+        }
+    }
+}
+
 /// @title Baal ';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
-contract Baal is Executor, Initializable {
+contract Baal is Executor, Initializable, CloneFactory {
     bool public lootPaused; /*tracks transferability of `loot` economic weight - amendable through 'period'[2] proposal*/
     bool public sharesPaused; /*tracks transferability of erc20 `shares` - amendable through 'period'[2] proposal*/
 
@@ -187,14 +200,15 @@ contract Baal is Executor, Initializable {
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
             string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
-            address _loot,
+            address _lootSingleton,
             address _multisendLibrary, /*address of multisend library*/
             bytes memory _initializationMultisendData /*here you call BaalOnly functions to set up initial shares, loot, shamans, periods, etc.*/
         ) = abi.decode(_initializationParams, (string, string, address, address, bytes));
         name = _name; /*initialize Baal `name` with erc20 accounting*/
         symbol = _symbol; /*initialize Baal `symbol` with erc20 accounting*/
         
-        lootToken = ILoot(_loot);
+        lootToken = ILoot(createClone(_lootSingleton));
+        lootToken.setUp(string(abi.encodePacked(_name, " LOOT")), string(abi.encodePacked(_symbol, "-LOOT"))); /*TODO this naming feels too opinionated*/
 
         multisendLibrary = _multisendLibrary;
 

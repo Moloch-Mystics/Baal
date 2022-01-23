@@ -3,12 +3,13 @@ pragma solidity >=0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol"; //https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
 interface IBaal {
     function lootPaused() external returns (bool);
 }
 
-contract Loot is ERC20 {
+contract Loot is ERC20, Initializable {
     IBaal baal;
 
     modifier baalOnly() {
@@ -16,8 +17,10 @@ contract Loot is ERC20 {
         _;
     }
 
-    constructor(string memory _name, string memory _symbol, address _baal) public ERC20(_name, _symbol) {
-      baal = IBaal(_baal);
+    constructor() ERC20("Template", "T") {} /*Configure template to be unusable*/
+
+    function setUp(string memory _name, string memory _symbol) public {
+        baal = IBaal(msg.sender); /*Configure Baal to setup sender*/
     }
 
     function _beforeTokenTransfer(
