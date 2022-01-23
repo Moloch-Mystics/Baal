@@ -35,7 +35,6 @@ contract Baal is Executor, Initializable {
 
     uint256 public totalSupply; /*counter for total `members` voting `shares` with erc20 accounting*/
 
-    uint32 public flashFeeNumerator; /*tracks 'fee' numerator for {flashLoan} in {flashFee} - e.g., '1 = 0.0001%'*/
     uint32 public gracePeriod; /*time delay after proposal voting period for processing*/
     uint32 public minVotingPeriod; /*minimum period for voting in seconds - amendable through 'period'[2] proposal*/
     uint32 public maxVotingPeriod; /*maximum period for voting in seconds - amendable through 'period'[2] proposal*/
@@ -507,11 +506,6 @@ contract Baal is Executor, Initializable {
         sharesPaused = pauseShares; /*set pause `shares` transfers on sixth `value`*/
     }
 
-    /// @notice Baal-only function to set flash fee numerator.
-    function setFlashFeeNumerator(uint32 _flashFeeNumerator) external baalOnly {
-        flashFeeNumerator = _flashFeeNumerator;
-    }
-
     /// @notice Baal-only function to set shaman status.
     function setShamans(address[] calldata _shamans, bool enabled)
         external
@@ -707,43 +701,6 @@ contract Baal is Executor, Initializable {
         success = true;
     }
 
-    /// @notice Flashloan ability that conforms to `IERC3156FlashLender`, as defined in 'https://eips.ethereum.org/EIPS/eip-3156'.
-    /// @param receiver Address of token receiver that conforms to `IERC3156FlashBorrower` & handles flashloan.
-    /// @param token The loan currency.
-    /// @param amount The amount of tokens lent.
-    /// @param data Arbitrary data structure, intended to contain user-defined parameters.
-    function flashLoan(
-        address receiver,
-        address token,
-        uint256 amount,
-        bytes calldata data
-    ) external returns (bool success) {
-        uint256 fee = flashFee(token, amount);
-        require(fee != 0, "uninitialized");
-
-        _safeTransfer(token, receiver, amount);
-
-        (, bytes memory _flashData) = receiver.call(
-            abi.encodeWithSelector(
-                0x23e30c8b,
-                msg.sender,
-                token,
-                amount,
-                fee,
-                data
-            )
-        ); /*'onFlashLoan(address,address,uint,uint,bytes)'*/
-        bytes32 flashData = abi.decode(_flashData, (bytes32));
-        require(
-            flashData == keccak256("ERC3156FlashBorrower.onFlashLoan"),
-            "Callback failed"
-        ); /*checks flash loan success*/
-
-        _safeTransferFrom(token, receiver, address(this), amount + fee);
-
-        success = true;
-    }
-
     /// @notice Process member burn of `shares` and/or `loot` to claim 'fair share' of `guildTokens`.
     /// @param to Account that receives 'fair share'.
     /// @param lootToBurn Baal pure economic weight to burn.
@@ -844,26 +801,6 @@ contract Baal is Executor, Initializable {
         tokens = guildTokens;
     }
 
-    /// @notice Returns the `fee` to be charged for a flash loan.
-    /// @param amount The sum of tokens lent.
-    /// @return fee The `fee` amount of 'token' to be charged for the loan, on top of the returned principal - uniform in Baal.
-    function flashFee(address, uint256 amount)
-        public
-        view
-        returns (uint256 fee)
-    {
-        fee = (amount * flashFeeNumerator) / 10000; /*Calculate `fee` - precision factor '10000' derived from ERC-3156 'Flash Loan Reference'*/
-    }
-
-    /// @notice Returns the `max` amount of `token` available to be lent.
-    /// @param token The loan currency.
-    /// @return max The `amount` of `token` that can be borrowed.
-    function maxFlashLoan(address token) external view returns (uint256 max) {
-        (, bytes memory balanceData) = token.staticcall(
-            abi.encodeWithSelector(0x70a08231, address(this))
-        ); /*get Baal token balance - 'balanceOf(address)'*/
-        max = abi.decode(balanceData, (uint256)); /*decode Baal token balance for calculation*/
-    }
     
     /***************
     HELPER FUNCTIONS
