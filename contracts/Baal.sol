@@ -379,6 +379,7 @@ contract Baal is Executor, Initializable {
 
         uint96 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
 
+        require(balance > 0, "!member"); /* check that user has shares*/
         require(prop.votingEnds >= block.timestamp, "ended"); /*check voting period has not ended*/
         require(!members[msg.sender].voted[proposal], "voted"); /*check vote not already cast*/
 
@@ -433,6 +434,7 @@ contract Baal is Executor, Initializable {
 
         uint96 balance = getPriorVotes(signatory, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
 
+        require(balance > 0, "!member"); /* check that user has shares*/
         require(prop.votingEnds >= block.timestamp, "ended"); /*check voting period has not ended*/
         require(!members[signatory].voted[proposal], "voted"); /*check vote not already cast*/
 

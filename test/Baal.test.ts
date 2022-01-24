@@ -28,6 +28,10 @@ const revertMessages = {
   submitProposalFlag: "!flag",
   submitVoteTimeEnded: "ended",
   submitVoteVoted: "voted",
+  submitVoteMember: "!member",
+  submitVoteWithSigTimeEnded: "ended",
+  submitVoteWithSigVoted: "voted",
+  submitVoteWithSigMember: "!member",
   sponsorProposalMember: "!member",
   sponsorProposalExists: "!exist",
   sponsorProposalSponsored: "sponsored",
@@ -345,7 +349,7 @@ describe("Baal contract", function () {
     })
   });
 
-  describe.only("submitVote", function () {
+  describe("submitVote", function () {
     beforeEach(async function () {
       await baal.submitProposal(
         proposal.data,
@@ -365,9 +369,11 @@ describe("Baal contract", function () {
         summoner.address,
         prop.votingStarts
       );
-
       expect(priorVotes).to.equal(votes)
       expect(prop.yesVotes).to.equal(votes);
+
+      const summonerData = await baal.members(summoner.address);
+      expect(summonerData.highestIndexYesVote).to.equal(1);
     });
 
     it("happy case - no vote", async function () {
@@ -378,6 +384,9 @@ describe("Baal contract", function () {
         await baal.checkpoints(summoner.address, nCheckpoints.sub(1))
       ).votes;
       expect(prop.noVotes).to.equal(votes);
+
+      const summonerData = await baal.members(summoner.address);
+      expect(summonerData.highestIndexYesVote).to.equal(0);
     });
 
     it("require fail - voting period has ended", async function () {
@@ -391,6 +400,12 @@ describe("Baal contract", function () {
       await baal.submitVote(1, yes);
       expect(baal.submitVote(1, yes)).to.be.revertedWith(
         revertMessages.submitVoteVoted
+      );
+    });
+
+    it("require fail - not a member", async function () {
+      expect(shamanBaal.submitVote(1, yes)).to.be.revertedWith(
+        revertMessages.submitVoteMember
       );
     });
   });
