@@ -82,22 +82,17 @@ describe('Baal contract', function () {
   const yes = true
   const no = false
 
-  async function submitAndProcessProposal(baal: Baal, action: any) {
-    const encodedAction = encodeMultiAction(multisend, [action], [baal.address], [BigNumber.from(0)], [0])
-    await baal.submitProposal(proposal.votingPeriod, encodedAction, proposal.expiration, ethers.utils.id(proposal.details))
-    await baal.submitVote(1, true)
+  async function submitAndProcessProposal(baalAsAddress: Baal, action: any) {
+    const encodedAction = encodeMultiAction(multisend, [action], [baalAsAddress.address], [BigNumber.from(0)], [0])
+    await baalAsAddress.submitProposal(proposal.votingPeriod, encodedAction, proposal.expiration, ethers.utils.id(proposal.details))
+    await baalAsAddress.submitVote(1, true)
     await moveForwardPeriods(2)
-    await baal.processProposal(1, proposal.revertOnFailure)
+    return await baalAsAddress.processProposal(1, proposal.revertOnFailure)
   }
 
   async function enableShaman(shamanToEnable: SignerWithAddress) {
     const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [[shamanToEnable.address], true])
-    await submitAndProcessProposal(baal, enableShamanAction)
-  }
-
-  async function delegateShares(baal: Baal, to: string) {
-    const delegateSharesAction = await baal.interface.encodeFunctionData('delegate', [to])
-    await submitAndProcessProposal(baal, delegateSharesAction)
+    return await submitAndProcessProposal(baal, enableShamanAction)
   }
 
   beforeEach(async function () {
@@ -319,6 +314,49 @@ describe('Baal contract', function () {
         baalAsShaman.burnLoot([summoner.address], [burning])
       ).to.emit(baal, 'TransferLoot').withArgs(summoner.address, zeroAddress, burning)
       expect((await (baal.members(summoner.address))).loot).to.equal(loot - burning)
+    })
+
+    it ('happy case - have shaman mint and burn delegated shares', async function () {
+      const minting = 100 
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(0)
+
+      // mint shares for a separate member than the summoner
+      await baalAsShaman.mintShares([applicant.address], [minting])
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(minting)
+      expect(await baal.delegates(applicant.address)).to.equal(applicant.address)
+      expect(await baal.getCurrentVotes(applicant.address)).to.equal(minting)
+      expect(await baal.getCurrentVotes(summoner.address)).to.equal(shares)
+
+      // submit proposal for member to delegate shares from applicant to the summoner
+      const baalAsApplicant = baal.connect(applicant)
+
+      await expect(
+        baalAsApplicant.delegate(summoner.address)
+      ).to.emit(baal, 'DelegateChanged').withArgs(applicant.address, applicant.address, summoner.address)
+      .to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares, shares + minting)
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(minting)
+      expect(await baal.delegates(applicant.address)).to.equal(summoner.address)
+      expect(await baal.getCurrentVotes(applicant.address)).to.equal(0)
+      expect(await baal.getCurrentVotes(summoner.address)).to.equal(shares + minting)
+
+      // mint shares for the delegator
+      await baalAsShaman.mintShares([applicant.address], [minting])
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(2 * minting)
+      expect(await baal.delegates(applicant.address)).to.equal(summoner.address)
+      expect(await baal.getCurrentVotes(applicant.address)).to.equal(0)
+      expect(await baal.getCurrentVotes(summoner.address)).to.equal(shares + 2 * minting)
+
+      // burn shares for the delegator
+      await baalAsShaman.burnShares([applicant.address], [minting])
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(minting)
+      expect(await baal.delegates(applicant.address)).to.equal(summoner.address)
+      expect(await baal.getCurrentVotes(applicant.address)).to.equal(0)
+      expect(await baal.getCurrentVotes(summoner.address)).to.equal(shares + minting)
     })
   })
 
