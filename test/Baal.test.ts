@@ -27,6 +27,7 @@ const revertMessages = {
   submitProposalArrayMax: "array max",
   submitProposalFlag: "!flag",
   submitVoteTimeEnded: "ended",
+  submitVoteVoted: "voted",
   sponsorProposalMember: "!member",
   sponsorProposalExists: "!exist",
   sponsorProposalSponsored: "sponsored",
@@ -344,7 +345,7 @@ describe("Baal contract", function () {
     })
   });
 
-  describe("submitVote", function () {
+  describe.only("submitVote", function () {
     beforeEach(async function () {
       await baal.submitProposal(
         proposal.data,
@@ -364,6 +365,8 @@ describe("Baal contract", function () {
         summoner.address,
         prop.votingStarts
       );
+
+      expect(priorVotes).to.equal(votes)
       expect(prop.yesVotes).to.equal(votes);
     });
 
@@ -381,6 +384,13 @@ describe("Baal contract", function () {
       await moveForwardPeriods(2);
       expect(baal.submitVote(1, no)).to.be.revertedWith(
         revertMessages.submitVoteTimeEnded
+      );
+    });
+
+    it("require fail - already voted", async function () {
+      await baal.submitVote(1, yes);
+      expect(baal.submitVote(1, yes)).to.be.revertedWith(
+        revertMessages.submitVoteVoted
       );
     });
   });
