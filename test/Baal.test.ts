@@ -105,7 +105,10 @@ const getBaalParams = async function (
     [0, 0, 0, 0, 0]
   )
 
-  return abiCoder.encode(['string', 'string', 'address', 'bytes'], [config.TOKEN_NAME, config.TOKEN_SYMBOL, multisend.address, initalizationActions])
+  return abiCoder.encode(
+    ['string', 'string', 'address', 'address', 'bytes'],
+    [config.TOKEN_NAME, config.TOKEN_SYMBOL, lootSingleton.address, multisend.address, initalizationActions]
+  )
 }
 
 describe('Baal contract', function () {
