@@ -1,4 +1,5 @@
 import { BigNumber } from '@ethersproject/bignumber'
+import { ethers } from 'hardhat'
 import { encodeMultiSend, MetaTransaction } from '@gnosis.pm/safe-contracts'
 import { MultiSend } from './types/MultiSend'
 
@@ -43,4 +44,14 @@ export const decodeMultiAction = (multisend: MultiSend, encoded: string) => {
   }
 
   return transactions
+}
+
+export const hashOperation = (transactions: string): string => {
+  const abiCoder = ethers.utils.defaultAbiCoder
+
+  const encoded = abiCoder.encode(['bytes'], [transactions])
+
+  const hashed = ethers.utils.solidityKeccak256(['bytes'], [encoded])
+
+  return hashed
 }
