@@ -49,9 +49,8 @@ contract Baal is Executor, Initializable, CloneFactory {
     uint256 public totalSupply; /*counter for total `members` voting `shares` with erc20 accounting*/
 
     uint32 public gracePeriod; /*time delay after proposal voting period for processing*/
-    uint32 public minVotingPeriod; /*minimum period for voting in seconds - amendable through 'period'[2] proposal*/
-    uint32 public maxVotingPeriod; /*maximum period for voting in seconds - amendable through 'period'[2] proposal*/
-    uint256 public proposalCount; /*counter for total `proposals` submitted*/
+    uint32 public votingPeriod; /* voting period in seconds - amendable through 'period'[2] proposal*/
+    uint32 public proposalCount; /*counter for total `proposals` submitted*/
     uint256 public proposalOffering; /* non-member proposal offering*/
     uint256 status; /*internal reentrancy check tracking value*/
 
@@ -86,6 +85,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     mapping(uint256 => Proposal) public proposals; /*maps `proposalCount` to struct details*/
     mapping(uint256 => bool) public proposalsPassed; /*maps `proposalCount` to approval status - separated out as struct is deleted, and this value can be used by minion-like contracts*/
     mapping(address => bool) public shamans; /*maps contracts approved in 'whitelist'[3] proposals for {memberAction} that mint or burn `shares`*/
+    mapping(address => bool) public guildTokensEnabled; /*maps guild token addresses -> enabled status (prevents duplicates in guildTokens[]) */
 
     mapping(uint256 => address) private _owners; /*maps token ID to owner*/
 
@@ -93,8 +93,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         bool lootPaused,
         bool sharesPaused,
         uint256 gracePeriod,
-        uint256 minVotingPeriod,
-        uint256 maxVotingPeriod,
+        uint256 votingPeriod,
         uint256 proposalOffering,
         string name,
         string symbol,
@@ -183,7 +182,7 @@ contract Baal is Executor, Initializable, CloneFactory {
 
     struct Proposal {
         /*Baal proposal details*/
-        uint32 votingPeriod; /*time for voting in seconds*/
+        uint32 id; /*id of this proposal, used in existence checks (increments from 1)*/
         uint32 votingStarts; /*starting time for proposal in seconds since unix epoch*/
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
         uint256 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
@@ -228,6 +227,9 @@ contract Baal is Executor, Initializable, CloneFactory {
             "call failure"
         );
 
+        require(totalSupply > 0, "shares != 0");
+
+
         status = 1; /*initialize 'reentrancy guard' status*/
     }
 
@@ -235,32 +237,27 @@ contract Baal is Executor, Initializable, CloneFactory {
     PROPOSAL FUNCTIONS
     *****************/
     /// @notice Submit proposal to Baal `members` for approval within given voting period.
-    /// @param votingPeriod Voting period in seconds.
     /// @param proposalData Multisend encoded transactions or proposal data
     /// @param details Context for proposal.
     /// @return proposal Count for submitted proposal.
     function submitProposal(
-        uint32 votingPeriod,
         bytes calldata proposalData,
         uint256 expiration,
         string calldata details
-    ) external payable nonReentrant returns (uint256 proposal) {
-        require(
-            minVotingPeriod <= votingPeriod && votingPeriod <= maxVotingPeriod,
-            "!votingPeriod"
-        ); /*check voting period is within Baal bounds*/
-
-        require(msg.value == proposalOffering, "Baal requires an offering");
-
-        bool selfSponsor; /*plant sponsor flag*/
-        if (balanceOf[msg.sender] != 0) selfSponsor = true; /*if a member, self-sponsor*/
+    ) external payable nonReentrant returns (uint256) {
+        bool selfSponsor = false; /*plant sponsor flag*/
+        if (balanceOf[msg.sender] != 0) {
+            selfSponsor = true; /*if a member, self-sponsor*/
+        } else {
+            require(msg.value == proposalOffering, "Baal requires an offering");
+        }
 
         bytes32 proposalDataHash = hashOperation(proposalData);
 
         unchecked {
             proposalCount++; /*increment proposal counter*/
             proposals[proposalCount] = Proposal( /*push params into proposal struct - start voting period timer if member submission*/
-                votingPeriod,
+                proposalCount,
                 selfSponsor ? uint32(block.timestamp) : 0,
                 selfSponsor ? uint32(block.timestamp) + votingPeriod : 0,
                 0,
@@ -273,13 +270,15 @@ contract Baal is Executor, Initializable, CloneFactory {
         }
 
         emit SubmitProposal(
-            proposal,
+            proposalCount,
             proposalDataHash,
             votingPeriod,
             proposalData,
             expiration,
             details
         ); /*emit event reflecting proposal submission*/
+
+        return proposalCount;
     }
 
     /// @notice Sponsor proposal to Baal `members` for approval within voting period.
@@ -288,13 +287,13 @@ contract Baal is Executor, Initializable, CloneFactory {
         Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
 
         require(balanceOf[msg.sender] != 0, "!member"); /*check 'membership' - required to sponsor proposal*/
-        require(prop.votingPeriod != 0, "!exist"); /*check proposal existence*/
+        require(prop.id != 0, "!exist"); /*check proposal existence*/
         require(prop.votingStarts == 0, "sponsored"); /*check proposal not already sponsored*/
 
         prop.votingStarts = uint32(block.timestamp);
 
         unchecked {
-            prop.votingEnds = uint32(block.timestamp) + prop.votingPeriod;
+            prop.votingEnds = uint32(block.timestamp) + votingPeriod;
         }
 
         emit SponsorProposal(msg.sender, proposal, block.timestamp);
@@ -308,6 +307,7 @@ contract Baal is Executor, Initializable, CloneFactory {
 
         uint256 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
 
+        require(balance > 0, "!member"); /* check that user has shares*/
         require(prop.votingEnds >= block.timestamp, "ended"); /*check voting period has not ended*/
         require(!members[msg.sender].voted[proposal], "voted"); /*check vote not already cast*/
 
@@ -362,6 +362,7 @@ contract Baal is Executor, Initializable, CloneFactory {
 
         uint256 balance = getPriorVotes(signatory, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
 
+        require(balance > 0, "!member"); /* check that user has shares*/
         require(prop.votingEnds >= block.timestamp, "ended"); /*check voting period has not ended*/
         require(!members[signatory].voted[proposal], "voted"); /*check vote not already cast*/
 
@@ -487,19 +488,17 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @notice Baal-only function to change periods.
     function setPeriods(bytes memory _periodData) external baalOrShamanOnly {
         (
-            uint32 min,
-            uint32 max,
+            uint32 voting,
             uint32 grace,
             uint256 newOffering,
             bool pauseLoot,
             bool pauseShares
         ) = abi.decode(
                 _periodData,
-                (uint32, uint32, uint32, uint256, bool, bool)
+                (uint32, uint32, uint256, bool, bool)
             );
-        if (min != 0) minVotingPeriod = min; /*if positive, reset min. voting periods to first `value`*/
-        if (max != 0) maxVotingPeriod = max; /*if positive, reset max. voting periods to second `value`*/
-        if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to third `value`*/
+        if (voting != 0) votingPeriod = voting; /*if positive, reset min. voting periods to first `value`*/
+        if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to second `value`*/
         proposalOffering = newOffering; /*set new proposal offering amount */
         lootPaused = pauseLoot; /*set pause `loot` transfers on fifth `value`*/
         sharesPaused = pauseShares; /*set pause `shares` transfers on sixth `value`*/
@@ -518,8 +517,14 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @notice Baal-only function to whitelist guildToken.
     function setGuildTokens(address[] calldata _tokens) external baalOrShamanOnly {
         for (uint256 i; i < _tokens.length; i++) {
-            if (guildTokens.length != MAX_GUILD_TOKEN_COUNT)
-                guildTokens.push(_tokens[i]); /*push account to `guildTokens` array if within 'MAX'*/
+            address token = _tokens[i];
+            if (guildTokensEnabled[token]) {
+                continue; // prevent duplicate tokens
+            }
+
+            if (guildTokens.length < MAX_GUILD_TOKEN_COUNT)
+                guildTokens.push(token); /*push account to `guildTokens` array if within 'MAX'*/
+                guildTokensEnabled[token] = true;
         }
     }
 
@@ -529,8 +534,11 @@ contract Baal is Executor, Initializable, CloneFactory {
         baalOrShamanOnly
     {
         for (uint256 i; i < _tokenIndexes.length; i++) {
+            address token = guildTokens[_tokenIndexes[i]];
+            guildTokensEnabled[token] = false; // disable the token
             guildTokens[_tokenIndexes[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
             guildTokens.pop(); /*pop account from `guildTokens` array*/
+            
         }
     }
 
@@ -662,6 +670,7 @@ contract Baal is Executor, Initializable, CloneFactory {
 
         unchecked {
             balanceOf[to] += amount;
+
         }
 
         _moveDelegates(delegates[msg.sender], delegates[to], amount);
