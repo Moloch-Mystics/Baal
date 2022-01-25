@@ -491,6 +491,34 @@ describe('Baal contract', function () {
       ).to.emit(baal, 'ProcessProposal').withArgs(1)
 
       expect(await baal.balanceOf(summoner.address)).to.equal(shares - burning)
+    })
+
+    it('happy case - mint loot', async function () {
+      const minting = 100
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(0)
+
+      const mintSharesAction = await baal.interface.encodeFunctionData('mintLoot', [[applicant.address], [minting]])
+      
+      await expect(
+        submitAndProcessProposal(baal, mintSharesAction)
+      ).to.emit(baal, 'ProcessProposal').withArgs(1)
+
+      expect((await (baal.members(applicant.address))).loot).to.equal(minting)
+    })
+
+    it('happy case - burn loot', async function () {
+      const burning = 100
+
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot)
+
+      const burnLootAction = await baal.interface.encodeFunctionData('burnLoot', [[summoner.address], [burning]])
+      
+      await expect(
+        submitAndProcessProposal(baal, burnLootAction)
+      ).to.emit(baal, 'ProcessProposal').withArgs(1)
+
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot - burning)
 
     })
   })
