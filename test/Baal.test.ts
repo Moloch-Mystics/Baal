@@ -235,7 +235,7 @@ describe('Baal contract', function () {
     })
   })
 
-  describe.only('shaman actions - permission level 7 (full)', function () {
+  describe('shaman actions - permission level 7 (full)', function () {
     it('setAdminConfig', async function() {
       await shamanBaal.setAdminConfig(true, true);
       expect(await shamanBaal.sharesPaused()).to.equal(true)
@@ -263,6 +263,7 @@ describe('Baal contract', function () {
     })
 
     it('setGuildTokens', async function () {
+      // TODO attempt to exceed max guild tokens count -> make max guild tokens a param
       const toke = (await ERC20.deploy('TOKE', 'TOKE', 10000000)) as TestErc20
       await shamanBaal.setGuildTokens([toke.address, toke.address]) // attempt to duplicate
       const guildTokens = await shamanBaal.getGuildTokens()

@@ -54,9 +54,9 @@ contract Baal is Executor, Initializable, CloneFactory {
     uint256 public proposalOffering; /* non-member proposal offering*/
     uint256 status; /*internal reentrancy check tracking value*/
 
-    bool public adminConfigLock;
-    bool public sharesConfigLock;
-    bool public governanceConfigLock;
+    bool public adminLock; /* once set to true, no new admin roles can be assigned to shaman */
+    bool public managerLock; /* once set to true, no new manager roles can be assigned to shaman */
+    bool public governorLock; /* once set to true, no new governor roles can be assigned to shaman */
 
     string public name; /*'name' for erc20 `shares` accounting*/
     string public symbol; /*'symbol' for erc20 `shares` accounting*/
@@ -573,8 +573,24 @@ contract Baal is Executor, Initializable, CloneFactory {
     {
         require(_shamans.length == _permissions.length, "!array parity"); /*check array lengths match*/
         for (uint256 i; i < _shamans.length; i++) {
-            shamans[_shamans[i]] = _permissions[i];
+            uint256 permission = _permissions[i];
+            if (adminLock) require(permission != 1 && permission != 3 && permission != 5 && permission != 7, "admin lock");
+            if (managerLock) require(permission != 2 && permission != 3 && permission != 6 && permission != 7, "manager lock");
+            if (governorLock) require(permission != 4 && permission != 5 && permission != 6 && permission != 7, "governor lock");
+            shamans[_shamans[i]] = permission;
         }
+    }
+
+    function lockAdmin() external baalOnly {
+        adminLock = true;
+    }
+
+    function lockManager() external baalOnly {
+        managerLock = true;
+    }
+
+    function lockGovernor() external baalOnly {
+        governorLock = true;
     }
 
     /*******************
