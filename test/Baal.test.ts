@@ -474,7 +474,7 @@ describe('Baal contract', function () {
       
       await expect(
         submitAndProcessProposal(baal, mintSharesAction)
-      ).to.emit(baal, 'ProcessProposal')
+      ).to.emit(baal, 'ProcessProposal').withArgs(1)
 
       expect(await baal.balanceOf(applicant.address)).to.equal(minting)
     })
