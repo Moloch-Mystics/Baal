@@ -82,12 +82,12 @@ describe('Baal contract', function () {
   const yes = true
   const no = false
 
-  async function submitAndProcessProposal(baalAsAddress: Baal, action: any) {
+  async function submitAndProcessProposal(baalAsAddress: Baal, action: any, proposalIndex = 1) {
     const encodedAction = encodeMultiAction(multisend, [action], [baalAsAddress.address], [BigNumber.from(0)], [0])
     await baalAsAddress.submitProposal(proposal.votingPeriod, encodedAction, proposal.expiration, ethers.utils.id(proposal.details))
     await baalAsAddress.submitVote(1, true)
     await moveForwardPeriods(2)
-    return await baalAsAddress.processProposal(1, proposal.revertOnFailure)
+    return await baalAsAddress.processProposal(proposalIndex, proposal.revertOnFailure)
   }
 
   async function enableShaman(shamanToEnable: SignerWithAddress) {
