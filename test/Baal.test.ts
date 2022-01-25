@@ -331,7 +331,7 @@ describe('Baal contract', function () {
       expect(await baal.getCurrentVotes(applicant.address)).to.equal(minting)
       expect(await baal.getCurrentVotes(summoner.address)).to.equal(shares)
 
-      // submit proposal for member to delegate shares from applicant to the summoner
+      // delegate shares from applicant to the summoner
       const baalAsApplicant = baal.connect(applicant)
 
       await expect(
