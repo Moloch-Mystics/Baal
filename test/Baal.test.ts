@@ -410,7 +410,7 @@ describe("Baal contract", function () {
     });
   });
 
-  describe("processProposal", function () {
+  describe.only("processProposal", function () {
     it("happy case yes wins", async function () {
       const beforeProcessed = await baal.proposals(1);
       await baal.submitProposal(
@@ -423,6 +423,7 @@ describe("Baal contract", function () {
       await baal.processProposal(1, proposal.revertOnFailure, proposal.data);
       const afterProcessed = await baal.proposals(1);
       expect(afterProcessed).to.deep.equal(beforeProcessed);
+      /* TODO test that execution happened*/
       expect(await baal.proposalsPassed(1)).to.equal(true);
     });
 
@@ -438,6 +439,7 @@ describe("Baal contract", function () {
       await baal.processProposal(1, proposal.revertOnFailure, proposal.data);
       const afterProcessed = await baal.proposals(1);
       expect(afterProcessed).to.deep.equal(beforeProcessed);
+      /* TODO test that execution was skipped*/
       expect(await baal.proposalsPassed(1)).to.equal(false);
     });
 
@@ -453,7 +455,7 @@ describe("Baal contract", function () {
       ).to.be.revertedWith("!exist");
     });
 
-    it("require fail - voting period has not ended", async function () {
+    it("require fail - prev proposal not processed", async function () {
       await baal.submitProposal(
         proposal.data,
         proposal.expiration,
