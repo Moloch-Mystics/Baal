@@ -64,6 +64,7 @@ const deploymentConfig = {
 describe('Baal contract', function () {
   let baal: Baal
   let baalAsShaman: Baal
+  let ERC20Factory: any
   let weth: TestErc20
   let shaman: RageQuitBank
   let multisend: MultiSend
@@ -101,8 +102,8 @@ describe('Baal contract', function () {
     const MultisendContract = await ethers.getContractFactory('MultiSend')
     ;[summoner, applicant, signingShaman] = await ethers.getSigners()
 
-    const ERC20 = await ethers.getContractFactory('TestERC20')
-    weth = (await ERC20.deploy('WETH', 'WETH', 10000000)) as TestErc20
+    ERC20Factory = await ethers.getContractFactory('TestERC20')
+    weth = (await ERC20Factory.deploy('WETH', 'WETH', 10000000)) as TestErc20
 
     shaman = (await ShamanContract.deploy()) as RageQuitBank
 
@@ -521,6 +522,29 @@ describe('Baal contract', function () {
       await setShamans([applicant], false, proposalIndex++)
 
       expect (await baal.shamans(applicant.address)).to.be.false
+    })
+
+    it('happy case - set tokens', async function () {
+      expect(await baal.getGuildTokens()).to.eql([weth.address])
+
+      const chili = (await ERC20Factory.deploy('CHILI', 'CHILI', 10000000)) as TestErc20
+
+      const addChiliTokenAction = await baal.interface.encodeFunctionData('setGuildTokens', [[chili.address]])
+
+      await submitAndProcessProposal(baal, addChiliTokenAction)
+
+      expect(await baal.getGuildTokens()).to.eql([weth.address, chili.address])
+    })
+
+    it('happy case - unset tokens', async function () {
+      expect(await baal.getGuildTokens()).to.eql([weth.address])
+
+      const removeWethAction = await baal.interface.encodeFunctionData('unsetGuildTokens', [[0]])
+
+      await submitAndProcessProposal(baal, removeWethAction)
+
+      expect(await baal.getGuildTokens()).to.eql([])
+
 
     })
   })
