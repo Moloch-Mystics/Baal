@@ -90,8 +90,8 @@ describe('Baal contract', function () {
     return await baalAsAddress.processProposal(proposalIndex, proposal.revertOnFailure)
   }
 
-  async function enableShaman(shamanToEnable: SignerWithAddress) {
-    const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [[shamanToEnable.address], true])
+  async function setShamans(shamansToEnable: [SignerWithAddress]) {
+    const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [shamansToEnable.map(a => a.address), true])
     return await submitAndProcessProposal(baal, enableShamanAction)
   }
 
@@ -236,7 +236,7 @@ describe('Baal contract', function () {
     })
 
     it('sad case - minting and burning array parity', async function () {
-      await enableShaman(applicant)
+      await setShamans([applicant])
       const baalAsApplicant = await baal.connect(applicant)
       
       await expect(
@@ -275,7 +275,7 @@ describe('Baal contract', function () {
     it('happy case - allows a proposal to enable a shaman', async function () {
       expect(await baal.shamans(summoner.address)).to.be.false
 
-      await enableShaman(summoner)
+      await setShamans([summoner])
 
       expect(await baal.shamans(summoner.address)).to.be.true
     })
