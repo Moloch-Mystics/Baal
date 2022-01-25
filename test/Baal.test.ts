@@ -11,6 +11,7 @@ import { BigNumber } from '@ethersproject/bignumber'
 import { buildContractCall } from '@gnosis.pm/safe-contracts'
 import { MultiSend } from '../src/types/MultiSend'
 import { ContractFactory } from 'ethers'
+import { ConfigExtender } from 'hardhat/types'
 
 use(solidity)
 
@@ -37,6 +38,7 @@ const revertMessages = {
   sponsorProposalExists: '!exist',
   sponsorProposalSponsored: 'sponsored',
   proposalMisnumbered: '!exist',
+  unsetGuildTokensLastToken: 'reverted with panic code 0x32 (Array accessed at an out-of-bounds or negative index)'
 }
 
 const zeroAddress = '0x0000000000000000000000000000000000000000'
@@ -65,6 +67,8 @@ const deploymentConfig = {
   TOKEN_SYMBOL: 'WETH',
 }
 
+const abiCoder = ethers.utils.defaultAbiCoder
+
 const getBaalParams = async function (
   baal: Baal,
   multisend: MultiSend,
@@ -82,8 +86,6 @@ const getBaalParams = async function (
   shares: [string[], number[]],
   loots: [string[], number[]]
 ) {
-  const abiCoder = ethers.utils.defaultAbiCoder
-
   const governanceConfig = abiCoder.encode(
     ['uint32', 'uint32', 'uint256'],
     [config.VOTING_PERIOD_IN_SECONDS, config.GRACE_PERIOD_IN_SECONDS, config.PROPOSAL_OFFERING]
@@ -115,6 +117,7 @@ describe('Baal contract', function () {
   let baal: Baal
   let lootSingleton: Loot
   let LootFactory: ContractFactory
+  let ERC20: ContractFactory
   let lootToken: Loot
   let shamanBaal: Baal
   let weth: TestErc20
@@ -146,7 +149,7 @@ describe('Baal contract', function () {
     const MultisendContract = await ethers.getContractFactory('MultiSend')
     ;[summoner, applicant, shaman] = await ethers.getSigners()
 
-    const ERC20 = await ethers.getContractFactory('TestERC20')
+    ERC20 = await ethers.getContractFactory('TestERC20')
     weth = (await ERC20.deploy('WETH', 'WETH', 10000000)) as TestErc20
 
     multisend = (await MultisendContract.deploy()) as MultiSend
@@ -232,7 +235,13 @@ describe('Baal contract', function () {
     })
   })
 
-  describe('shaman actions', function () {
+  describe.only('shaman actions - permission level 7 (full)', function () {
+    it('setAdminConfig', async function() {
+      await shamanBaal.setAdminConfig(true, true);
+      expect(await shamanBaal.sharesPaused()).to.equal(true)
+      expect(await shamanBaal.lootPaused()).to.equal(true)
+    })
+
     it('mint shares', async function () {
       await shamanBaal.mintShares([summoner.address], [69])
       expect(await shamanBaal.balanceOf(summoner.address)).to.equal(169)
@@ -251,6 +260,39 @@ describe('Baal contract', function () {
     it('burn loot', async function () {
       await shamanBaal.burnLoot([summoner.address], [69])
       expect(await lootToken.balanceOf(summoner.address)).to.equal(431)
+    })
+
+    it('setGuildTokens', async function () {
+      const toke = (await ERC20.deploy('TOKE', 'TOKE', 10000000)) as TestErc20
+      await shamanBaal.setGuildTokens([toke.address, toke.address]) // attempt to duplicate
+      const guildTokens = await shamanBaal.getGuildTokens()
+      expect(guildTokens[0]).to.be.equal(weth.address)
+      expect(guildTokens[1]).to.be.equal(toke.address)
+      expect(guildTokens.length).to.be.equal(2) // checks no duplicates
+      expect(await baal.guildTokensEnabled(weth.address)).to.be.equal(true)
+      expect(await baal.guildTokensEnabled(toke.address)).to.be.equal(true)
+    })
+
+    it('unsetGuildTokens', async function () {
+      // TODO, try in various orders (e.g. [1,2,3,4] - remove 1 and 3)
+      await shamanBaal.unsetGuildTokens([0])
+      const guildTokensAfter = await shamanBaal.getGuildTokens()
+      expect(guildTokensAfter.length).to.be.equal(0)
+    })
+
+    it('setGovernanceConfig', async function() {
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256'],
+        [10, 20, 50]
+      )
+
+      await shamanBaal.setGovernanceConfig(governanceConfig)
+      const voting = await baal.votingPeriod()
+      const grace = await baal.gracePeriod()
+      const offering = await baal.proposalOffering()
+      expect(voting).to.be.equal(10)
+      expect(grace).to.be.equal(20)
+      expect(offering).to.be.equal(50)
     })
   })
 
