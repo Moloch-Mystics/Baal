@@ -263,7 +263,6 @@ describe('Baal contract', function () {
     })
 
     it('setGuildTokens', async function () {
-      // TODO attempt to exceed max guild tokens count -> make max guild tokens a param
       const toke = (await ERC20.deploy('TOKE', 'TOKE', 10000000)) as TestErc20
       await shamanBaal.setGuildTokens([toke.address, toke.address]) // attempt to duplicate
       const guildTokens = await shamanBaal.getGuildTokens()

@@ -42,7 +42,6 @@ contract Baal is Executor, Initializable, CloneFactory {
     bool public sharesPaused; /*tracks transferability of erc20 `shares` - amendable through 'period'[2] proposal*/
 
     uint8 public constant decimals = 18; /*unit scaling factor in erc20 `shares` accounting - '18' is default to match ETH & common erc20s*/
-    uint16 constant MAX_GUILD_TOKEN_COUNT = 400; /*maximum number of whitelistable tokens subject to {ragequit}*/
 
     ILoot public lootToken; /*Sub ERC20 for loot mgmt*/
 
@@ -534,9 +533,8 @@ contract Baal is Executor, Initializable, CloneFactory {
                 continue; // prevent duplicate tokens
             }
 
-            if (guildTokens.length < MAX_GUILD_TOKEN_COUNT)
-                guildTokens.push(token); /*push account to `guildTokens` array if within 'MAX'*/
-                guildTokensEnabled[token] = true;
+            guildTokens.push(token); /*push account to `guildTokens` array*/
+            guildTokensEnabled[token] = true;
         }
     }
 
