@@ -478,6 +478,21 @@ describe('Baal contract', function () {
 
       expect(await baal.balanceOf(applicant.address)).to.equal(minting)
     })
+
+    it('happy case - burn shares', async function () {
+      const burning = 100
+
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares)
+
+      const burnSharesAction = await baal.interface.encodeFunctionData('burnShares', [[summoner.address], [burning]])
+      
+      await expect(
+        submitAndProcessProposal(baal, burnSharesAction)
+      ).to.emit(baal, 'ProcessProposal').withArgs(1)
+
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares - burning)
+
+    })
   })
 
   describe('ragequit', function () {
