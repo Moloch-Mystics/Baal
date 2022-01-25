@@ -85,14 +85,14 @@ describe('Baal contract', function () {
   async function submitAndProcessProposal(baalAsAddress: Baal, action: any, proposalIndex = 1) {
     const encodedAction = encodeMultiAction(multisend, [action], [baalAsAddress.address], [BigNumber.from(0)], [0])
     await baalAsAddress.submitProposal(proposal.votingPeriod, encodedAction, proposal.expiration, ethers.utils.id(proposal.details))
-    await baalAsAddress.submitVote(1, true)
+    await baalAsAddress.submitVote(proposalIndex, true)
     await moveForwardPeriods(2)
     return await baalAsAddress.processProposal(proposalIndex, proposal.revertOnFailure)
   }
 
-  async function setShamans(shamansToEnable: [SignerWithAddress]) {
-    const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [shamansToEnable.map(a => a.address), true])
-    return await submitAndProcessProposal(baal, enableShamanAction)
+  async function setShamans(shamansToEnable: SignerWithAddress[], enable: boolean, proposalIndex = 1) {
+    const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [shamansToEnable.map(a => a.address), enable])
+    return await submitAndProcessProposal(baal, enableShamanAction, proposalIndex)
   }
 
   beforeEach(async function () {
@@ -236,48 +236,37 @@ describe('Baal contract', function () {
     })
 
     it('sad case - minting and burning array parity', async function () {
-      await setShamans([applicant])
-      const baalAsApplicant = await baal.connect(applicant)
-      
       await expect(
-        baalAsApplicant.mintShares([summoner.address, applicant.address], [0])
+        baalAsShaman.mintShares([summoner.address, applicant.address], [0])
       ).to.be.revertedWith(revertMessages.arrayParity)
 
       await expect(
-        baalAsApplicant.burnShares([summoner.address, applicant.address], [0])
+        baalAsShaman.burnShares([summoner.address, applicant.address], [0])
       ).to.be.revertedWith(revertMessages.arrayParity)
 
       await expect(
-        baalAsApplicant.mintLoot([summoner.address, applicant.address], [0])
+        baalAsShaman.mintLoot([summoner.address, applicant.address], [0])
       ).to.be.revertedWith(revertMessages.arrayParity)
 
       await expect(
-        baalAsApplicant.burnLoot([summoner.address, applicant.address], [0])
+        baalAsShaman.burnLoot([summoner.address, applicant.address], [0])
       ).to.be.revertedWith(revertMessages.arrayParity)
 
       await expect(
-        baalAsApplicant.mintShares([summoner.address], [0, 100])
+        baalAsShaman.mintShares([summoner.address], [0, 100])
       ).to.be.revertedWith(revertMessages.arrayParity)
 
       await expect(
-        baalAsApplicant.burnShares([summoner.address], [0, 100])
+        baalAsShaman.burnShares([summoner.address], [0, 100])
       ).to.be.revertedWith(revertMessages.arrayParity)
 
       await expect(
-        baalAsApplicant.mintLoot([summoner.address], [0, 100])
+        baalAsShaman.mintLoot([summoner.address], [0, 100])
       ).to.be.revertedWith(revertMessages.arrayParity)
 
       await expect(
-        baalAsApplicant.burnLoot([summoner.address], [0, 100])
+        baalAsShaman.burnLoot([summoner.address], [0, 100])
       ).to.be.revertedWith(revertMessages.arrayParity)
-    })
-
-    it('happy case - allows a proposal to enable a shaman', async function () {
-      expect(await baal.shamans(summoner.address)).to.be.false
-
-      await setShamans([summoner])
-
-      expect(await baal.shamans(summoner.address)).to.be.true
     })
 
     it('happy case - allows a shaman to mint shares', async function () {
@@ -519,6 +508,19 @@ describe('Baal contract', function () {
       ).to.emit(baal, 'ProcessProposal').withArgs(1)
 
       expect((await (baal.members(summoner.address))).loot).to.equal(loot - burning)
+    })
+
+    it('happy case - set and remove shamans', async function () {
+      var proposalIndex = 1;
+      expect(await baal.shamans(applicant.address)).to.be.false
+
+      await setShamans([applicant], true, proposalIndex++)
+
+      expect(await baal.shamans(applicant.address)).to.be.true
+
+      await setShamans([applicant], false, proposalIndex++)
+
+      expect (await baal.shamans(applicant.address)).to.be.false
 
     })
   })
