@@ -347,7 +347,7 @@ describe('Baal contract', function () {
       // mint shares for the delegator
       await expect(
         baalAsShaman.mintShares([applicant.address], [minting])
-      ).to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares + 2 * minting)
+      ).to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares + minting, shares + 2 * minting)
 
       expect(await baal.balanceOf(applicant.address)).to.equal(2 * minting)
       expect(await baal.delegates(applicant.address)).to.equal(summoner.address)
