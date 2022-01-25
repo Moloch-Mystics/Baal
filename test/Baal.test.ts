@@ -464,6 +464,22 @@ describe('Baal contract', function () {
     })
   })
 
+  describe('test all actions callable via proposal', function () {
+    it('happy case - mint shares', async function () {
+      const minting = 100
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(0)
+
+      const mintSharesAction = await baal.interface.encodeFunctionData('mintShares', [[applicant.address], [minting]])
+      
+      await expect(
+        submitAndProcessProposal(baal, mintSharesAction)
+      ).to.emit(baal, 'ProcessProposal')
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(minting)
+    })
+  })
+
   describe('ragequit', function () {
     beforeEach(async function () {
       await baal.submitProposal(proposal.votingPeriod, proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
