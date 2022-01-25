@@ -214,7 +214,7 @@ describe('Baal contract', function () {
     })
   })
 
-  describe.only('shaman actions', function () {
+  describe('shaman actions', function () {
     it ('sad case - shaman is not whitelisted', async function (){
       expect(await baal.shamans(summoner.address)).to.be.false
       
