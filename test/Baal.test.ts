@@ -76,21 +76,21 @@ const getBaalParams = async function (
     TOKEN_NAME: any
     TOKEN_SYMBOL: any
   },
-  lootPaused: boolean,
-  sharesPaused: boolean,
+  adminConfig: [boolean, boolean],
   tokens: [string[]],
-  shamans: [string[], boolean],
+  shamans: [string[], number[]],
   shares: [string[], number[]],
   loots: [string[], number[]]
 ) {
   const abiCoder = ethers.utils.defaultAbiCoder
 
-  const periods = abiCoder.encode(
-    ['uint32', 'uint32', 'uint256', 'bool', 'bool'],
-    [config.VOTING_PERIOD_IN_SECONDS, config.GRACE_PERIOD_IN_SECONDS, config.PROPOSAL_OFFERING, lootPaused, sharesPaused]
+  const governanceConfig = abiCoder.encode(
+    ['uint32', 'uint32', 'uint256'],
+    [config.VOTING_PERIOD_IN_SECONDS, config.GRACE_PERIOD_IN_SECONDS, config.PROPOSAL_OFFERING]
   )
 
-  const setPeriods = await baal.interface.encodeFunctionData('setPeriods', [periods])
+  const setAdminConfig = await baal.interface.encodeFunctionData('setAdminConfig', adminConfig)
+  const setGovernanceConfig = await baal.interface.encodeFunctionData('setGovernanceConfig', [governanceConfig])
   const setGuildTokens = await baal.interface.encodeFunctionData('setGuildTokens', tokens)
   const setShaman = await baal.interface.encodeFunctionData('setShamans', shamans)
   const mintShares = await baal.interface.encodeFunctionData('mintShares', shares)
@@ -99,10 +99,10 @@ const getBaalParams = async function (
 
   const initalizationActions = encodeMultiAction(
     multisend,
-    [setPeriods, setGuildTokens, setShaman, mintShares, mintLoot],
-    [baal.address, baal.address, baal.address, baal.address, baal.address],
-    [BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0)],
-    [0, 0, 0, 0, 0]
+    [setAdminConfig, setGovernanceConfig, setGuildTokens, setShaman, mintShares, mintLoot],
+    [baal.address, baal.address, baal.address, baal.address, baal.address, baal.address],
+    [BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0)],
+    [0, 0, 0, 0, 0, 0]
   )
 
   return abiCoder.encode(
@@ -159,10 +159,9 @@ describe('Baal contract', function () {
       multisend,
       lootSingleton,
       deploymentConfig,
-      false,
-      false,
+      [sharesPaused, lootPaused],
       [[weth.address]],
-      [[shaman.address], true],
+      [[shaman.address], [7]],
       [[summoner.address], [shares]],
       [[summoner.address], [loot]]
     )
@@ -213,7 +212,7 @@ describe('Baal contract', function () {
       expect(sharesPaused).to.be.false
 
       const shamans = await baal.shamans(shaman.address)
-      expect(shamans).to.be.true
+      expect(shamans).to.be.equal(7)
 
       const guildTokens = await baal.getGuildTokens()
       expect(guildTokens[0]).to.equal(weth.address)
@@ -367,7 +366,7 @@ describe('Baal contract', function () {
     });
   });
 
-  describe.only("processProposal", function () {
+  describe("processProposal", function () {
     it("happy case yes wins", async function () {
       const beforeProcessed = await baal.proposals(1);
       await baal.submitProposal(
@@ -573,10 +572,9 @@ describe('Baal contract - tribute required', function () {
       multisend,
       lootSingleton,
       customConfig,
-      false,
-      false,
+      [sharesPaused, lootPaused],
       [[weth.address]],
-      [[shaman.address], true],
+      [[shaman.address], [7]],
       [[summoner.address], [shares]],
       [[summoner.address], [loot]]
     )

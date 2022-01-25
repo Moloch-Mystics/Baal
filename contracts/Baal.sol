@@ -54,6 +54,10 @@ contract Baal is Executor, Initializable, CloneFactory {
     uint256 public proposalOffering; /* non-member proposal offering*/
     uint256 status; /*internal reentrancy check tracking value*/
 
+    bool public adminConfigLock;
+    bool public sharesConfigLock;
+    bool public governanceConfigLock;
+
     string public name; /*'name' for erc20 `shares` accounting*/
     string public symbol; /*'symbol' for erc20 `shares` accounting*/
 
@@ -84,10 +88,20 @@ contract Baal is Executor, Initializable, CloneFactory {
     mapping(address => Member) public members; /*maps `members` accounts to struct details*/
     mapping(uint256 => Proposal) public proposals; /*maps `proposalCount` to struct details*/
     mapping(uint256 => bool) public proposalsPassed; /*maps `proposalCount` to approval status - separated out as struct is deleted, and this value can be used by minion-like contracts*/
-    mapping(address => bool) public shamans; /*maps contracts approved in 'whitelist'[3] proposals for {memberAction} that mint or burn `shares`*/
     mapping(address => bool) public guildTokensEnabled; /*maps guild token addresses -> enabled status (prevents duplicates in guildTokens[]) */
 
     mapping(uint256 => address) private _owners; /*maps token ID to owner*/
+
+    mapping(address => uint256) public shamans; /*maps shaman addresses to their permission level*/
+    /* permissions registry for shamans
+    0 = no permission
+    1 = admin only
+    2 = manager only
+    4 = governance only
+    3 = admin + manager
+    5 = admin + governance
+    6 = manager + governance
+    7 = admin + manager + governance */
 
     event SummonComplete(
         bool lootPaused,
@@ -160,11 +174,32 @@ contract Baal is Executor, Initializable, CloneFactory {
         status = 1;
     }
 
-    modifier baalOrShamanOnly() {
+    modifier baalOnly() {
+        require(msg.sender == address(this), "!baal");
+        _;
+    }
+
+    modifier baalOrAdminOnly() {
         require(
-            msg.sender == address(this) || shamans[msg.sender],
-            "!shaman or !baal"
-        ); /*check `shaman` is approved*/
+            msg.sender == address(this) || isAdmin(msg.sender),
+            "!baal & !admin"
+        ); /*check `shaman` is admin*/
+        _;
+    }
+
+    modifier baalOrManagerOnly() {
+        require(
+            msg.sender == address(this) || isManager(msg.sender),
+            "!baal & !manager"
+        ); /*check `shaman` is manager*/
+        _;
+    }
+
+    modifier baalOrGovernorOnly() {
+        require(
+            msg.sender == address(this) || isGovernor(msg.sender),
+            "!baal & !governor"
+        ); /*check `shaman` is governor*/
         _;
     }
 
@@ -434,10 +469,16 @@ contract Baal is Executor, Initializable, CloneFactory {
         );
     }
 
-    /// @notice Baal-or-shaman-only function to mint shares.
+    /// @notice Baal-or-admin-only function to set admin config (pause/unpause shares/loot)
+    function setAdminConfig(bool pauseShares, bool pauseLoot) external baalOrAdminOnly {
+        sharesPaused = pauseShares; /*set pause `shares`*/
+        lootPaused = pauseLoot; /*set pause `loot`*/
+    }
+
+    /// @notice Baal-or-manager-only function to mint shares.
     function mintShares(address[] calldata to, uint256[] calldata amount)
         external
-        baalOrShamanOnly
+        baalOrManagerOnly
     {
         require(to.length == amount.length, "!array parity"); /*check array lengths match*/
         for (uint256 i = 0; i < to.length; i++) {
@@ -445,10 +486,10 @@ contract Baal is Executor, Initializable, CloneFactory {
         }
     }
 
-    /// @notice Baal-or-shaman-only function to burn shares.
+    /// @notice Baal-or-manager-only function to burn shares.
     function burnShares(address[] calldata to, uint256[] calldata amount)
         external
-        baalOrShamanOnly
+        baalOrManagerOnly
     {
         require(to.length == amount.length, "!array parity"); /*check array lengths match*/
         for (uint256 i = 0; i < to.length; i++) {
@@ -456,10 +497,10 @@ contract Baal is Executor, Initializable, CloneFactory {
         }
     }
 
-    /// @notice Baal-or-shaman-only function to mint loot.
+    /// @notice Baal-or-manager-only function to mint loot.
     function mintLoot(address[] calldata to, uint256[] calldata amount)
         external
-        baalOrShamanOnly
+        baalOrManagerOnly
     {
         require(to.length == amount.length, "!array parity"); /*check array lengths match*/
         for (uint256 i = 0; i < to.length; i++) {
@@ -467,10 +508,10 @@ contract Baal is Executor, Initializable, CloneFactory {
         }
     }
 
-    /// @notice Baal-or-shaman-only function to burn loot.
+    /// @notice Baal-or-manager-only function to burn loot.
     function burnLoot(address[] calldata to, uint256[] calldata amount)
         external
-        baalOrShamanOnly
+        baalOrManagerOnly
     {
         require(to.length == amount.length, "!array parity"); /*check array lengths match*/
         for (uint256 i = 0; i < to.length; i++) {
@@ -478,44 +519,15 @@ contract Baal is Executor, Initializable, CloneFactory {
         }
     }
 
-    /// @notice Baal-only function to convert shares to loot.
-    function convertSharesToLoot(address to) external baalOrShamanOnly {
+    /// @notice Baal-or-manager-only function to convert shares to loot.
+    function convertSharesToLoot(address to) external baalOrManagerOnly {
         uint256 removedBalance = balanceOf[to]; /*gas-optimize variable*/
         _burnShares(to, removedBalance); /*burn all of `to` `shares` & convert into `loot`*/
         _mintLoot(to, removedBalance); /*mint equivalent `loot`*/
     }
 
-    /// @notice Baal-only function to change periods.
-    function setPeriods(bytes memory _periodData) external baalOrShamanOnly {
-        (
-            uint32 voting,
-            uint32 grace,
-            uint256 newOffering,
-            bool pauseLoot,
-            bool pauseShares
-        ) = abi.decode(
-                _periodData,
-                (uint32, uint32, uint256, bool, bool)
-            );
-        if (voting != 0) votingPeriod = voting; /*if positive, reset min. voting periods to first `value`*/
-        if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to second `value`*/
-        proposalOffering = newOffering; /*set new proposal offering amount */
-        lootPaused = pauseLoot; /*set pause `loot` transfers on fifth `value`*/
-        sharesPaused = pauseShares; /*set pause `shares` transfers on sixth `value`*/
-    }
-
-    /// @notice Baal-only function to set shaman status.
-    function setShamans(address[] calldata _shamans, bool enabled)
-        external
-        baalOrShamanOnly
-    {
-        for (uint256 i; i < _shamans.length; i++) {
-            shamans[_shamans[i]] = enabled;
-        }
-    }
-
     /// @notice Baal-only function to whitelist guildToken.
-    function setGuildTokens(address[] calldata _tokens) external baalOrShamanOnly {
+    function setGuildTokens(address[] calldata _tokens) external baalOrManagerOnly {
         for (uint256 i; i < _tokens.length; i++) {
             address token = _tokens[i];
             if (guildTokensEnabled[token]) {
@@ -529,16 +541,39 @@ contract Baal is Executor, Initializable, CloneFactory {
     }
 
     /// @notice Baal-only function to remove guildToken
-    function unsetGuildTokens(uint256[] calldata _tokenIndexes)
-        external
-        baalOrShamanOnly
-    {
+    function unsetGuildTokens(uint256[] calldata _tokenIndexes) external baalOrManagerOnly {
         for (uint256 i; i < _tokenIndexes.length; i++) {
             address token = guildTokens[_tokenIndexes[i]];
             guildTokensEnabled[token] = false; // disable the token
             guildTokens[_tokenIndexes[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
             guildTokens.pop(); /*pop account from `guildTokens` array*/
             
+        }
+    }
+
+    /// @notice Baal-or-governance-only function to change periods.
+    function setGovernanceConfig(bytes memory _periodData) external baalOrGovernorOnly {
+        (
+            uint32 voting,
+            uint32 grace,
+            uint256 newOffering
+        ) = abi.decode(
+                _periodData,
+                (uint32, uint32, uint256)
+            );
+        if (voting != 0) votingPeriod = voting; /*if positive, reset min. voting periods to first `value`*/
+        if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to second `value`*/
+        proposalOffering = newOffering; /*set new proposal offering amount */
+    }
+
+    /// @notice Baal-only function to set shaman status.
+    function setShamans(address[] calldata _shamans, uint256[] calldata _permissions)
+        external
+        baalOnly
+    {
+        require(_shamans.length == _permissions.length, "!array parity"); /*check array lengths match*/
+        for (uint256 i; i < _shamans.length; i++) {
+            shamans[_shamans[i]] = _permissions[i];
         }
     }
 
@@ -809,7 +844,21 @@ contract Baal is Executor, Initializable, CloneFactory {
         tokens = guildTokens;
     }
 
-    
+    function isAdmin(address shaman) public view returns (bool) {
+        uint256 permission = shamans[shaman];
+        return (permission == 1 || permission == 3 || permission == 5 || permission == 7);
+    }
+
+    function isManager(address shaman) public view returns (bool) {
+        uint256 permission = shamans[shaman];
+        return (permission == 2 || permission == 3 || permission == 6 || permission == 7);
+    }
+
+    function isGovernor(address shaman) public view returns (bool) {
+        uint256 permission = shamans[shaman];
+        return (permission == 4 || permission == 5 || permission == 6 || permission == 7);
+    }
+
     /***************
     HELPER FUNCTIONS
     ***************/
