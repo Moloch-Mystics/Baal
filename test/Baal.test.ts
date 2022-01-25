@@ -286,6 +286,7 @@ describe('Baal contract', function () {
       await expect(
         baalAsShaman.mintShares([summoner.address], [minting])
       ).to.emit(baal, 'Transfer').withArgs(zeroAddress, summoner.address, minting)
+      .to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares, shares+minting)
       expect(await baal.balanceOf(summoner.address)).to.equal(shares + minting)
     })
 
@@ -295,6 +296,7 @@ describe('Baal contract', function () {
       await expect(
         baalAsShaman.burnShares([summoner.address], [burning])
       ).to.emit(baal, 'Transfer').withArgs(summoner.address, zeroAddress, burning)
+      .to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares, shares - burning)
       expect(await baal.balanceOf(summoner.address)).to.equal(shares - burning)
     })
 
