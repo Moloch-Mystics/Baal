@@ -121,7 +121,6 @@ contract Baal is Executor, Initializable, CloneFactory {
         bytes32 indexed proposalDataHash,
         uint256 votingPeriod,
         bytes proposalData,
-        uint256 expiration,
         string details
     ); /*emits after proposal is submitted*/
     event SponsorProposal(
@@ -219,11 +218,12 @@ contract Baal is Executor, Initializable, CloneFactory {
         uint32 id; /*id of this proposal, used in existence checks (increments from 1)*/
         uint32 votingStarts; /*starting time for proposal in seconds since unix epoch*/
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
+        uint32 graceEnds; /*termination date for proposal in seconds since unix epoch - derived from `gracePeriod` set on proposal*/
         uint256 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
         uint256 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
         bytes32 proposalDataHash; /*hash of raw data associated with state updates*/
         bool actionFailed; /*label if proposal processed but action failed TODO gas optimize*/
-        uint256 expiration; /*time after which proposal should be considered invalid. 0 if no expiration*/
+        uint256 expiration; /*times after which proposal should be considered invalid and skipped. */
         string details; /*human-readable context for proposal*/
     }
 
@@ -286,6 +286,8 @@ contract Baal is Executor, Initializable, CloneFactory {
             require(msg.value == proposalOffering, "Baal requires an offering");
         }
 
+        require(expiration == 0 || prop.expiration > block.timestamp + votingPeriod + gracePeriod, "expired");
+
         bytes32 proposalDataHash = hashOperation(proposalData);
 
         unchecked {
@@ -323,11 +325,13 @@ contract Baal is Executor, Initializable, CloneFactory {
         require(balanceOf[msg.sender] != 0, "!member"); /*check 'membership' - required to sponsor proposal*/
         require(prop.id != 0, "!exist"); /*check proposal existence*/
         require(prop.votingStarts == 0, "sponsored"); /*check proposal not already sponsored*/
+        require(prop.expiration == 0 || prop.expiration > block.timestamp + votingPeriod + gracePeriod, "expired");
 
         prop.votingStarts = uint32(block.timestamp);
 
         unchecked {
             prop.votingEnds = uint32(block.timestamp) + votingPeriod;
+            prop.graceEnds = uint32(block.timestamp) + votingPeriod + gracePeriod;
         }
 
         emit SponsorProposal(msg.sender, proposal, block.timestamp);
@@ -421,10 +425,8 @@ contract Baal is Executor, Initializable, CloneFactory {
     // ********************
     /// @notice Process `proposal` & execute internal functions.
     /// @param proposal Number of proposal in `proposals` mapping to process for execution.
-    /// @param revertOnFailure Optionally revert if actions fail to process - useful to move past stuck actions
     function processProposal(
         uint256 proposal,
-        bool revertOnFailure,
         bytes calldata proposalData
     ) external nonReentrant {
         Proposal storage prop = proposals[proposal]; /*alias `proposal` storage pointers*/
@@ -438,10 +440,9 @@ contract Baal is Executor, Initializable, CloneFactory {
         );
 
         /*check if `proposal` approved by simple majority of members*/
-        if (prop.yesVotes > prop.noVotes) {
+        if (prop.yesVotes > prop.noVotes && okToExecute) {
             proposalsPassed[proposal] = true; /*flag that proposal passed - allows minion-like extensions*/
             bool success = processActionProposal(proposalData); /*execute 'action'*/
-            if (revertOnFailure) require(success, "call failure");
             if (!success) prop.actionFailed = true;
         }
 
@@ -648,7 +649,6 @@ contract Baal is Executor, Initializable, CloneFactory {
         unchecked {
             require(nonce == nonces[signatory]++, "!nonce"); /*check given `nonce` is next in `nonces`*/
         }
-        require(block.timestamp <= deadline, "expired"); /*check signature is not expired*/
 
         _delegate(signatory, delegatee); /*execute delegation*/
     }
@@ -1049,19 +1049,14 @@ contract Baal is Executor, Initializable, CloneFactory {
         returns (bool ready)
     {
         unchecked {
+            Proposal memory prevProposal = proposals[proposal - 1];
             require(proposal <= proposalCount, "!exist"); /*check proposal exists*/
             require(
-                proposals[proposal - 1].votingEnds == 0 ||
-                    proposals[proposal - 1].actionFailed,
+                prevProposal.id == 0 || prevProposal.actionFailed,
                 "prev!processed"
             ); /*check previous proposal has processed by deletion or with failed action*/
-            require(proposals[proposal].votingEnds != 0, "processed"); /*check given proposal has been sponsored & not yet processed by deletion*/
-            require(
-                proposals[proposal].expiration == 0 ||
-                    proposals[proposal].expiration > block.timestamp,
-                "expired"
-            ); /*check given proposal action has not expired */
-            require(prop.votingEnds + gracePeriod <= block.timestamp, "!ended"); /*check voting period has ended*/
+            require(prop.id != 0, "processed"); /*check given proposal has been sponsored & not yet processed by deletion*/
+            require(prop.graceEnds <= block.timestamp, "!ended"); /*check grace period has ended*/
             ready = true; /*otherwise, process if voting period done*/
         }
     }
