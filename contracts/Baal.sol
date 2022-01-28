@@ -42,7 +42,6 @@ contract Baal is Executor, Initializable, CloneFactory {
     bool public sharesPaused; /*tracks transferability of erc20 `shares` - amendable through 'period'[2] proposal*/
 
     uint8 public constant decimals = 18; /*unit scaling factor in erc20 `shares` accounting - '18' is default to match ETH & common erc20s*/
-    uint16 constant MAX_GUILD_TOKEN_COUNT = 400; /*maximum number of whitelistable tokens subject to {ragequit}*/
 
     ILoot public lootToken; /*Sub ERC20 for loot mgmt*/
 
@@ -53,6 +52,10 @@ contract Baal is Executor, Initializable, CloneFactory {
     uint32 public proposalCount; /*counter for total `proposals` submitted*/
     uint256 public proposalOffering; /* non-member proposal offering*/
     uint256 status; /*internal reentrancy check tracking value*/
+
+    bool public adminLock; /* once set to true, no new admin roles can be assigned to shaman */
+    bool public managerLock; /* once set to true, no new manager roles can be assigned to shaman */
+    bool public governorLock; /* once set to true, no new governor roles can be assigned to shaman */
 
     string public name; /*'name' for erc20 `shares` accounting*/
     string public symbol; /*'symbol' for erc20 `shares` accounting*/
@@ -84,10 +87,20 @@ contract Baal is Executor, Initializable, CloneFactory {
     mapping(address => Member) public members; /*maps `members` accounts to struct details*/
     mapping(uint256 => Proposal) public proposals; /*maps `proposalCount` to struct details*/
     mapping(uint256 => bool) public proposalsPassed; /*maps `proposalCount` to approval status - separated out as struct is deleted, and this value can be used by minion-like contracts*/
-    mapping(address => bool) public shamans; /*maps contracts approved in 'whitelist'[3] proposals for {memberAction} that mint or burn `shares`*/
     mapping(address => bool) public guildTokensEnabled; /*maps guild token addresses -> enabled status (prevents duplicates in guildTokens[]) */
 
     mapping(uint256 => address) private _owners; /*maps token ID to owner*/
+
+    mapping(address => uint256) public shamans; /*maps shaman addresses to their permission level*/
+    /* permissions registry for shamans
+    0 = no permission
+    1 = admin only
+    2 = manager only
+    4 = governance only
+    3 = admin + manager
+    5 = admin + governance
+    6 = manager + governance
+    7 = admin + manager + governance */
 
     event SummonComplete(
         bool lootPaused,
@@ -108,7 +121,6 @@ contract Baal is Executor, Initializable, CloneFactory {
         bytes32 indexed proposalDataHash,
         uint256 votingPeriod,
         bytes proposalData,
-        uint256 expiration,
         string details
     ); /*emits after proposal is submitted*/
     event SponsorProposal(
@@ -160,11 +172,32 @@ contract Baal is Executor, Initializable, CloneFactory {
         status = 1;
     }
 
-    modifier baalOrShamanOnly() {
+    modifier baalOnly() {
+        require(msg.sender == address(this), "!baal");
+        _;
+    }
+
+    modifier baalOrAdminOnly() {
         require(
-            msg.sender == address(this) || shamans[msg.sender],
-            "!shaman or !baal"
-        ); /*check `shaman` is approved*/
+            msg.sender == address(this) || isAdmin(msg.sender),
+            "!baal & !admin"
+        ); /*check `shaman` is admin*/
+        _;
+    }
+
+    modifier baalOrManagerOnly() {
+        require(
+            msg.sender == address(this) || isManager(msg.sender),
+            "!baal & !manager"
+        ); /*check `shaman` is manager*/
+        _;
+    }
+
+    modifier baalOrGovernorOnly() {
+        require(
+            msg.sender == address(this) || isGovernor(msg.sender),
+            "!baal & !governor"
+        ); /*check `shaman` is governor*/
         _;
     }
 
@@ -185,11 +218,12 @@ contract Baal is Executor, Initializable, CloneFactory {
         uint32 id; /*id of this proposal, used in existence checks (increments from 1)*/
         uint32 votingStarts; /*starting time for proposal in seconds since unix epoch*/
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
+        uint32 graceEnds; /*termination date for proposal in seconds since unix epoch - derived from `gracePeriod` set on proposal*/
         uint256 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
         uint256 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
         bytes32 proposalDataHash; /*hash of raw data associated with state updates*/
         bool actionFailed; /*label if proposal processed but action failed TODO gas optimize*/
-        uint256 expiration; /*time after which proposal should be considered invalid. 0 if no expiration*/
+        uint256 expiration; /*times after which proposal should be considered invalid and skipped. */
         string details; /*human-readable context for proposal*/
     }
 
@@ -252,6 +286,8 @@ contract Baal is Executor, Initializable, CloneFactory {
             require(msg.value == proposalOffering, "Baal requires an offering");
         }
 
+        require(expiration == 0 || prop.expiration > block.timestamp + votingPeriod + gracePeriod, "expired");
+
         bytes32 proposalDataHash = hashOperation(proposalData);
 
         unchecked {
@@ -289,11 +325,13 @@ contract Baal is Executor, Initializable, CloneFactory {
         require(balanceOf[msg.sender] != 0, "!member"); /*check 'membership' - required to sponsor proposal*/
         require(prop.id != 0, "!exist"); /*check proposal existence*/
         require(prop.votingStarts == 0, "sponsored"); /*check proposal not already sponsored*/
+        require(prop.expiration == 0 || prop.expiration > block.timestamp + votingPeriod + gracePeriod, "expired");
 
         prop.votingStarts = uint32(block.timestamp);
 
         unchecked {
             prop.votingEnds = uint32(block.timestamp) + votingPeriod;
+            prop.graceEnds = uint32(block.timestamp) + votingPeriod + gracePeriod;
         }
 
         emit SponsorProposal(msg.sender, proposal, block.timestamp);
@@ -387,10 +425,8 @@ contract Baal is Executor, Initializable, CloneFactory {
     // ********************
     /// @notice Process `proposal` & execute internal functions.
     /// @param proposal Number of proposal in `proposals` mapping to process for execution.
-    /// @param revertOnFailure Optionally revert if actions fail to process - useful to move past stuck actions
     function processProposal(
         uint256 proposal,
-        bool revertOnFailure,
         bytes calldata proposalData
     ) external nonReentrant {
         Proposal storage prop = proposals[proposal]; /*alias `proposal` storage pointers*/
@@ -404,10 +440,9 @@ contract Baal is Executor, Initializable, CloneFactory {
         );
 
         /*check if `proposal` approved by simple majority of members*/
-        if (prop.yesVotes > prop.noVotes) {
+        if (prop.yesVotes > prop.noVotes && okToExecute) {
             proposalsPassed[proposal] = true; /*flag that proposal passed - allows minion-like extensions*/
             bool success = processActionProposal(proposalData); /*execute 'action'*/
-            if (revertOnFailure) require(success, "call failure");
             if (!success) prop.actionFailed = true;
         }
 
@@ -434,10 +469,16 @@ contract Baal is Executor, Initializable, CloneFactory {
         );
     }
 
-    /// @notice Baal-or-shaman-only function to mint shares.
+    /// @notice Baal-or-admin-only function to set admin config (pause/unpause shares/loot)
+    function setAdminConfig(bool pauseShares, bool pauseLoot) external baalOrAdminOnly {
+        sharesPaused = pauseShares; /*set pause `shares`*/
+        lootPaused = pauseLoot; /*set pause `loot`*/
+    }
+
+    /// @notice Baal-or-manager-only function to mint shares.
     function mintShares(address[] calldata to, uint256[] calldata amount)
         external
-        baalOrShamanOnly
+        baalOrManagerOnly
     {
         require(to.length == amount.length, "!array parity"); /*check array lengths match*/
         for (uint256 i = 0; i < to.length; i++) {
@@ -445,10 +486,10 @@ contract Baal is Executor, Initializable, CloneFactory {
         }
     }
 
-    /// @notice Baal-or-shaman-only function to burn shares.
+    /// @notice Baal-or-manager-only function to burn shares.
     function burnShares(address[] calldata to, uint256[] calldata amount)
         external
-        baalOrShamanOnly
+        baalOrManagerOnly
     {
         require(to.length == amount.length, "!array parity"); /*check array lengths match*/
         for (uint256 i = 0; i < to.length; i++) {
@@ -456,10 +497,10 @@ contract Baal is Executor, Initializable, CloneFactory {
         }
     }
 
-    /// @notice Baal-or-shaman-only function to mint loot.
+    /// @notice Baal-or-manager-only function to mint loot.
     function mintLoot(address[] calldata to, uint256[] calldata amount)
         external
-        baalOrShamanOnly
+        baalOrManagerOnly
     {
         require(to.length == amount.length, "!array parity"); /*check array lengths match*/
         for (uint256 i = 0; i < to.length; i++) {
@@ -467,10 +508,10 @@ contract Baal is Executor, Initializable, CloneFactory {
         }
     }
 
-    /// @notice Baal-or-shaman-only function to burn loot.
+    /// @notice Baal-or-manager-only function to burn loot.
     function burnLoot(address[] calldata to, uint256[] calldata amount)
         external
-        baalOrShamanOnly
+        baalOrManagerOnly
     {
         require(to.length == amount.length, "!array parity"); /*check array lengths match*/
         for (uint256 i = 0; i < to.length; i++) {
@@ -478,61 +519,28 @@ contract Baal is Executor, Initializable, CloneFactory {
         }
     }
 
-    /// @notice Baal-only function to convert shares to loot.
-    function convertSharesToLoot(address to) external baalOrShamanOnly {
+    /// @notice Baal-or-manager-only function to convert shares to loot.
+    function convertSharesToLoot(address to) external baalOrManagerOnly {
         uint256 removedBalance = balanceOf[to]; /*gas-optimize variable*/
         _burnShares(to, removedBalance); /*burn all of `to` `shares` & convert into `loot`*/
         _mintLoot(to, removedBalance); /*mint equivalent `loot`*/
     }
 
-    /// @notice Baal-only function to change periods.
-    function setPeriods(bytes memory _periodData) external baalOrShamanOnly {
-        (
-            uint32 voting,
-            uint32 grace,
-            uint256 newOffering,
-            bool pauseLoot,
-            bool pauseShares
-        ) = abi.decode(
-                _periodData,
-                (uint32, uint32, uint256, bool, bool)
-            );
-        if (voting != 0) votingPeriod = voting; /*if positive, reset min. voting periods to first `value`*/
-        if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to second `value`*/
-        proposalOffering = newOffering; /*set new proposal offering amount */
-        lootPaused = pauseLoot; /*set pause `loot` transfers on fifth `value`*/
-        sharesPaused = pauseShares; /*set pause `shares` transfers on sixth `value`*/
-    }
-
-    /// @notice Baal-only function to set shaman status.
-    function setShamans(address[] calldata _shamans, bool enabled)
-        external
-        baalOrShamanOnly
-    {
-        for (uint256 i; i < _shamans.length; i++) {
-            shamans[_shamans[i]] = enabled;
-        }
-    }
-
     /// @notice Baal-only function to whitelist guildToken.
-    function setGuildTokens(address[] calldata _tokens) external baalOrShamanOnly {
+    function setGuildTokens(address[] calldata _tokens) external baalOrManagerOnly {
         for (uint256 i; i < _tokens.length; i++) {
             address token = _tokens[i];
             if (guildTokensEnabled[token]) {
                 continue; // prevent duplicate tokens
             }
 
-            if (guildTokens.length < MAX_GUILD_TOKEN_COUNT)
-                guildTokens.push(token); /*push account to `guildTokens` array if within 'MAX'*/
-                guildTokensEnabled[token] = true;
+            guildTokens.push(token); /*push account to `guildTokens` array*/
+            guildTokensEnabled[token] = true;
         }
     }
 
     /// @notice Baal-only function to remove guildToken
-    function unsetGuildTokens(uint256[] calldata _tokenIndexes)
-        external
-        baalOrShamanOnly
-    {
+    function unsetGuildTokens(uint256[] calldata _tokenIndexes) external baalOrManagerOnly {
         for (uint256 i; i < _tokenIndexes.length; i++) {
             address token = guildTokens[_tokenIndexes[i]];
             guildTokensEnabled[token] = false; // disable the token
@@ -540,6 +548,48 @@ contract Baal is Executor, Initializable, CloneFactory {
             guildTokens.pop(); /*pop account from `guildTokens` array*/
             
         }
+    }
+
+    /// @notice Baal-or-governance-only function to change periods.
+    function setGovernanceConfig(bytes memory _periodData) external baalOrGovernorOnly {
+        (
+            uint32 voting,
+            uint32 grace,
+            uint256 newOffering
+        ) = abi.decode(
+                _periodData,
+                (uint32, uint32, uint256)
+            );
+        if (voting != 0) votingPeriod = voting; /*if positive, reset min. voting periods to first `value`*/
+        if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to second `value`*/
+        proposalOffering = newOffering; /*set new proposal offering amount */
+    }
+
+    /// @notice Baal-only function to set shaman status.
+    function setShamans(address[] calldata _shamans, uint256[] calldata _permissions)
+        external
+        baalOnly
+    {
+        require(_shamans.length == _permissions.length, "!array parity"); /*check array lengths match*/
+        for (uint256 i; i < _shamans.length; i++) {
+            uint256 permission = _permissions[i];
+            if (adminLock) require(permission != 1 && permission != 3 && permission != 5 && permission != 7, "admin lock");
+            if (managerLock) require(permission != 2 && permission != 3 && permission != 6 && permission != 7, "manager lock");
+            if (governorLock) require(permission != 4 && permission != 5 && permission != 6 && permission != 7, "governor lock");
+            shamans[_shamans[i]] = permission;
+        }
+    }
+
+    function lockAdmin() external baalOnly {
+        adminLock = true;
+    }
+
+    function lockManager() external baalOnly {
+        managerLock = true;
+    }
+
+    function lockGovernor() external baalOnly {
+        governorLock = true;
     }
 
     /*******************
@@ -599,7 +649,6 @@ contract Baal is Executor, Initializable, CloneFactory {
         unchecked {
             require(nonce == nonces[signatory]++, "!nonce"); /*check given `nonce` is next in `nonces`*/
         }
-        require(block.timestamp <= deadline, "expired"); /*check signature is not expired*/
 
         _delegate(signatory, delegatee); /*execute delegation*/
     }
@@ -809,7 +858,21 @@ contract Baal is Executor, Initializable, CloneFactory {
         tokens = guildTokens;
     }
 
-    
+    function isAdmin(address shaman) public view returns (bool) {
+        uint256 permission = shamans[shaman];
+        return (permission == 1 || permission == 3 || permission == 5 || permission == 7);
+    }
+
+    function isManager(address shaman) public view returns (bool) {
+        uint256 permission = shamans[shaman];
+        return (permission == 2 || permission == 3 || permission == 6 || permission == 7);
+    }
+
+    function isGovernor(address shaman) public view returns (bool) {
+        uint256 permission = shamans[shaman];
+        return (permission == 4 || permission == 5 || permission == 6 || permission == 7);
+    }
+
     /***************
     HELPER FUNCTIONS
     ***************/
@@ -986,19 +1049,14 @@ contract Baal is Executor, Initializable, CloneFactory {
         returns (bool ready)
     {
         unchecked {
+            Proposal memory prevProposal = proposals[proposal - 1];
             require(proposal <= proposalCount, "!exist"); /*check proposal exists*/
             require(
-                proposals[proposal - 1].votingEnds == 0 ||
-                    proposals[proposal - 1].actionFailed,
+                prevProposal.id == 0 || prevProposal.actionFailed,
                 "prev!processed"
             ); /*check previous proposal has processed by deletion or with failed action*/
-            require(proposals[proposal].votingEnds != 0, "processed"); /*check given proposal has been sponsored & not yet processed by deletion*/
-            require(
-                proposals[proposal].expiration == 0 ||
-                    proposals[proposal].expiration > block.timestamp,
-                "expired"
-            ); /*check given proposal action has not expired */
-            require(prop.votingEnds + gracePeriod <= block.timestamp, "!ended"); /*check voting period has ended*/
+            require(prop.id != 0, "processed"); /*check given proposal has been sponsored & not yet processed by deletion*/
+            require(prop.graceEnds <= block.timestamp, "!ended"); /*check grace period has ended*/
             ready = true; /*otherwise, process if voting period done*/
         }
     }
