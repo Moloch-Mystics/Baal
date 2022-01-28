@@ -51,6 +51,10 @@ contract Baal is Executor, Initializable, CloneFactory {
     uint32 public votingPeriod; /* voting period in seconds - amendable through 'period'[2] proposal*/
     uint32 public proposalCount; /*counter for total `proposals` submitted*/
     uint256 public proposalOffering; /* non-member proposal offering*/
+    uint256 public quorumPercent; /* minimum % of shares that must vote yes for it to pass*/
+    uint256 public sponsorThreshold; /* minimum number of shares to sponsor a proposal (not %)*/
+    uint256 public dilutionBound; /* auto-fails a proposal if more than 1/(dilutionBound) total shares exit before processing*/
+    uint256 public stakingRequirement; /* auto-fails a proposals if more than 1/(stakingRequirement) yes voters exit before processing*/
     uint256 status; /*internal reentrancy check tracking value*/
 
     bool public adminLock; /* once set to true, no new admin roles can be assigned to shaman */
@@ -121,6 +125,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         bytes32 indexed proposalDataHash,
         uint256 votingPeriod,
         bytes proposalData,
+        uint256 expiration,
         string details
     ); /*emits after proposal is submitted*/
     event SponsorProposal(
@@ -211,6 +216,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         /*Baal membership details*/
         uint256 highestIndexYesVote; /*highest proposal index on which a member `approved`*/
         mapping(uint256 => bool) voted; /*maps voting decisions on proposals by `members` account*/
+        mapping(uint32 => uint32) orderedYesVotes; /* maps yes vote index to the previous yes vote proposal index */
     }
 
     struct Proposal {
@@ -224,6 +230,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         bytes32 proposalDataHash; /*hash of raw data associated with state updates*/
         bool actionFailed; /*label if proposal processed but action failed TODO gas optimize*/
         uint256 expiration; /*times after which proposal should be considered invalid and skipped. */
+        uint256 maxTotalSharesAndLootAtYesVote;
         string details; /*human-readable context for proposal*/
     }
 
@@ -279,14 +286,13 @@ contract Baal is Executor, Initializable, CloneFactory {
         uint256 expiration,
         string calldata details
     ) external payable nonReentrant returns (uint256) {
+        require(msg.value == proposalOffering, "Baal requires an offering");
+        require(expiration == 0 || expiration > block.timestamp + votingPeriod + gracePeriod, "expired");
+
         bool selfSponsor = false; /*plant sponsor flag*/
         if (balanceOf[msg.sender] != 0) {
             selfSponsor = true; /*if a member, self-sponsor*/
-        } else {
-            require(msg.value == proposalOffering, "Baal requires an offering");
         }
-
-        require(expiration == 0 || prop.expiration > block.timestamp + votingPeriod + gracePeriod, "expired");
 
         bytes32 proposalDataHash = hashOperation(proposalData);
 
@@ -296,11 +302,13 @@ contract Baal is Executor, Initializable, CloneFactory {
                 proposalCount,
                 selfSponsor ? uint32(block.timestamp) : 0,
                 selfSponsor ? uint32(block.timestamp) + votingPeriod : 0,
+                selfSponsor ? uint32(block.timestamp) + votingPeriod + gracePeriod : 0,
                 0,
                 0,
                 proposalDataHash,
                 false,
                 expiration,
+                0,
                 details
             );
         }
@@ -322,7 +330,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     function sponsorProposal(uint256 proposal) external nonReentrant {
         Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
 
-        require(balanceOf[msg.sender] != 0, "!member"); /*check 'membership' - required to sponsor proposal*/
+        require(getPriorVotes(msg.sender, block.timestamp) > sponsorThreshold, "!sponsor"); /*check 'votes > threshold - required to sponsor proposal*/
         require(prop.id != 0, "!exist"); /*check proposal existence*/
         require(prop.votingStarts == 0, "sponsored"); /*check proposal not already sponsored*/
         require(prop.expiration == 0 || prop.expiration > block.timestamp + votingPeriod + gracePeriod, "expired");
@@ -345,7 +353,7 @@ contract Baal is Executor, Initializable, CloneFactory {
 
         uint256 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
 
-        require(balance > 0, "!member"); /* check that user has shares*/
+        require(balanceOf[msg.sender] != 0, "!member"); /*check 'membership' - required to vote on proposals*/
         require(prop.votingEnds >= block.timestamp, "ended"); /*check voting period has not ended*/
         require(!members[msg.sender].voted[proposal], "voted"); /*check vote not already cast*/
 
@@ -354,6 +362,8 @@ contract Baal is Executor, Initializable, CloneFactory {
                 /*if `approved`, cast delegated balance `yesVotes` to proposal*/
                 prop.yesVotes += balance;
                 members[msg.sender].highestIndexYesVote = proposal;
+                prop.maxTotalSharesAndLootAtYesVote = totalSupply + totalLoot();
+                // TODO set delegator ordered yes votes... for all delegators
             } else {
                 /*otherwise, cast delegated balance `noVotes` to proposal*/
                 prop.noVotes += balance;
@@ -409,6 +419,8 @@ contract Baal is Executor, Initializable, CloneFactory {
                 /*if `approved`, cast delegated balance `yesVotes` to proposal*/
                 prop.yesVotes += balance;
                 members[signatory].highestIndexYesVote = proposal;
+                prop.maxTotalSharesAndLootAtYesVote = totalSupply + totalLoot();
+                // TODO set delegator ordered yes votes... for all delegators
             } else {
                 /*otherwise, cast delegated balance `noVotes` to proposal*/
                 prop.noVotes += balance;
@@ -439,6 +451,18 @@ contract Baal is Executor, Initializable, CloneFactory {
             "incorrect calldata"
         );
 
+        bool okToExecute = true;
+
+        // Make proposal fail if it didn't pass quorum
+        if (prop.yesVotes * 100 / totalSupply < quorumPercent) okToExecute = false;
+
+        // Make the proposal fail if the dilutionBound is exceeded
+        if (okToExecute && (totalSupply + totalLoot() * dilutionBound) < prop.maxTotalSharesAndLootAtYesVote) {
+            okToExecute = false;
+        }
+
+        // TODO - Check staking requirement
+
         /*check if `proposal` approved by simple majority of members*/
         if (prop.yesVotes > prop.noVotes && okToExecute) {
             proposalsPassed[proposal] = true; /*flag that proposal passed - allows minion-like extensions*/
@@ -453,6 +477,8 @@ contract Baal is Executor, Initializable, CloneFactory {
 
             emit ProcessProposal(proposal); /*emit event reflecting that given proposal processed*/
         }
+
+        // TODO, maybe emit extra metadata in event?
     }
 
     /// @notice Internal function to process 'action'[0] proposal.
@@ -555,14 +581,18 @@ contract Baal is Executor, Initializable, CloneFactory {
         (
             uint32 voting,
             uint32 grace,
-            uint256 newOffering
+            uint256 newOffering,
+            uint256 quorum,
+            uint256 sponsor
         ) = abi.decode(
                 _periodData,
-                (uint32, uint32, uint256)
+                (uint32, uint32, uint256, uint256, uint256)
             );
         if (voting != 0) votingPeriod = voting; /*if positive, reset min. voting periods to first `value`*/
         if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to second `value`*/
         proposalOffering = newOffering; /*set new proposal offering amount */
+        quorumPercent = quorum;
+        sponsorThreshold = sponsor;
     }
 
     /// @notice Baal-only function to set shaman status.
