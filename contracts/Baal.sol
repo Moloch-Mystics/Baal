@@ -125,6 +125,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         bytes32 indexed proposalDataHash,
         uint256 votingPeriod,
         bytes proposalData,
+        uint256 expiration,
         string details
     ); /*emits after proposal is submitted*/
     event SponsorProposal(
@@ -286,7 +287,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         string calldata details
     ) external payable nonReentrant returns (uint256) {
         require(msg.value == proposalOffering, "Baal requires an offering");
-        require(expiration == 0 || prop.expiration > block.timestamp + votingPeriod + gracePeriod, "expired");
+        require(expiration == 0 || expiration > block.timestamp + votingPeriod + gracePeriod, "expired");
 
         bool selfSponsor = false; /*plant sponsor flag*/
         if (balanceOf[msg.sender] != 0) {
@@ -301,11 +302,13 @@ contract Baal is Executor, Initializable, CloneFactory {
                 proposalCount,
                 selfSponsor ? uint32(block.timestamp) : 0,
                 selfSponsor ? uint32(block.timestamp) + votingPeriod : 0,
+                selfSponsor ? uint32(block.timestamp) + votingPeriod + gracePeriod : 0,
                 0,
                 0,
                 proposalDataHash,
                 false,
                 expiration,
+                0,
                 details
             );
         }
@@ -327,7 +330,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     function sponsorProposal(uint256 proposal) external nonReentrant {
         Proposal storage prop = proposals[proposal]; /*alias proposal storage pointers*/
 
-        require(getCurrentVotes(msg.sender) > sponsorThreshold, "!sponsor"); /*check 'votes > threshold - required to sponsor proposal*/
+        require(getPriorVotes(msg.sender, block.timestamp) > sponsorThreshold, "!sponsor"); /*check 'votes > threshold - required to sponsor proposal*/
         require(prop.id != 0, "!exist"); /*check proposal existence*/
         require(prop.votingStarts == 0, "sponsored"); /*check proposal not already sponsored*/
         require(prop.expiration == 0 || prop.expiration > block.timestamp + votingPeriod + gracePeriod, "expired");
@@ -451,7 +454,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         bool okToExecute = true;
 
         // Make proposal fail if it didn't pass quorum
-        if (prop.yesVotes * 100 / totalShares < quorumPercent) okToExecute = false;
+        if (prop.yesVotes * 100 / totalSupply < quorumPercent) okToExecute = false;
 
         // Make the proposal fail if the dilutionBound is exceeded
         if (okToExecute && (totalSupply + totalLoot() * dilutionBound) < prop.maxTotalSharesAndLootAtYesVote) {
