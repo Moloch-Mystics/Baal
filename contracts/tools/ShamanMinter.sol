@@ -9,9 +9,9 @@ contract ShamanMinter {
     }
     
     function doubler(address[] calldata members) external payable {
-        uint256[] memory amounts;
+        uint96[] memory amounts;
         for (uint256 i = 0; i < members.length; i++) {
-            amounts[i] = ( uint256(baal.balanceOf(members[i])));
+            amounts[i] = ( uint96(baal.balanceOf(members[i])));
         }
         baal.mintShares(members, amounts);
     }
