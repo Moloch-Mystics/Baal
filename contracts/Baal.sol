@@ -53,6 +53,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     uint256 public proposalOffering; /* non-member proposal offering*/
     uint256 public quorumPercent; /* minimum % of shares that must vote yes for it to pass*/
     uint256 public sponsorThreshold; /* minimum number of shares to sponsor a proposal (not %)*/
+    uint256 public dilutionBound; /* auto-fails a proposal if more than 1/(dilutionBound) total shares exit before processing*/
     uint256 status; /*internal reentrancy check tracking value*/
 
     bool public adminLock; /* once set to true, no new admin roles can be assigned to shaman */
@@ -226,6 +227,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         bytes32 proposalDataHash; /*hash of raw data associated with state updates*/
         bool actionFailed; /*label if proposal processed but action failed TODO gas optimize*/
         uint256 expiration; /*times after which proposal should be considered invalid and skipped. */
+        uint256 maxTotalSharesAndLootAtYesVote;
         string details; /*human-readable context for proposal*/
     }
 
@@ -355,6 +357,7 @@ contract Baal is Executor, Initializable, CloneFactory {
                 /*if `approved`, cast delegated balance `yesVotes` to proposal*/
                 prop.yesVotes += balance;
                 members[msg.sender].highestIndexYesVote = proposal;
+                prop.maxTotalSharesAndLootAtYesVote = totalSupply + totalLoot();
             } else {
                 /*otherwise, cast delegated balance `noVotes` to proposal*/
                 prop.noVotes += balance;
@@ -410,6 +413,7 @@ contract Baal is Executor, Initializable, CloneFactory {
                 /*if `approved`, cast delegated balance `yesVotes` to proposal*/
                 prop.yesVotes += balance;
                 members[signatory].highestIndexYesVote = proposal;
+                prop.maxTotalSharesAndLootAtYesVote = totalSupply + totalLoot();
             } else {
                 /*otherwise, cast delegated balance `noVotes` to proposal*/
                 prop.noVotes += balance;
@@ -442,7 +446,13 @@ contract Baal is Executor, Initializable, CloneFactory {
 
         bool okToExecute = true;
 
+        // Make proposal fail if it didn't pass quorum
         if (prop.yesVotes * 100 / totalShares < quorumPercent) okToExecute = false;
+
+        // Make the proposal fail if the dilutionBound is exceeded
+        if (okToExecute && (totalSupply + totalLoot() * dilutionBound) < prop.maxTotalSharesAndLootAtYesVote) {
+            okToExecute = false;
+        }
 
         /*check if `proposal` approved by simple majority of members*/
         if (prop.yesVotes > prop.noVotes && okToExecute) {
