@@ -34,7 +34,7 @@ const revertMessages = {
   submitVoteWithSigTimeEnded: 'ended',
   submitVoteWithSigVoted: 'voted',
   submitVoteWithSigMember: '!member',
-  sponsorProposalMember: '!member',
+  sponsorProposalSponsor: '!sponsor',
   sponsorProposalExists: '!exist',
   sponsorProposalSponsored: 'sponsored',
   proposalMisnumbered: '!exist',
@@ -63,6 +63,8 @@ const deploymentConfig = {
   GRACE_PERIOD_IN_SECONDS: 43200,
   VOTING_PERIOD_IN_SECONDS: 432000,
   PROPOSAL_OFFERING: 0,
+  SPONSOR_THRESHOLD: 1,
+  QUORUM_PERCENT: 0,
   TOKEN_NAME: 'wrapped ETH',
   TOKEN_SYMBOL: 'WETH',
 }
@@ -77,6 +79,8 @@ const getBaalParams = async function (
     PROPOSAL_OFFERING: any
     GRACE_PERIOD_IN_SECONDS: any
     VOTING_PERIOD_IN_SECONDS: any
+    QUORUM_PERCENT: any
+    SPONSOR_THRESHOLD: any
     TOKEN_NAME: any
     TOKEN_SYMBOL: any
   },
@@ -87,8 +91,8 @@ const getBaalParams = async function (
   loots: [string[], number[]]
 ) {
   const governanceConfig = abiCoder.encode(
-    ['uint32', 'uint32', 'uint256'],
-    [config.VOTING_PERIOD_IN_SECONDS, config.GRACE_PERIOD_IN_SECONDS, config.PROPOSAL_OFFERING]
+    ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
+    [config.VOTING_PERIOD_IN_SECONDS, config.GRACE_PERIOD_IN_SECONDS, config.PROPOSAL_OFFERING, config.QUORUM_PERCENT, config.SPONSOR_THRESHOLD]
   )
 
   const setAdminConfig = await baal.interface.encodeFunctionData('setAdminConfig', adminConfig)
@@ -97,7 +101,6 @@ const getBaalParams = async function (
   const setShaman = await baal.interface.encodeFunctionData('setShamans', shamans)
   const mintShares = await baal.interface.encodeFunctionData('mintShares', shares)
   const mintLoot = await baal.interface.encodeFunctionData('mintLoot', loots)
-  // const delegateSummoners = await baal.interface.encodeFunctionData('delegateSummoners', [[summoner.address], [summoner.address]])
 
   const initalizationActions = encodeMultiAction(
     multisend,
@@ -111,6 +114,21 @@ const getBaalParams = async function (
     ['string', 'string', 'address', 'address', 'bytes'],
     [config.TOKEN_NAME, config.TOKEN_SYMBOL, lootSingleton.address, multisend.address, initalizationActions]
   )
+}
+
+const verifyProposal = function(prop1: any, prop2: any, overrides?: any) {
+  for (let key in prop1) {
+    if (Number.isInteger(+key)) {
+      continue
+    }
+    if (overrides && (key in overrides)) {
+      // console.log('override', key)
+      expect(prop1[key]).to.equal(overrides[key])
+    } else {
+      // console.log('check', key)
+      expect(prop1[key]).to.equal(prop2[key])
+    }
+  }
 }
 
 describe('Baal contract', function () {
@@ -179,12 +197,10 @@ describe('Baal contract', function () {
 
     proposal = {
       flag: 0,
-      votingPeriod: 175000,
       account: summoner.address,
       data: selfTransferAction,
       details: 'all hail baal',
       expiration: 0,
-      revertOnFailure: true,
     }
   })
 
@@ -220,9 +236,15 @@ describe('Baal contract', function () {
       const guildTokens = await baal.getGuildTokens()
       expect(guildTokens[0]).to.equal(weth.address)
 
-      const summonerData = await baal.members(summoner.address)
+      const summonerHighestYesVote = await baal.members(summoner.address)
       expect(await lootToken.balanceOf(summoner.address)).to.equal(500)
-      expect(summonerData).to.equal(0) // Weird typechain issue with this struct
+      expect(summonerHighestYesVote).to.equal(0)
+
+      const summonerVotes = await baal.getCurrentVotes(summoner.address)
+      expect(summonerVotes).to.equal(100)
+
+      const summonerSelfDelegates = await baal.delegates(summoner.address)
+      expect(summonerSelfDelegates).to.equal(summoner.address)
 
       expect(await baal.balanceOf(summoner.address)).to.equal(100)
 
@@ -282,17 +304,53 @@ describe('Baal contract', function () {
 
     it('setGovernanceConfig', async function() {
       const governanceConfig = abiCoder.encode(
-        ['uint32', 'uint32', 'uint256'],
-        [10, 20, 50]
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
+        [10, 20, 50, 1, 2]
       )
 
       await shamanBaal.setGovernanceConfig(governanceConfig)
       const voting = await baal.votingPeriod()
       const grace = await baal.gracePeriod()
       const offering = await baal.proposalOffering()
+      const quorum = await baal.quorumPercent()
+      const sponsorThreshold = await baal.sponsorThreshold()
       expect(voting).to.be.equal(10)
       expect(grace).to.be.equal(20)
       expect(offering).to.be.equal(50)
+      expect(quorum).to.be.equal(1)
+      expect(sponsorThreshold).to.be.equal(2)
+    })
+  })
+
+  describe('erc20 actions', function() {
+    it('transfer to first time recipient', async function() {
+      const summonerBalance0 = await baal.balanceOf(summoner.address)
+      const summonerVotes0 = await baal.getCurrentVotes(summoner.address)
+      expect(summonerBalance0).to.equal(100)
+      expect(summonerVotes0).to.equal(100)
+
+      await baal.transfer(shaman.address, deploymentConfig.SPONSOR_THRESHOLD)
+      const summonerBalance = await baal.balanceOf(summoner.address)
+      const summonerVotes = await baal.getCurrentVotes(summoner.address)
+      const shamanBalance = await baal.balanceOf(shaman.address)
+      const shamanVotes = await baal.getCurrentVotes(shaman.address)
+      expect(summonerBalance).to.equal(99)
+      expect(summonerVotes).to.equal(99)
+      expect(shamanBalance).to.equal(1)
+      expect(shamanVotes).to.equal(1)
+
+      const summonerCheckpoints = await baal.numCheckpoints(summoner.address)
+      const shamanCheckpoints = await baal.numCheckpoints(shaman.address)
+      const summonerCP0 = await baal.checkpoints(summoner.address, 0)
+      const summonerCP1 = await baal.checkpoints(summoner.address, 1)
+      const shamanCP0 = await baal.checkpoints(shaman.address, 0)
+      const shamanCP1 = await baal.checkpoints(shaman.address, 1)
+      expect(summonerCheckpoints).to.equal(2)
+      expect(shamanCheckpoints).to.equal(1)
+      expect(summonerCP0.votes).to.equal(100)
+      expect(summonerCP1.votes).to.equal(99)
+      expect(shamanCP0.votes).to.equal(1)
+      expect(shamanCP1.fromTimeStamp).to.equal(0) // checkpoint DNE
     })
   })
 
@@ -336,10 +394,24 @@ describe('Baal contract', function () {
       expect(proposalDataSponsored.votingEnds).to.equal(now + deploymentConfig.VOTING_PERIOD_IN_SECONDS)
     })
 
-    it('require fail - not member', async function () {
+    it('require fail - not sponsor', async function () {
       await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
 
-      expect(shamanBaal.sponsorProposal(1)).to.be.revertedWith(revertMessages.sponsorProposalMember)
+      expect(shamanBaal.sponsorProposal(1)).to.be.revertedWith(revertMessages.sponsorProposalSponsor)
+    })
+
+    it('edge case - just enough shares to sponsor', async function () {
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+
+      const proposalData = await baal.proposals(1)
+      expect(proposalData.votingStarts).to.equal(0)
+
+      await baal.transfer(shaman.address, deploymentConfig.SPONSOR_THRESHOLD)
+      
+      await shamanBaal.sponsorProposal(1)
+      const now = await blockTime()
+      const proposalDataSponsored = await baal.proposals(1)
+      expect(proposalDataSponsored.votingStarts).to.equal(now)
     })
 
     it('require fail - proposal doesnt exist', async function () {
@@ -370,8 +442,8 @@ describe('Baal contract', function () {
       expect(priorVotes).to.equal(votes)
       expect(prop.yesVotes).to.equal(votes);
 
-      const highestIndexYesVote = await baal.members(summoner.address);
-      expect(highestIndexYesVote).to.equal(1);
+      const highestIDYesVote = await baal.members(summoner.address);
+      expect(highestIDYesVote).to.equal(1);
     });
 
     it("happy case - no vote", async function () {
@@ -410,35 +482,33 @@ describe('Baal contract', function () {
 
   describe("processProposal", function () {
     it("happy case yes wins", async function () {
-      const beforeProcessed = await baal.proposals(1);
       await baal.submitProposal(
         proposal.data,
         proposal.expiration,
         ethers.utils.id(proposal.details)
       );
       await baal.submitVote(1, yes);
+      const beforeProcessed = await baal.proposals(1);
       await moveForwardPeriods(2);
-      await baal.processProposal(1, proposal.revertOnFailure, proposal.data);
+      await baal.processProposal(1, proposal.data);
       const afterProcessed = await baal.proposals(1);
-      expect(afterProcessed).to.deep.equal(beforeProcessed);
+      verifyProposal(afterProcessed, beforeProcessed, { processed: true, passed: true })
       /* TODO test that execution happened*/
-      expect(await baal.proposalsPassed(1)).to.equal(true);
     });
 
     it("happy case no wins", async function () {
-      const beforeProcessed = await baal.proposals(1);
       await baal.submitProposal(
         proposal.data,
         proposal.expiration,
         ethers.utils.id(proposal.details)
       );
       await baal.submitVote(1, no);
+      const beforeProcessed = await baal.proposals(1);
       await moveForwardPeriods(2);
-      await baal.processProposal(1, proposal.revertOnFailure, proposal.data);
+      await baal.processProposal(1, proposal.data);
       const afterProcessed = await baal.proposals(1);
-      expect(afterProcessed).to.deep.equal(beforeProcessed);
+      verifyProposal(afterProcessed, beforeProcessed, { processed: true })
       /* TODO test that execution was skipped*/
-      expect(await baal.proposalsPassed(1)).to.equal(false);
     });
 
     it("require fail - proposal does not exist", async function () {
@@ -449,7 +519,7 @@ describe('Baal contract', function () {
       );
       await baal.submitVote(1, yes);
       expect(
-        baal.processProposal(2, proposal.revertOnFailure, proposal.data)
+        baal.processProposal(2, proposal.data)
       ).to.be.revertedWith("!exist");
     });
 
@@ -468,7 +538,7 @@ describe('Baal contract', function () {
       await baal.submitVote(2, yes);
       await moveForwardPeriods(2);
       expect(
-        baal.processProposal(2, proposal.revertOnFailure, proposal.data)
+        baal.processProposal(2, proposal.data)
       ).to.be.revertedWith("prev!processed");
     });
 
@@ -489,7 +559,7 @@ describe('Baal contract', function () {
       await baal.submitVote(1, yes);
       await moveForwardPeriods(2);
       expect(
-        baal.processProposal(1, proposal.revertOnFailure, badSelfTransferAction)
+        baal.processProposal(1, badSelfTransferAction)
       ).to.be.revertedWith("incorrect calldata");
     });
   });
@@ -513,11 +583,6 @@ describe('Baal contract', function () {
       await baal.ragequit(summoner.address, lootToBurn, sharesToBurn)
       const lootAfter = await lootToken.balanceOf(summoner.address)
       expect(lootAfter).to.equal(lootBefore.sub(lootToBurn))
-    })
-
-    it('require fail - proposal voting has not ended', async function () {
-      await baal.submitVote(1, yes)
-      expect(baal.ragequit(summoner.address, loot, shares)).to.be.revertedWith('processed')
     })
   })
 
@@ -630,12 +695,10 @@ describe('Baal contract - tribute required', function () {
 
     proposal = {
       flag: 0,
-      votingPeriod: 175000,
       account: summoner.address,
       data: selfTransferAction,
       details: 'all hail baal',
       expiration: 0,
-      revertOnFailure: true,
     }
   })
 

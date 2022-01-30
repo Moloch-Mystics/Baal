@@ -14,6 +14,8 @@ import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "./LootERC20.sol";
 
+import "hardhat/console.sol";
+
 interface ILoot {
     function setUp(string memory _name, string memory _symbol) external;
     function mint(address recipient, uint256 amount) external;
@@ -47,8 +49,8 @@ contract Baal is Executor, Initializable, CloneFactory {
 
     uint256 public totalSupply; /*counter for total `members` voting `shares` with erc20 accounting*/
 
-    uint32 public gracePeriod; /*time delay after proposal voting period for processing*/
     uint32 public votingPeriod; /* voting period in seconds - amendable through 'period'[2] proposal*/
+    uint32 public gracePeriod; /*time delay after proposal voting period for processing*/
     uint32 public proposalCount; /*counter for total `proposals` submitted*/
     uint256 public proposalOffering; /* non-member proposal offering*/
     uint256 public quorumPercent; /* minimum % of shares that must vote yes for it to pass*/
@@ -297,7 +299,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         require(expiration == 0 || expiration > block.timestamp + votingPeriod + gracePeriod, "expired");
 
         bool selfSponsor = false; /*plant sponsor flag*/
-        if (getPriorVotes(msg.sender, block.timestamp) > sponsorThreshold) {
+        if (getCurrentVotes(msg.sender) > sponsorThreshold) {
             selfSponsor = true; /*if above sponsor threshold, self-sponsor*/
         } else {
             require(msg.value == proposalOffering, "Baal requires an offering");
@@ -342,7 +344,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     function sponsorProposal(uint32 id) external nonReentrant {
         Proposal storage prop = proposals[id]; /*alias proposal storage pointers*/
 
-        require(getPriorVotes(msg.sender, block.timestamp) > sponsorThreshold, "!sponsor"); /*check 'votes > threshold - required to sponsor proposal*/
+        require(getCurrentVotes(msg.sender) >= sponsorThreshold, "!sponsor"); /*check 'votes > threshold - required to sponsor proposal*/
         require(prop.id != 0, "!exist"); /*check proposal existence*/
         require(prop.votingStarts == 0, "sponsored"); /*check proposal not already sponsored*/
         require(prop.expiration == 0 || prop.expiration > block.timestamp + votingPeriod + gracePeriod, "expired");
@@ -453,10 +455,11 @@ contract Baal is Executor, Initializable, CloneFactory {
 
         if (highestIDYesVote == 0) { // first yes vote ever
             member.orderedYesVotes[id] = 0;
+            member.highestIDYesVote = id; // update member (storage)
 
         } else if (id > highestIDYesVote) { // yes vote is already latest
             member.orderedYesVotes[id] = highestIDYesVote;
-            member.highestIDYesVote = id; // actually update storage variable
+            member.highestIDYesVote = id; // update member (storage)
 
         } else { // find and insert yes vote in order
             uint32 nextYesVoteId = highestIDYesVote;
@@ -498,7 +501,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         bool okToExecute = true;
 
         // Make proposal fail if after expiration
-        if (prop.expiration < block.timestamp) okToExecute = false;
+        if (prop.expiration != 0 && prop.expiration < block.timestamp) okToExecute = false;
 
         // Make proposal fail if it didn't pass quorum
         if (okToExecute && prop.yesVotes * 100 / totalSupply < quorumPercent) okToExecute = false;
@@ -621,7 +624,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     }
 
     /// @notice Baal-or-governance-only function to change periods.
-    function setGovernanceConfig(bytes memory _periodData) external baalOrGovernorOnly {
+    function setGovernanceConfig(bytes memory _governanceConfig) external baalOrGovernorOnly {
         (
             uint32 voting,
             uint32 grace,
@@ -629,7 +632,7 @@ contract Baal is Executor, Initializable, CloneFactory {
             uint256 quorum,
             uint256 sponsor
         ) = abi.decode(
-                _periodData,
+                _governanceConfig,
                 (uint32, uint32, uint256, uint256, uint256)
             );
         if (voting != 0) votingPeriod = voting; /*if positive, reset min. voting periods to first `value`*/
@@ -791,9 +794,14 @@ contract Baal is Executor, Initializable, CloneFactory {
 
         balanceOf[msg.sender] -= amount;
 
+        /*If recipient is receiving their first shares, auto-self delegate*/
+        if (balanceOf[to] == 0 && numCheckpoints[to] == 0) {
+            delegates[to] = to;
+            members[to].delegateChain.push(Delegation(block.timestamp, to));
+        }
+
         unchecked {
             balanceOf[to] += amount;
-
         }
 
         _moveDelegates(delegates[msg.sender], delegates[to], amount);
@@ -820,6 +828,12 @@ contract Baal is Executor, Initializable, CloneFactory {
         }
 
         balanceOf[from] -= amount;
+
+        /*If recipient is receiving their first shares, auto-self delegate*/
+        if (balanceOf[to] == 0 && numCheckpoints[to] == 0) {
+            delegates[to] = to;
+            members[to].delegateChain.push(Delegation(block.timestamp, to));
+        }
 
         unchecked {
             balanceOf[to] += amount;
@@ -920,7 +934,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @param account The user to check delegated `votes` for.
     /// @return votes Current `votes` delegated to `account`.
     function getCurrentVotes(address account)
-        external
+        public
         view
         returns (uint256 votes)
     {
@@ -1141,8 +1155,11 @@ contract Baal is Executor, Initializable, CloneFactory {
     function _mintShares(address to, uint256 shares) private {
         unchecked {
             if (totalSupply + shares <= type(uint256).max / 2) {
-                if (balanceOf[to] == 0 && numCheckpoints[to] == 0)
-                    delegates[to] = to; /*If recipient is receiving their first shares, delegate to themself to save having to do this transaction after*/
+                /*If recipient is receiving their first shares, auto-self delegate*/
+                if (balanceOf[to] == 0 && numCheckpoints[to] == 0) {
+                    delegates[to] = to;
+                    members[to].delegateChain.push(Delegation(block.timestamp, to));
+                }
 
                 balanceOf[to] += shares; /*add `shares` for `to` account*/
 
