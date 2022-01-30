@@ -23,20 +23,23 @@ const revertMessages = {
   molochAlreadyInitialized: 'Initializable: contract is already initialized',
   molochConstructorSharesCannotBe0: 'shares cannot be 0',
   molochConstructorVotingPeriodCannotBe0: 'votingPeriod cannot be 0',
+  submitProposalExpired: 'expired',
   submitProposalOffering: 'Baal requires an offering',
   submitProposalVotingPeriod: '!votingPeriod',
   submitProposalArrays: '!array parity',
   submitProposalArrayMax: 'array max',
   submitProposalFlag: '!flag',
+  sponsorProposalExpired: 'expired',
+  sponsorProposalSponsor: '!sponsor',
+  sponsorProposalExists: '!exist',
+  sponsorProposalSponsored: 'sponsored',
+  submitVoteNotSponsored: '!sponsored',
   submitVoteTimeEnded: 'ended',
   submitVoteVoted: 'voted',
   submitVoteMember: '!member',
   submitVoteWithSigTimeEnded: 'ended',
   submitVoteWithSigVoted: 'voted',
   submitVoteWithSigMember: '!member',
-  sponsorProposalSponsor: '!sponsor',
-  sponsorProposalExists: '!exist',
-  sponsorProposalSponsored: 'sponsored',
   proposalMisnumbered: '!exist',
   unsetGuildTokensLastToken: 'reverted with panic code 0x32 (Array accessed at an out-of-bounds or negative index)'
 }
@@ -378,6 +381,23 @@ describe('Baal contract', function () {
       expect(proposalData.details).to.equal(ethers.utils.id(proposal.details))
       // TODO test data hash is accurate
     })
+
+    it('require fail - expiration passed', async function() {
+      const now = await blockTime()
+      expect(baal.submitProposal(proposal.data, now, ethers.utils.id(proposal.details))).to.be.revertedWith(revertMessages.submitProposalExpired)
+    })
+
+    it('edge case - expiration exists, but far enough ahead', async function() {
+      const countBefore = await baal.proposalCount()
+      const expiration = (await blockTime()) + deploymentConfig.VOTING_PERIOD_IN_SECONDS + deploymentConfig.GRACE_PERIOD_IN_SECONDS + 10000
+      await baal.submitProposal(proposal.data, expiration, ethers.utils.id(proposal.details))
+
+      const countAfter = await baal.proposalCount()
+      expect(countAfter).to.equal(countBefore + 1)
+
+      const proposalData = await baal.proposals(1)
+      expect(proposalData.id).to.equal(1)
+    })
   })
 
   describe('sponsorProposal', function () {
@@ -393,6 +413,23 @@ describe('Baal contract', function () {
       expect(proposalDataSponsored.votingStarts).to.equal(now)
       expect(proposalDataSponsored.votingEnds).to.equal(now + deploymentConfig.VOTING_PERIOD_IN_SECONDS)
     })
+
+    it('require fail - expired', async function () {
+      const expiration = (await blockTime()) + deploymentConfig.VOTING_PERIOD_IN_SECONDS + deploymentConfig.GRACE_PERIOD_IN_SECONDS + 10000
+      await shamanBaal.submitProposal(proposal.data, expiration, ethers.utils.id(proposal.details))
+      await moveForwardPeriods(1)
+      expect(baal.sponsorProposal(1)).to.be.revertedWith(revertMessages.sponsorProposalExpired)
+    })
+
+
+    it('edge case - expiration exists, but far enough ahead', async function() {
+      const expiration = (await blockTime()) + deploymentConfig.VOTING_PERIOD_IN_SECONDS + deploymentConfig.GRACE_PERIOD_IN_SECONDS + 10000
+      await baal.submitProposal(proposal.data, expiration, ethers.utils.id(proposal.details))
+      const now = await blockTime()
+      const proposalDataSponsored = await baal.proposals(1)
+      expect(proposalDataSponsored.votingStarts).to.equal(now)
+    })
+
 
     it('require fail - not sponsor', async function () {
       await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
@@ -428,7 +465,7 @@ describe('Baal contract', function () {
     })
   })
 
-  describe('submitVote', function () {
+  describe('submitVote (w/ auto self-sponsor)', function () {
     beforeEach(async function () {
       await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
     })
@@ -479,6 +516,15 @@ describe('Baal contract', function () {
       );
     });
   });
+  
+  describe('submitVote (no self-sponsor)', function () {
+    it('require fail - voting not started', async function() {
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      expect(baal.submitVote(1, no)).to.be.revertedWith(
+        revertMessages.submitVoteNotSponsored
+      );
+    })
+  })
 
   describe("processProposal", function () {
     it("happy case yes wins", async function () {
@@ -632,7 +678,7 @@ describe('Baal contract', function () {
 })
 
 describe('Baal contract - tribute required', function () {
-  let customConfig = { ...deploymentConfig, PROPOSAL_OFFERING: 69 }
+  let customConfig = { ...deploymentConfig, PROPOSAL_OFFERING: 69, SPONSOR_THRESHOLD: 1 }
 
   let baal: Baal
   let shamanBaal: Baal
@@ -717,13 +763,31 @@ describe('Baal contract - tribute required', function () {
       expect(proposalData.votingStarts).to.equal(0)
     })
 
-    it('happy case - member can submit without tribute', async function () {
+    it('happy case - sponsors can submit without tribute, auto-sponsors', async function () {
       const countBefore = await baal.proposalCount()
 
       await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      const now = await blockTime()
 
       const countAfter = await baal.proposalCount()
       expect(countAfter).to.equal(countBefore + 1)
+      const proposalData = await baal.proposals(1)
+      expect(proposalData.id).to.equal(1)
+      expect(proposalData.votingStarts).to.equal(now)
+    })
+
+    it('edge case - sponsors can submit without tribute at threshold', async function () {
+      const countBefore = await baal.proposalCount()
+      await baal.transfer(shaman.address, 1) // transfer 1 share to shaman, putting them at threshold (1)
+
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      const now = await blockTime()
+
+      const countAfter = await baal.proposalCount()
+      expect(countAfter).to.equal(countBefore + 1)
+      const proposalData = await baal.proposals(1)
+      expect(proposalData.id).to.equal(1)
+      expect(proposalData.votingStarts).to.equal(now)
     })
 
     it('require fail - no tribute offered', async function () {

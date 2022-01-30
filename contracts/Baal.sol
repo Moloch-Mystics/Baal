@@ -299,7 +299,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         require(expiration == 0 || expiration > block.timestamp + votingPeriod + gracePeriod, "expired");
 
         bool selfSponsor = false; /*plant sponsor flag*/
-        if (getCurrentVotes(msg.sender) > sponsorThreshold) {
+        if (getCurrentVotes(msg.sender) >= sponsorThreshold) {
             selfSponsor = true; /*if above sponsor threshold, self-sponsor*/
         } else {
             require(msg.value == proposalOffering, "Baal requires an offering");
@@ -364,8 +364,8 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @param approved If 'true', member will cast `yesVotes` onto proposal - if 'false', `noVotes` will be counted.
     function submitVote(uint32 id, bool approved) external nonReentrant {
         Proposal storage prop = proposals[id]; /*alias proposal storage pointers*/
+        require(prop.votingStarts > 0, "!sponsored"); /* check proposal is sponsored (assumes voting starts immediately) */
         require(prop.votingEnds >= block.timestamp, "ended"); /*check voting period has not ended*/
-        require(prop.votingStarts <= block.timestamp, "!started"); /* check voting period has started*/
 
         uint256 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
         require(balanceOf[msg.sender] != 0, "!member"); /*check 'membership' - required to vote on proposals*/
