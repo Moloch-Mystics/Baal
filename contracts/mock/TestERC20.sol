@@ -23,6 +23,7 @@ contract TestERC20 {
     }
     
     function approve(address to, uint amount) external returns (bool) {
+        console.log("approve");
         allowance[msg.sender][to] = amount;
         emit Approval(msg.sender, to, amount);
         return true;
@@ -38,6 +39,7 @@ contract TestERC20 {
     function transferFrom(address from, address to, uint amount) external returns (bool) {
         if (allowance[from][msg.sender] != type(uint).max) 
             allowance[from][msg.sender] -= amount;
+        
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
         emit Transfer(from, to, amount);

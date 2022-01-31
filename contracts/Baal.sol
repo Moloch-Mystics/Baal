@@ -280,7 +280,6 @@ contract Baal is Executor, Initializable, CloneFactory {
 
         require(totalSupply > 0, "shares != 0");
 
-
         status = 1; /*initialize 'reentrancy guard' status*/
     }
 

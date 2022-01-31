@@ -12,6 +12,7 @@ import { buildContractCall } from '@gnosis.pm/safe-contracts'
 import { MultiSend } from '../src/types/MultiSend'
 import { ContractFactory } from 'ethers'
 import { ConfigExtender } from 'hardhat/types'
+import { Test } from 'mocha'
 
 use(solidity)
 
@@ -143,6 +144,7 @@ describe('Baal contract', function () {
   let lootToken: Loot
   let shamanBaal: Baal
   let weth: TestErc20
+  let applicantWeth: TestErc20
   let multisend: MultiSend
 
   let applicant: SignerWithAddress
@@ -173,6 +175,7 @@ describe('Baal contract', function () {
 
     ERC20 = await ethers.getContractFactory('TestERC20')
     weth = (await ERC20.deploy('WETH', 'WETH', 10000000)) as TestErc20
+    applicantWeth = weth.connect(applicant)
 
     multisend = (await MultisendContract.deploy()) as MultiSend
 
@@ -669,6 +672,32 @@ describe('Baal contract', function () {
       expect(
         baal.processProposal(1, badSelfTransferAction)
       ).to.be.revertedWith("incorrect calldata");
+    });
+
+    it("scenario - offer tribute", async function () {
+      weth.transfer(applicant.address, 100) // summoner transfer 100 weth
+      const offerWeth = weth.interface.encodeFunctionData('transferFrom', [applicant.address, baal.address, 100])
+      const tributeMultiAction = encodeMultiAction(multisend, [offerWeth], [weth.address], [BigNumber.from(0)], [0])
+      proposal.data = tributeMultiAction
+
+      await applicantWeth.approve(baal.address, 100)
+
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      const beforeProcessed = await baal.proposals(1);
+      await moveForwardPeriods(2);
+      await baal.processProposal(1, proposal.data);
+      const afterProcessed = await baal.proposals(1);
+      verifyProposal(afterProcessed, beforeProcessed, { processed: true, passed: true })
+      const applicantWethBalance = await weth.balanceOf(applicant.address)
+      expect(applicantWethBalance).to.equal(0)
+      const baalWethBalance = await weth.balanceOf(baal.address)
+      expect(baalWethBalance).to.equal(100)
+      /* TODO test that execution happened*/
     });
   });
 
