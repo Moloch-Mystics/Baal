@@ -785,16 +785,30 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @param to The address of destination account.
     /// @param amount The number of `shares` tokens to transfer.
     /// @return success Whether or not the transfer succeeded.
-    function transfer(address to, uint256 amount)
-        external
-        returns (bool success)
-    {
+    function transfer(address to, uint256 amount) external returns (bool success) {
+        success = _transfer(msg.sender, to, amount);
+    }
+
+    /// @notice Transfer `amount` tokens from `from` to `to`.
+    /// @param from The address of the source account.
+    /// @param to The address of the destination account.
+    /// @param amount The number of `shares` tokens to transfer.
+    /// @return success Whether or not the transfer succeeded.
+    function transferFrom(address from, address to, uint256 amount) external returns (bool success) {
+        if (allowance[from][msg.sender] != type(uint256).max) {
+            allowance[from][msg.sender] -= amount;
+        }
+
+        success = _transfer(from, to, amount);
+    }
+
+    function _transfer(address from, address to, uint256 amount) private returns (bool success) {
         require(!sharesPaused, "!transferable");
 
         balanceOf[msg.sender] -= amount;
 
         /*If recipient is receiving their first shares, auto-self delegate*/
-        if (balanceOf[to] == 0 && numCheckpoints[to] == 0) {
+        if (balanceOf[to] == 0 && numCheckpoints[to] == 0 && amount > 0) {
             delegates[to] = to;
             members[to].delegateChain.push(Delegation(block.timestamp, to));
         }
@@ -806,41 +820,6 @@ contract Baal is Executor, Initializable, CloneFactory {
         _moveDelegates(delegates[msg.sender], delegates[to], amount);
 
         emit Transfer(msg.sender, to, amount);
-
-        success = true;
-    }
-
-    /// @notice Transfer `amount` tokens from `from` to `to`.
-    /// @param from The address of the source account.
-    /// @param to The address of the destination account.
-    /// @param amount The number of `shares` tokens to transfer.
-    /// @return success Whether or not the transfer succeeded.
-    function transferFrom(
-        address from,
-        address to,
-        uint256 amount
-    ) external returns (bool success) {
-        require(!sharesPaused, "!transferable");
-
-        if (allowance[from][msg.sender] != type(uint256).max) {
-            allowance[from][msg.sender] -= amount;
-        }
-
-        balanceOf[from] -= amount;
-
-        /*If recipient is receiving their first shares, auto-self delegate*/
-        if (balanceOf[to] == 0 && numCheckpoints[to] == 0) {
-            delegates[to] = to;
-            members[to].delegateChain.push(Delegation(block.timestamp, to));
-        }
-
-        unchecked {
-            balanceOf[to] += amount;
-        }
-
-        _moveDelegates(delegates[from], delegates[to], amount);
-
-        emit Transfer(from, to, amount);
 
         success = true;
     }
@@ -1071,6 +1050,7 @@ contract Baal is Executor, Initializable, CloneFactory {
 
     /// @notice Delegates Baal voting weight.
     function _delegate(address delegator, address delegatee) private {
+        require(balanceOf[delegator] > 0, '!shares');
         uint32 timestamp = uint32(block.timestamp);
         address currentDelegate = delegates[delegator];
         delegates[delegator] = delegatee;
@@ -1178,7 +1158,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         unchecked {
             if (totalSupply + shares <= type(uint256).max / 2) {
                 /*If recipient is receiving their first shares, auto-self delegate*/
-                if (balanceOf[to] == 0 && numCheckpoints[to] == 0) {
+                if (balanceOf[to] == 0 && numCheckpoints[to] == 0 && shares > 0) {
                     delegates[to] = to;
                     members[to].delegateChain.push(Delegation(block.timestamp, to));
                 }

@@ -23,7 +23,6 @@ contract TestERC20 {
     }
     
     function approve(address to, uint amount) external returns (bool) {
-        console.log("approve");
         allowance[msg.sender][to] = amount;
         emit Approval(msg.sender, to, amount);
         return true;

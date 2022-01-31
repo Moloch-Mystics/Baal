@@ -43,7 +43,8 @@ const revertMessages = {
   submitVoteWithSigMember: '!member',
   proposalMisnumbered: '!exist',
   unsetGuildTokensLastToken: 'reverted with panic code 0x32 (Array accessed at an out-of-bounds or negative index)',
-  sharesTransferPaused: '!transferable'
+  sharesTransferPaused: '!transferable',
+  sharesInsufficientBalance: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)'
 }
 
 const zeroAddress = '0x0000000000000000000000000000000000000000'
@@ -334,9 +335,26 @@ describe('Baal contract', function () {
       expect(sponsorThreshold).to.be.equal(2)
     })
   })
+  describe('erc20 shares - approve', function() {
+    it('happy case', async function() {
+      await baal.approve(shaman.address, 20)
+      const allowance = await baal.allowance(summoner.address, shaman.address)
+      expect(allowance).to.equal(20)
+    })
+
+    it('overwrites previous value', async function() {
+      await baal.approve(shaman.address, 20)
+      const allowance = await baal.allowance(summoner.address, shaman.address)
+      expect(allowance).to.equal(20)
+
+      await baal.approve(shaman.address, 50)
+      const allowance2 = await baal.allowance(summoner.address, shaman.address)
+      expect(allowance2).to.equal(50)
+    })
+  })
 
   describe('erc20 shares - transfer', function() {
-    it('transfer to first time recipient', async function() {
+    it('transfer to first time recipient - auto self delegates', async function() {
       const beforeTransferTimestamp = await blockTime()
       await baal.transfer(shaman.address, deploymentConfig.SPONSOR_THRESHOLD)
       const afterTransferTimestamp = await blockTime()
@@ -369,11 +387,122 @@ describe('Baal contract', function () {
       const shamanDelegateChain0 = await baal.getDelegateChainByIndex(shaman.address, 0)
       expect(shamanDelegateChain0.delegate).to.equal(shaman.address)
       expect(shamanDelegateChain0.fromTimeStamp).to.equal(afterTransferTimestamp)
+
+      const delegate = await baal.delegates(shaman.address)
+      expect(delegate).to.equal(shaman.address)
     })
 
     it('require fails - shares paused', async function () {
       await shamanBaal.setAdminConfig(true, false) // pause shares
       expect(baal.transfer(shaman.address, deploymentConfig.SPONSOR_THRESHOLD)).to.be.revertedWith(revertMessages.sharesTransferPaused)
+    })
+
+    it('require fails - insufficient balance', async function () {
+      expect(baal.transfer(shaman.address, 101)).to.be.revertedWith(revertMessages.sharesInsufficientBalance)
+    })
+
+    it('0 transfer - doesnt update delegates', async function() {
+      const beforeTransferTimestamp = await blockTime()
+      await baal.transfer(shaman.address, 0)
+      const summonerBalance = await baal.balanceOf(summoner.address)
+      const summonerVotes = await baal.getCurrentVotes(summoner.address)
+      const shamanBalance = await baal.balanceOf(shaman.address)
+      const shamanVotes = await baal.getCurrentVotes(shaman.address)
+      expect(summonerBalance).to.equal(100)
+      expect(summonerVotes).to.equal(100)
+      expect(shamanBalance).to.equal(0)
+      expect(shamanVotes).to.equal(0)
+
+      const summonerCheckpoints = await baal.numCheckpoints(summoner.address)
+      const shamanCheckpoints = await baal.numCheckpoints(shaman.address)
+      const summonerCP0 = await baal.checkpoints(summoner.address, 0)
+      const shamanCP0 = await baal.checkpoints(shaman.address, 0)
+      expect(summonerCheckpoints).to.equal(1)
+      expect(shamanCheckpoints).to.equal(0)
+      expect(summonerCP0.votes).to.equal(100)
+      expect(shamanCP0.fromTimeStamp).to.equal(0) // checkpoint DNE
+
+      const summonerDelegateChain0 = await baal.getDelegateChainByIndex(summoner.address, 0)
+      expect(summonerDelegateChain0.delegate).to.equal(summoner.address)
+      expect(summonerDelegateChain0.fromTimeStamp).to.equal(beforeTransferTimestamp)
+
+      const shamanDelegateChainLength = await baal.getDelegateChainLength(shaman.address)
+      expect(shamanDelegateChainLength).to.equal(0)
+    })
+
+    it('self transfer - doesnt update delegates', async function() {
+      const beforeTransferTimestamp = await blockTime()
+      await baal.transfer(summoner.address, 10)
+      const summonerBalance = await baal.balanceOf(summoner.address)
+      const summonerVotes = await baal.getCurrentVotes(summoner.address)
+      expect(summonerBalance).to.equal(100)
+      expect(summonerVotes).to.equal(100)
+
+      const summonerCheckpoints = await baal.numCheckpoints(summoner.address)
+      const summonerCP0 = await baal.checkpoints(summoner.address, 0)
+      expect(summonerCheckpoints).to.equal(1)
+      expect(summonerCP0.votes).to.equal(100)
+
+      const summonerDelegateChain0 = await baal.getDelegateChainByIndex(summoner.address, 0)
+      expect(summonerDelegateChain0.delegate).to.equal(summoner.address)
+      expect(summonerDelegateChain0.fromTimeStamp).to.equal(beforeTransferTimestamp)
+    })
+
+    it('transferring to shareholder w/ delegate assigns votes to delegate', async function() {
+      const t1 = await blockTime()
+      await baal.transfer(shaman.address, deploymentConfig.SPONSOR_THRESHOLD)
+      const t2 = await blockTime()
+      await shamanBaal.delegate(applicant.address) // set shaman delegate -> applicant
+      const t3 = await blockTime()
+      await baal.transfer(shaman.address, deploymentConfig.SPONSOR_THRESHOLD)
+      const t4 = await blockTime()
+      
+      const summonerBalance = await baal.balanceOf(summoner.address)
+      const summonerVotes = await baal.getCurrentVotes(summoner.address)
+      const shamanBalance = await baal.balanceOf(shaman.address)
+      const shamanVotes = await baal.getCurrentVotes(shaman.address)
+      const applicantVotes = await baal.getCurrentVotes(applicant.address)
+      expect(summonerBalance).to.equal(98)
+      expect(summonerVotes).to.equal(98)
+      expect(shamanBalance).to.equal(2)
+      expect(shamanVotes).to.equal(0)
+      expect(applicantVotes).to.equal(2)
+
+      const delegate = await baal.delegates(shaman.address)
+      expect(delegate).to.equal(applicant.address)
+
+      const summonerCheckpoints = await baal.numCheckpoints(summoner.address)
+      const shamanCheckpoints = await baal.numCheckpoints(shaman.address)
+      const applicantCheckpoints = await baal.numCheckpoints(applicant.address)
+      const summonerCP0 = await baal.checkpoints(summoner.address, 0)
+      const summonerCP1 = await baal.checkpoints(summoner.address, 1)
+      const summonerCP2 = await baal.checkpoints(summoner.address, 2)
+      const shamanCP0 = await baal.checkpoints(shaman.address, 0)
+      const shamanCP1 = await baal.checkpoints(shaman.address, 1)
+      const applicantCP0 = await baal.checkpoints(applicant.address, 0)
+      const applicantCP1 = await baal.checkpoints(applicant.address, 1)
+      expect(summonerCheckpoints).to.equal(3)
+      expect(shamanCheckpoints).to.equal(2)
+      expect(applicantCheckpoints).to.equal(2)
+      expect(summonerCP0.votes).to.equal(100)
+      expect(summonerCP1.votes).to.equal(99)
+      expect(summonerCP2.votes).to.equal(98)
+      expect(shamanCP0.votes).to.equal(1)
+      expect(shamanCP1.votes).to.equal(0)
+      expect(applicantCP0.votes).to.equal(1)
+      expect(applicantCP1.votes).to.equal(2)
+
+      const summonerDelegateChain0 = await baal.getDelegateChainByIndex(summoner.address, 0)
+      expect(summonerDelegateChain0.delegate).to.equal(summoner.address)
+      expect(summonerDelegateChain0.fromTimeStamp).to.equal(t1)
+
+      const shamanDelegateChain0 = await baal.getDelegateChainByIndex(shaman.address, 0)
+      expect(shamanDelegateChain0.delegate).to.equal(shaman.address)
+      expect(shamanDelegateChain0.fromTimeStamp).to.equal(t2)
+
+      const shamanDelegateChain1 = await baal.getDelegateChainByIndex(shaman.address, 1)
+      expect(shamanDelegateChain1.delegate).to.equal(applicant.address)
+      expect(shamanDelegateChain1.fromTimeStamp).to.equal(t3)
     })
   })
 
@@ -381,7 +510,15 @@ describe('Baal contract', function () {
     it('transfer to first time recipient', async function() {
       const beforeTransferTimestamp = await blockTime()
       await baal.approve(shaman.address, deploymentConfig.SPONSOR_THRESHOLD)
+
+      const allowanceBefore = await baal.allowance(summoner.address, shaman.address)
+      expect(allowanceBefore).to.equal(1)
+
       await shamanBaal.transferFrom(summoner.address, shaman.address, deploymentConfig.SPONSOR_THRESHOLD)
+
+      const allowanceAfter = await baal.allowance(summoner.address, shaman.address)
+      expect(allowanceAfter).to.equal(0)
+
       const afterTransferTimestamp = await blockTime()
       const summonerBalance = await baal.balanceOf(summoner.address)
       const summonerVotes = await baal.getCurrentVotes(summoner.address)
