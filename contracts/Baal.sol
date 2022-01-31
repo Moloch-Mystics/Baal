@@ -979,9 +979,26 @@ contract Baal is Executor, Initializable, CloneFactory {
         }
     }
 
+    function didMemberVoteOnProposal(address memberAddr, uint32 id) public view returns (bool) {
+        return members[memberAddr].voted[id];
+    }
+
+    function getPreviousYesVoteIdById(address memberAddr, uint32 id) public view returns (uint32) {
+        return members[memberAddr].orderedYesVotes[id];
+    }
+
+    function getDelegateChainByIndex(address memberAddr, uint256 index) public view returns (Delegation memory d) {
+        d = members[memberAddr].delegateChain[index];
+        return d;
+    }
+
+    function getDelegateChainLength(address memberAddr) public view returns (uint256) {
+        return members[memberAddr].delegateChain.length;
+    }
+
     /// @notice Returns array list of approved `guildTokens` in Baal for {ragequit}.
     /// @return tokens ERC-20s approved for {ragequit}.
-    function getGuildTokens() external view returns (address[] memory tokens) {
+    function getGuildTokens() public view returns (address[] memory tokens) {
         tokens = guildTokens;
     }
 
@@ -1055,9 +1072,15 @@ contract Baal is Executor, Initializable, CloneFactory {
 
     /// @notice Delegates Baal voting weight.
     function _delegate(address delegator, address delegatee) private {
+        uint32 timestamp = uint32(block.timestamp);
         address currentDelegate = delegates[delegator];
         delegates[delegator] = delegatee;
-        members[delegator].delegateChain.push(Delegation(block.timestamp, delegatee));
+        Member storage member = members[delegator];
+        if (member.delegateChain.length > 0 && member.delegateChain[member.delegateChain.length - 1].fromTimeStamp == timestamp) {
+            member.delegateChain[member.delegateChain.length].delegate = delegatee;
+        } else {
+            member.delegateChain.push(Delegation(block.timestamp, delegatee));
+        }
         // TODO the two data structures above are redundant
 
         _moveDelegates(

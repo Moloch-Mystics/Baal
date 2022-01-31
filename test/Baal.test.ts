@@ -41,7 +41,8 @@ const revertMessages = {
   submitVoteWithSigVoted: 'voted',
   submitVoteWithSigMember: '!member',
   proposalMisnumbered: '!exist',
-  unsetGuildTokensLastToken: 'reverted with panic code 0x32 (Array accessed at an out-of-bounds or negative index)'
+  unsetGuildTokensLastToken: 'reverted with panic code 0x32 (Array accessed at an out-of-bounds or negative index)',
+  sharesTransferPaused: '!transferable'
 }
 
 const zeroAddress = '0x0000000000000000000000000000000000000000'
@@ -209,6 +210,8 @@ describe('Baal contract', function () {
 
   describe('constructor', function () {
     it('verify deployment parameters', async function () {
+      const now = await blockTime()
+
       const decimals = await baal.decimals()
       expect(decimals).to.equal(18)
 
@@ -248,6 +251,10 @@ describe('Baal contract', function () {
 
       const summonerSelfDelegates = await baal.delegates(summoner.address)
       expect(summonerSelfDelegates).to.equal(summoner.address)
+
+      const summonerDelegateChain0 = await baal.getDelegateChainByIndex(summoner.address, 0)
+      expect(summonerDelegateChain0.delegate).to.equal(summoner.address)
+      expect(summonerDelegateChain0.fromTimeStamp).to.equal(now)
 
       expect(await baal.balanceOf(summoner.address)).to.equal(100)
 
@@ -325,14 +332,11 @@ describe('Baal contract', function () {
     })
   })
 
-  describe('erc20 actions', function() {
+  describe('erc20 shares - transfer', function() {
     it('transfer to first time recipient', async function() {
-      const summonerBalance0 = await baal.balanceOf(summoner.address)
-      const summonerVotes0 = await baal.getCurrentVotes(summoner.address)
-      expect(summonerBalance0).to.equal(100)
-      expect(summonerVotes0).to.equal(100)
-
+      const beforeTransferTimestamp = await blockTime()
       await baal.transfer(shaman.address, deploymentConfig.SPONSOR_THRESHOLD)
+      const afterTransferTimestamp = await blockTime()
       const summonerBalance = await baal.balanceOf(summoner.address)
       const summonerVotes = await baal.getCurrentVotes(summoner.address)
       const shamanBalance = await baal.balanceOf(shaman.address)
@@ -354,6 +358,63 @@ describe('Baal contract', function () {
       expect(summonerCP1.votes).to.equal(99)
       expect(shamanCP0.votes).to.equal(1)
       expect(shamanCP1.fromTimeStamp).to.equal(0) // checkpoint DNE
+
+      const summonerDelegateChain0 = await baal.getDelegateChainByIndex(summoner.address, 0)
+      expect(summonerDelegateChain0.delegate).to.equal(summoner.address)
+      expect(summonerDelegateChain0.fromTimeStamp).to.equal(beforeTransferTimestamp)
+
+      const shamanDelegateChain0 = await baal.getDelegateChainByIndex(shaman.address, 0)
+      expect(shamanDelegateChain0.delegate).to.equal(shaman.address)
+      expect(shamanDelegateChain0.fromTimeStamp).to.equal(afterTransferTimestamp)
+    })
+
+    it('require fails - shares paused', async function () {
+      await shamanBaal.setAdminConfig(true, false) // pause shares
+      expect(baal.transfer(shaman.address, deploymentConfig.SPONSOR_THRESHOLD)).to.be.revertedWith(revertMessages.sharesTransferPaused)
+    })
+  })
+
+  describe('erc20 shares - transferFrom', function() {
+    it('transfer to first time recipient', async function() {
+      const beforeTransferTimestamp = await blockTime()
+      await baal.approve(shaman.address, deploymentConfig.SPONSOR_THRESHOLD)
+      await shamanBaal.transferFrom(summoner.address, shaman.address, deploymentConfig.SPONSOR_THRESHOLD)
+      const afterTransferTimestamp = await blockTime()
+      const summonerBalance = await baal.balanceOf(summoner.address)
+      const summonerVotes = await baal.getCurrentVotes(summoner.address)
+      const shamanBalance = await baal.balanceOf(shaman.address)
+      const shamanVotes = await baal.getCurrentVotes(shaman.address)
+      expect(summonerBalance).to.equal(99)
+      expect(summonerVotes).to.equal(99)
+      expect(shamanBalance).to.equal(1)
+      expect(shamanVotes).to.equal(1)
+
+      const summonerCheckpoints = await baal.numCheckpoints(summoner.address)
+      const shamanCheckpoints = await baal.numCheckpoints(shaman.address)
+      const summonerCP0 = await baal.checkpoints(summoner.address, 0)
+      const summonerCP1 = await baal.checkpoints(summoner.address, 1)
+      const shamanCP0 = await baal.checkpoints(shaman.address, 0)
+      const shamanCP1 = await baal.checkpoints(shaman.address, 1)
+      expect(summonerCheckpoints).to.equal(2)
+      expect(shamanCheckpoints).to.equal(1)
+      expect(summonerCP0.votes).to.equal(100)
+      expect(summonerCP1.votes).to.equal(99)
+      expect(shamanCP0.votes).to.equal(1)
+      expect(shamanCP1.fromTimeStamp).to.equal(0) // checkpoint DNE
+
+      const summonerDelegateChain0 = await baal.getDelegateChainByIndex(summoner.address, 0)
+      expect(summonerDelegateChain0.delegate).to.equal(summoner.address)
+      expect(summonerDelegateChain0.fromTimeStamp).to.equal(beforeTransferTimestamp)
+
+      const shamanDelegateChain0 = await baal.getDelegateChainByIndex(shaman.address, 0)
+      expect(shamanDelegateChain0.delegate).to.equal(shaman.address)
+      expect(shamanDelegateChain0.fromTimeStamp).to.equal(afterTransferTimestamp)
+    })
+
+    it('require fails - shares paused', async function () {
+      await shamanBaal.setAdminConfig(true, false) // pause shares
+      await baal.approve(shaman.address, deploymentConfig.SPONSOR_THRESHOLD)
+      expect(baal.transferFrom(summoner.address, shaman.address, deploymentConfig.SPONSOR_THRESHOLD)).to.be.revertedWith(revertMessages.sharesTransferPaused)
     })
   })
 
@@ -364,6 +425,7 @@ describe('Baal contract', function () {
       const countBefore = await baal.proposalCount()
 
       await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      // TODO test return value
 
       const now = await blockTime()
 
