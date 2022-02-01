@@ -2,36 +2,29 @@
 pragma solidity >=0.8.0;
 import "../Baal.sol";
 
+import "hardhat/console.sol";
+
 contract TributeEscrow {
     struct Escrow {
         address token;
         address applicant;
         uint256 amount;
-        address baal;
         bool released;
     }
     mapping(address => mapping(uint256 => Escrow)) escrows;
 
-    function submitTributeProposal(
-        Baal baal,
-        IERC20 tribute,
-        uint256 amount,
+    function encodeTributeProposal(
+        address baal,
         uint256 shares,
         uint256 loot,
-        address recipient
-    ) public {
-        bytes memory _issueShares = abi.encodeWithSignature(
-            "mintShares(address[],uint256[])",
-            [recipient],
-            [shares]
-        );
-        bytes memory _issueLoot = abi.encodeWithSignature(
-            "mintLoot(address[],uint256[])",
-            [recipient],
-            [loot]
-        );
+        address recipient,
+        uint32 proposalId,
+        address escrow
+    ) public view returns (bytes memory) {
+        // Workaround for solidity dynamic memory array
+        address[] memory _recipients = new address[](1);
+        _recipients[0] = recipient;
 
-        uint32 proposalId = baal.proposalCount() + 1;
         bytes memory _releaseEscrow = abi.encodeWithSignature(
             "releaseEscrow(uint32)",
             proposalId
@@ -39,23 +32,43 @@ contract TributeEscrow {
 
         bytes memory tributeMultisend = abi.encodePacked(
             uint8(0),
-            address(this),
+            escrow,
             uint256(0),
             uint256(_releaseEscrow.length),
             bytes(_releaseEscrow)
         );
 
         if (shares > 0) {
+            // Workaround for solidity dynamic memory array
+            uint256[] memory _shares = new uint256[](1);
+            _shares[0] = shares;
+
+            bytes memory _issueShares = abi.encodeWithSignature(
+                "mintShares(address[],uint256[])",
+                _recipients,
+                _shares
+            );
+
             tributeMultisend = abi.encodePacked(
                 tributeMultisend,
                 uint8(0),
-                address(baal),
+                baal,
                 uint256(0),
                 uint256(_issueShares.length),
                 bytes(_issueShares)
             );
         }
         if (loot > 0) {
+            // Workaround for solidity dynamic memory array
+            uint256[] memory _loot = new uint256[](1);
+            _loot[0] = loot;
+
+            bytes memory _issueLoot = abi.encodeWithSignature(
+                "mintLoot(address[],uint256[])",
+                _recipients,
+                _loot
+            );
+
             tributeMultisend = abi.encodePacked(
                 tributeMultisend,
                 uint8(0),
@@ -70,9 +83,38 @@ contract TributeEscrow {
             "multiSend(bytes)",
             tributeMultisend
         );
+        return _multisendAction;
     }
 
-    function releaseEscrow(uint32 proposalId) public {
+    function submitTributeProposal(
+        Baal baal,
+        address token,
+        uint256 amount,
+        uint256 shares,
+        uint256 loot,
+        address recipient,
+        uint32 expiration,
+        string memory details
+    ) public {
+        uint32 proposalId = baal.proposalCount() + 1;
+        bytes memory encodedProposal = encodeTributeProposal(
+            address(baal),
+            shares,
+            loot,
+            recipient,
+            proposalId,
+            address(this)
+        );
+        escrows[address(baal)][proposalId] = Escrow(
+            token,
+            recipient,
+            amount,
+            false
+        );
+        baal.submitProposal(encodedProposal, expiration, details);
+    }
+
+    function releaseEscrow(uint32 proposalId) external {
         Baal baal = Baal(payable(msg.sender));
         Escrow storage escrow = escrows[address(baal)][proposalId];
         require(!escrow.released, "Already released");

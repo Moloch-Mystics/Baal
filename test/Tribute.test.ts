@@ -5,8 +5,9 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 
 import { Baal } from '../src/types/Baal'
 import { TestErc20 } from '../src/types/TestErc20'
+import { TributeEscrow } from '../src/types/TributeEscrow'
 import { Loot } from '../src/types/Loot'
-import { encodeMultiAction } from '../src/util'
+import { decodeMultiAction, encodeMultiAction } from '../src/util'
 import { BigNumber } from '@ethersproject/bignumber'
 import { buildContractCall } from '@gnosis.pm/safe-contracts'
 import { MultiSend } from '../src/types/MultiSend'
@@ -122,21 +123,6 @@ const getBaalParams = async function (
   )
 }
 
-const verifyProposal = function (prop1: any, prop2: any, overrides?: any) {
-  for (let key in prop1) {
-    if (Number.isInteger(+key)) {
-      continue
-    }
-    if (overrides && key in overrides) {
-      // console.log('override', key)
-      expect(prop1[key]).to.equal(overrides[key])
-    } else {
-      // console.log('check', key)
-      expect(prop1[key]).to.equal(prop2[key])
-    }
-  }
-}
-
 describe.only('Tribute proposal type', function () {
   let baal: Baal
   let lootSingleton: Loot
@@ -178,6 +164,8 @@ describe.only('Tribute proposal type', function () {
     weth = (await ERC20.deploy('WETH', 'WETH', 10000000)) as TestErc20
     applicantWeth = weth.connect(applicant)
 
+    await weth.transfer(applicant.address, 1000)
+
     multisend = (await MultisendContract.deploy()) as MultiSend
 
     baal = (await BaalContract.deploy()) as Baal
@@ -216,7 +204,6 @@ describe.only('Tribute proposal type', function () {
     it('Allows applicant to tribute tokens in exchagne for shares', async function () {
       expect(await weth.balanceOf(baal.address)).to.equal(0)
 
-      await weth.transfer(applicant.address, 1000)
       await applicantWeth.approve(baal.address, 100)
 
       const mintShares = await baal.interface.encodeFunctionData('mintShares', [[applicant.address], [100]])
@@ -242,7 +229,6 @@ describe.only('Tribute proposal type', function () {
     it('EXPLOIT - Allows another proposal to spend tokens intended for tribute', async function () {
       expect(await weth.balanceOf(baal.address)).to.equal(0)
 
-      await weth.transfer(applicant.address, 1000)
       await applicantWeth.approve(baal.address, 100)
 
       const mintShares = await baal.interface.encodeFunctionData('mintShares', [[applicant.address], [100]])
@@ -255,6 +241,8 @@ describe.only('Tribute proposal type', function () {
         [BigNumber.from(0), BigNumber.from(0)],
         [0, 0]
       )
+
+      const decoded = decodeMultiAction(multisend, encodedProposal)
 
       // malicious proposal sends tokens but skips issuing shares
       const maliciousProposal = encodeMultiAction(multisend, [sendTribute], [weth.address], [BigNumber.from(0)], [0])
@@ -269,6 +257,30 @@ describe.only('Tribute proposal type', function () {
       await baal.processProposal(2, maliciousProposal)
       expect(await weth.balanceOf(baal.address)).to.equal(100)
       expect(await baal.balanceOf(applicant.address)).to.equal(0)
+    })
+  })
+
+  describe('safe tribute', function () {
+    let tributeEscrow: TributeEscrow
+    this.beforeEach(async function () {
+      const TributeEscrowContract = await ethers.getContractFactory('TributeEscrow')
+      tributeEscrow = (await TributeEscrowContract.deploy()) as TributeEscrow
+    })
+    it('allows external tribute escrow to submit share proposal in exchange for tokens', async function () {
+      await applicantWeth.approve(tributeEscrow.address, 100)
+
+      await tributeEscrow.submitTributeProposal(baal.address, applicantWeth.address, 100, 100, 0, applicant.address, proposal.expiration, 'tribute')
+      await baal.sponsorProposal(1)
+      await baal.submitVote(1, yes)
+      await moveForwardPeriods(2)
+
+      const encodedProposal = await tributeEscrow.encodeTributeProposal(baal.address, 100, 0, applicant.address, 1, tributeEscrow.address)
+
+      const decoded = decodeMultiAction(multisend, encodedProposal)
+
+      await baal.processProposal(1, encodedProposal)
+      expect(await weth.balanceOf(baal.address)).to.equal(100)
+      expect(await baal.balanceOf(applicant.address)).to.equal(100)
     })
   })
 })
