@@ -994,6 +994,10 @@ contract Baal is Executor, Initializable, CloneFactory {
         uint256 permission = shamans[shaman];
         return (permission == 4 || permission == 5 || permission == 6 || permission == 7);
     }
+    
+    function didProposalPass(uint256 proposalId) public view returns (bool) {
+        return proposals[proposalId].passed;
+    }
 
     /***************
     HELPER FUNCTIONS
