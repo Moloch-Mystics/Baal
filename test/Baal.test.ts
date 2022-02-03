@@ -544,8 +544,6 @@ describe('Baal contract', function () {
       await submitAndProcessProposal(baal, removeWethAction)
 
       expect(await baal.getGuildTokens()).to.eql([])
-
-
     })
   })
 
