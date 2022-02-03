@@ -32,19 +32,30 @@ const revertMessages = {
   submitProposalFlag: '!flag',
   sponsorProposalExpired: 'expired',
   sponsorProposalSponsor: '!sponsor',
-  sponsorProposalExists: '!exist',
-  sponsorProposalSponsored: 'sponsored',
+  sponsorProposalNotSubmitted: '!submitted',
   submitVoteNotSponsored: '!sponsored',
-  submitVoteTimeEnded: 'ended',
+  submitVoteNotVoting: '!voting',
   submitVoteVoted: 'voted',
   submitVoteMember: '!member',
   submitVoteWithSigTimeEnded: 'ended',
   submitVoteWithSigVoted: 'voted',
   submitVoteWithSigMember: '!member',
+  processProposalNotReady: '!ready',
   proposalMisnumbered: '!exist',
   unsetGuildTokensLastToken: 'reverted with panic code 0x32 (Array accessed at an out-of-bounds or negative index)',
   sharesTransferPaused: '!transferable',
   sharesInsufficientBalance: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)'
+}
+
+const STATES = {
+  UNBORN: 0,
+  SUBMITTED: 1,
+  VOTING: 2,
+  CANCELLED: 3,
+  GRACE: 4,
+  READY: 5,
+  PROCESSED: 6,
+  DEEFEATED: 7
 }
 
 const zeroAddress = '0x0000000000000000000000000000000000000000'
@@ -60,8 +71,8 @@ async function blockNumber() {
 }
 
 async function moveForwardPeriods(periods: number) {
-  const goToTime = deploymentConfig.VOTING_PERIOD_IN_SECONDS * periods
-  await ethers.provider.send('evm_increaseTime', [goToTime])
+  const goToTime = (await blockTime()) + deploymentConfig.VOTING_PERIOD_IN_SECONDS * periods
+  await ethers.provider.send("evm_mine", [goToTime])
   return true
 }
 
@@ -455,7 +466,6 @@ describe('Baal contract', function () {
       await shamanBaal.delegate(applicant.address) // set shaman delegate -> applicant
       const t3 = await blockTime()
       await baal.transfer(shaman.address, deploymentConfig.SPONSOR_THRESHOLD)
-      const t4 = await blockTime()
       
       const summonerBalance = await baal.balanceOf(summoner.address)
       const summonerVotes = await baal.getCurrentVotes(summoner.address)
@@ -578,7 +588,7 @@ describe('Baal contract', function () {
       expect(proposalData.votingEnds).to.equal(now + deploymentConfig.VOTING_PERIOD_IN_SECONDS)
       expect(proposalData.yesVotes).to.equal(0)
       expect(proposalData.noVotes).to.equal(0)
-      expect(proposalData.actionFailed).to.equal(false)
+      // TODO status checks
       expect(proposalData.expiration).to.equal(proposal.expiration)
       expect(proposalData.details).to.equal(ethers.utils.id(proposal.details))
       // TODO test data hash is accurate
@@ -608,12 +618,17 @@ describe('Baal contract', function () {
 
       const proposalData = await baal.proposals(1)
       expect(proposalData.votingStarts).to.equal(0)
+      const state = await baal.state(1) 
+      expect(state).to.equal(STATES.SUBMITTED) 
 
       await baal.sponsorProposal(1)
       const now = await blockTime()
       const proposalDataSponsored = await baal.proposals(1)
       expect(proposalDataSponsored.votingStarts).to.equal(now)
       expect(proposalDataSponsored.votingEnds).to.equal(now + deploymentConfig.VOTING_PERIOD_IN_SECONDS)
+
+      const state2 = await baal.state(1)
+      expect(state2).to.equal(STATES.VOTING) 
     })
 
     it('require fail - expired', async function () {
@@ -623,7 +638,6 @@ describe('Baal contract', function () {
       expect(baal.sponsorProposal(1)).to.be.revertedWith(revertMessages.sponsorProposalExpired)
     })
 
-
     it('edge case - expiration exists, but far enough ahead', async function() {
       const expiration = (await blockTime()) + deploymentConfig.VOTING_PERIOD_IN_SECONDS + deploymentConfig.GRACE_PERIOD_IN_SECONDS + 10000
       await baal.submitProposal(proposal.data, expiration, ethers.utils.id(proposal.details))
@@ -631,7 +645,6 @@ describe('Baal contract', function () {
       const proposalDataSponsored = await baal.proposals(1)
       expect(proposalDataSponsored.votingStarts).to.equal(now)
     })
-
 
     it('require fail - not sponsor', async function () {
       await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
@@ -654,7 +667,9 @@ describe('Baal contract', function () {
     })
 
     it('require fail - proposal doesnt exist', async function () {
-      expect(baal.sponsorProposal(1)).to.be.revertedWith(revertMessages.sponsorProposalExists)
+      const state = await baal.state(1) 
+      expect(state).to.equal(STATES.UNBORN)
+      expect(baal.sponsorProposal(1)).to.be.revertedWith(revertMessages.sponsorProposalNotSubmitted)
     })
 
     it('require fail - already sponsored', async function () {
@@ -663,7 +678,9 @@ describe('Baal contract', function () {
       const proposalData = await baal.proposals(1)
       expect(proposalData.votingStarts).to.equal(0)
       await baal.sponsorProposal(1)
-      expect(baal.sponsorProposal(1)).to.be.revertedWith(revertMessages.sponsorProposalSponsored)
+      const state = await baal.state(1) 
+      expect(state).to.equal(STATES.VOTING)
+      expect(baal.sponsorProposal(1)).to.be.revertedWith(revertMessages.sponsorProposalNotSubmitted)
     })
   })
 
@@ -700,8 +717,10 @@ describe('Baal contract', function () {
 
     it("require fail - voting period has ended", async function () {
       await moveForwardPeriods(2);
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.DEEFEATED)
       expect(baal.submitVote(1, no)).to.be.revertedWith(
-        revertMessages.submitVoteTimeEnded
+        revertMessages.submitVoteNotVoting
       );
     });
 
@@ -722,8 +741,10 @@ describe('Baal contract', function () {
   describe('submitVote (no self-sponsor)', function () {
     it('require fail - voting not started', async function() {
       await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.SUBMITTED)
       expect(baal.submitVote(1, no)).to.be.revertedWith(
-        revertMessages.submitVoteNotSponsored
+        revertMessages.submitVoteNotVoting
       );
     })
   })
@@ -740,23 +761,22 @@ describe('Baal contract', function () {
       await moveForwardPeriods(2);
       await baal.processProposal(1, proposal.data);
       const afterProcessed = await baal.proposals(1);
-      verifyProposal(afterProcessed, beforeProcessed, { processed: true, passed: true })
+      verifyProposal(afterProcessed, beforeProcessed)
+      // TODO check proposal status flags
       /* TODO test that execution happened*/
     });
 
-    it("happy case no wins", async function () {
+    it("require fail - no wins, proposal is defeated", async function () {
       await baal.submitProposal(
         proposal.data,
         proposal.expiration,
         ethers.utils.id(proposal.details)
       );
       await baal.submitVote(1, no);
-      const beforeProcessed = await baal.proposals(1);
       await moveForwardPeriods(2);
-      await baal.processProposal(1, proposal.data);
-      const afterProcessed = await baal.proposals(1);
-      verifyProposal(afterProcessed, beforeProcessed, { processed: true })
-      /* TODO test that execution was skipped*/
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.DEEFEATED)
+      expect(baal.processProposal(1, proposal.data)).to.be.revertedWith(revertMessages.processProposalNotReady)
     });
 
     it("require fail - proposal does not exist", async function () {
@@ -766,9 +786,11 @@ describe('Baal contract', function () {
         ethers.utils.id(proposal.details)
       );
       await baal.submitVote(1, yes);
+      const state = await baal.state(2)
+      expect(state).to.equal(STATES.UNBORN)
       expect(
         baal.processProposal(2, proposal.data)
-      ).to.be.revertedWith("!exist");
+      ).to.be.revertedWith(revertMessages.processProposalNotReady);
     });
 
     it("require fail - prev proposal not processed", async function () {

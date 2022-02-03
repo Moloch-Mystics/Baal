@@ -66,6 +66,8 @@ contract Baal is Executor, Initializable, CloneFactory {
     string public name; /*'name' for erc20 `shares` accounting*/
     string public symbol; /*'symbol' for erc20 `shares` accounting*/
 
+    uint32 public latestSponsoredProposalId; /* the id of the last proposal to be sponsored */
+
     bytes32 constant DOMAIN_TYPEHASH =
         keccak256(
             "EIP712Domain(string name,uint chainId,address verifyingContract)"
@@ -91,7 +93,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     mapping(address => uint256) public nonces; /*maps record of states for signing & validating signatures*/
 
     mapping(address => Member) public members; /*maps `members` accounts to struct details*/
-    mapping(uint256 => Proposal) public proposals; /*maps `proposalCount` to struct details*/
+    mapping(uint256 => Proposal) public proposals; /*maps `proposal id` to struct details*/
     mapping(address => bool) public guildTokensEnabled; /*maps guild token addresses -> enabled status (prevents duplicates in guildTokens[]) */
 
     mapping(uint256 => address) private _owners; /*maps token ID to owner*/
@@ -229,6 +231,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     struct Proposal {
         /*Baal proposal details*/
         uint32 id; /*id of this proposal, used in existence checks (increments from 1)*/
+        uint32 prevProposalId; /* id of the previous proposal - set at sponsorship from latestSponsoredProposalId */
         uint32 votingStarts; /*starting time for proposal in seconds since unix epoch*/
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
         uint32 graceEnds; /*termination date for proposal in seconds since unix epoch - derived from `gracePeriod` set on proposal*/
@@ -237,11 +240,27 @@ contract Baal is Executor, Initializable, CloneFactory {
         uint256 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
         uint256 maxTotalSharesAndLootAtYesVote; /* highest share+loot count during any individual yes vote*/
         uint256 rqYesVotes; /* yes voting shares that have ragequit since voting yes */
-        bool passed; /* yes only if proposal pass and also passed all execution checks at processing time */
-        bool actionFailed; /*label if proposal processed but action failed TODO gas optimize*/
-        bool processed; /* true if process proposal has been called for this proposal */
+        bool[4] status; /* [cancelled, processed, passed, actionFailed] */
+        // bool cancelled; /* true if proposal is cancelled (by sponsor/govshaman, or with enough undelegations), skips processing */
+        // bool processed; /* true if process proposal has been called for this proposal */
+        // bool passed; /* yes only if proposal pass and also passed all execution checks at processing time */
+        // bool actionFailed; /*label if proposal processed but action failed TODO gas optimize*/
+        address sponsor; /* address of the sponsor - set at sponsor proposal - relevant for cancellation */
         bytes32 proposalDataHash; /*hash of raw data associated with state updates*/
         string details; /*human-readable context for proposal*/
+    }
+
+    /* Unborn -> Submitted -> Voting -> Grace -> Ready -> Processed 
+                              \-> Cancelled  \-> Defeated   */
+    enum ProposalState {
+        Unborn,    /* 0 - can submit w/ this id */
+        Submitted, /* 1 - can sponsor -> voting */
+        Voting,    /* 2 - can be cancelled, otherwise proceeds to grace */
+        Cancelled, /* 3 - terminal state, counts as processed */
+        Grace,     /* 4 - proceeds to ready/failed */
+        Ready,     /* 5 - can be processed */
+        Processed, /* 6 - terminal state */
+        Defeated   /* 7 - terminal state, yes votes <= no votes, counts as processed */
     }
 
     /// @notice Summon Baal with voting configuration & initial array of `members` accounts with `shares` & `loot` weights.
@@ -310,20 +329,24 @@ contract Baal is Executor, Initializable, CloneFactory {
             proposalCount++; /*increment proposal counter*/
             proposals[proposalCount] = Proposal( /*push params into proposal struct - start voting period timer if member submission*/
                 proposalCount,
-                selfSponsor ? uint32(block.timestamp) : 0,
-                selfSponsor ? uint32(block.timestamp) + votingPeriod : 0,
-                selfSponsor ? uint32(block.timestamp) + votingPeriod + gracePeriod : 0,
-                expiration,
-                0,
-                0,
-                0,
-                0,
-                false,
-                false,
-                false,
+                selfSponsor ? latestSponsoredProposalId : 0, /* prevProposalId */
+                selfSponsor ? uint32(block.timestamp) : 0, /* votingStarts */
+                selfSponsor ? uint32(block.timestamp) + votingPeriod : 0, /* votingEnds */
+                selfSponsor ? uint32(block.timestamp) + votingPeriod + gracePeriod : 0, /* graceEnds */
+                expiration, 
+                0, /* yes votes */
+                0, /* no votes */
+                0, /* highestMaxSharesAndLootAtYesVote */
+                0, /* rqYesVotes */
+                [false, false, false, false], /* [cancelled, processed, passed, actionFailed] */
+                selfSponsor ? msg.sender : address(0),
                 proposalDataHash,
                 details
             );
+        }
+
+        if (selfSponsor) {
+            latestSponsoredProposalId = proposalCount;
         }
 
         emit SubmitProposal(
@@ -344,8 +367,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         Proposal storage prop = proposals[id]; /*alias proposal storage pointers*/
 
         require(getCurrentVotes(msg.sender) >= sponsorThreshold, "!sponsor"); /*check 'votes > threshold - required to sponsor proposal*/
-        require(prop.id != 0, "!exist"); /*check proposal existence*/
-        require(prop.votingStarts == 0, "sponsored"); /*check proposal not already sponsored*/
+        require(state(id) == ProposalState.Submitted, "!submitted");
         require(prop.expiration == 0 || prop.expiration > block.timestamp + votingPeriod + gracePeriod, "expired");
 
         prop.votingStarts = uint32(block.timestamp);
@@ -355,6 +377,10 @@ contract Baal is Executor, Initializable, CloneFactory {
             prop.graceEnds = uint32(block.timestamp) + votingPeriod + gracePeriod;
         }
 
+        prop.prevProposalId = latestSponsoredProposalId;
+        prop.sponsor = msg.sender;
+        latestSponsoredProposalId = id;
+
         emit SponsorProposal(msg.sender, id, block.timestamp);
     }
 
@@ -363,8 +389,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @param approved If 'true', member will cast `yesVotes` onto proposal - if 'false', `noVotes` will be counted.
     function submitVote(uint32 id, bool approved) external nonReentrant {
         Proposal storage prop = proposals[id]; /*alias proposal storage pointers*/
-        require(prop.votingStarts > 0, "!sponsored"); /* check proposal is sponsored (assumes voting starts immediately) */
-        require(prop.votingEnds >= block.timestamp, "ended"); /*check voting period has not ended*/
+        require(state(id) == ProposalState.Voting, "!voting");
 
         uint256 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
         require(balanceOf[msg.sender] != 0, "!member"); /*check 'membership' - required to vote on proposals*/
@@ -403,8 +428,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         bytes32 s
     ) external nonReentrant {
         Proposal storage prop = proposals[id]; /*alias proposal storage pointers*/
-        require(prop.votingEnds >= block.timestamp, "ended"); /*check voting period has not ended*/
-        require(prop.votingStarts <= block.timestamp, "!started"); /* check voting period has started*/
+        require(state(id) == ProposalState.Voting, "!voting");
 
         bytes32 domainSeparator = keccak256(
             abi.encode(
@@ -488,7 +512,16 @@ contract Baal is Executor, Initializable, CloneFactory {
     ) external nonReentrant {
         Proposal storage prop = proposals[id]; /*alias `proposal` storage pointers*/
 
-        _processingReady(id, prop); /*validate `proposal` processing requirements*/
+        require(state(id) == ProposalState.Ready, "!ready");
+
+        ProposalState prevProposalState = state(prop.prevProposalId);
+        require(
+            prevProposalState == ProposalState.Processed ||
+            prevProposalState == ProposalState.Cancelled ||
+            prevProposalState == ProposalState.Defeated ||
+            prevProposalState == ProposalState.Unborn,
+            "prev!processed"
+        );
 
         // check that the proposalData matches the stored hash
         require(
@@ -496,7 +529,7 @@ contract Baal is Executor, Initializable, CloneFactory {
             "incorrect calldata"
         );
 
-        prop.processed = true;
+        prop.status[1] = true;
         bool okToExecute = true;
 
         // Make proposal fail if after expiration
@@ -517,9 +550,9 @@ contract Baal is Executor, Initializable, CloneFactory {
 
         /*check if `proposal` approved by simple majority of members*/
         if (prop.yesVotes > prop.noVotes && okToExecute) {
-            prop.passed = true; /*flag that proposal passed - allows minion-like extensions*/
+            prop.status[2] = true; /*flag that proposal passed - allows minion-like extensions*/
             bool success = processActionProposal(proposalData); /*execute 'action'*/
-            if (!success) prop.actionFailed = true;
+            if (!success) prop.status[3] = true;
         }
 
         emit ProcessProposal(id); /*emit event reflecting that given proposal processed*/
@@ -639,6 +672,13 @@ contract Baal is Executor, Initializable, CloneFactory {
         proposalOffering = newOffering; /*set new proposal offering amount */
         quorumPercent = quorum;
         sponsorThreshold = sponsor;
+    }
+
+    function cancelProposal(uint32 id) external {
+        Proposal storage prop = proposals[id];
+        require(state(id) == ProposalState.Voting, "!voting");
+        require(msg.sender == prop.sponsor || getPriorVotes(prop.sponsor, block.timestamp) < sponsorThreshold || isGovernor(msg.sender), "!cancellable");
+        prop.status[0] = true;
     }
 
     /// @notice Baal-only function to set shaman status.
@@ -786,6 +826,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @param amount The number of `shares` tokens to transfer.
     /// @return success Whether or not the transfer succeeded.
     function transfer(address to, uint256 amount) external returns (bool success) {
+        require(!sharesPaused, "!transferable");
         success = _transfer(msg.sender, to, amount);
     }
 
@@ -795,6 +836,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @param amount The number of `shares` tokens to transfer.
     /// @return success Whether or not the transfer succeeded.
     function transferFrom(address from, address to, uint256 amount) external returns (bool success) {
+        require(!sharesPaused, "!transferable");
         if (allowance[from][msg.sender] != type(uint256).max) {
             allowance[from][msg.sender] -= amount;
         }
@@ -803,9 +845,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     }
 
     function _transfer(address from, address to, uint256 amount) private returns (bool success) {
-        require(!sharesPaused, "!transferable");
-
-        balanceOf[msg.sender] -= amount;
+        balanceOf[from] -= amount;
 
         /*If recipient is receiving their first shares, auto-self delegate*/
         if (balanceOf[to] == 0 && numCheckpoints[to] == 0 && amount > 0) {
@@ -817,9 +857,9 @@ contract Baal is Executor, Initializable, CloneFactory {
             balanceOf[to] += amount;
         }
 
-        _moveDelegates(delegates[msg.sender], delegates[to], amount);
+        _moveDelegates(delegates[from], delegates[to], amount);
 
-        emit Transfer(msg.sender, to, amount);
+        emit Transfer(from, to, amount);
 
         success = true;
     }
@@ -857,7 +897,7 @@ contract Baal is Executor, Initializable, CloneFactory {
                 }
  
                 // found processed proposal from an active delegate - we're done
-                if (prop.processed) { 
+                if (prop.status[1] /* processed */) { 
                     done = true;
                     break;
                 }
@@ -908,6 +948,32 @@ contract Baal is Executor, Initializable, CloneFactory {
     /***************
     GETTER FUNCTIONS
     ***************/
+
+    function state(uint32 id) public view returns (ProposalState) {
+        Proposal memory prop = proposals[id];
+        if (prop.id == 0) {
+            return ProposalState.Unborn;
+        } else if (prop.status[0] /* cancelled */) {
+            return ProposalState.Cancelled;
+        } else if (prop.votingStarts == 0) {
+            return ProposalState.Submitted;
+        } else if (block.timestamp <= prop.votingEnds) {
+            return ProposalState.Voting;
+        } else if (block.timestamp <= prop.graceEnds) {
+            return ProposalState.Grace;
+        } else if (prop.noVotes >= prop.yesVotes) {
+            return ProposalState.Defeated;
+        } else if (prop.status[1] /* processed */) {
+            return ProposalState.Processed;
+        } else {
+            return ProposalState.Ready;
+        }
+    }
+
+    function getProposalStatus(uint32 id) public view returns (bool[4] memory) {
+        return proposals[id].status;
+    }
+
     /// @notice Returns the current delegated `vote` balance for `account`.
     /// @param account The user to check delegated `votes` for.
     /// @return votes Current `votes` delegated to `account`.
@@ -1171,22 +1237,6 @@ contract Baal is Executor, Initializable, CloneFactory {
 
                 emit Transfer(address(0), to, shares); /*emit event reflecting mint of `shares` with erc20 accounting*/
             }
-        }
-    }
-
-    /// @notice Check to validate proposal processing requirements.
-    function _processingReady(uint32 id, Proposal memory prop)
-        private
-        view
-        returns (bool ready)
-    {
-        unchecked {
-            require(prop.id != 0, "!exist"); /*check proposal existence*/
-            Proposal memory prevProposal = proposals[id - 1];
-            require(prevProposal.processed || prevProposal.id == 0, "prev!processed"); /*check previous proposal has processed*/
-            require(prop.graceEnds <= block.timestamp, "!ended"); /*check grace period has ended*/
-            require(!prop.processed, "processed"); /*check given proposal has not yet been processed*/
-            ready = true; /*otherwise, process if voting period done*/
         }
     }
 
