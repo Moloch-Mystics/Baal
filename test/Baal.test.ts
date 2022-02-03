@@ -52,15 +52,6 @@ async function moveForwardPeriods(periods: number) {
   return true
 }
 
-async function enableShaman(baal: Baal, summoner: SignerWithAddress, multisend: MultiSend, proposal: { [key: string]: any }) {
-  const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [[summoner.address], true])
-  const enableShamanEncoded = encodeMultiAction(multisend, [enableShamanAction], [baal.address], [BigNumber.from(0)], [0])
-  await baal.submitProposal(proposal.votingPeriod, enableShamanEncoded, proposal.expiration, ethers.utils.id(proposal.details))
-  await baal.submitVote(1, true)
-  await moveForwardPeriods(2)
-  await baal.processProposal(1, proposal.revertOnFailure)
-}
-
 const deploymentConfig = {
   GRACE_PERIOD_IN_SECONDS: 43200,
   MIN_VOTING_PERIOD_IN_SECONDS: 172800,
@@ -90,6 +81,19 @@ describe('Baal contract', function () {
 
   const yes = true
   const no = false
+
+  async function submitAndProcessProposal(baalAsAddress: Baal, action: any) {
+    const encodedAction = encodeMultiAction(multisend, [action], [baalAsAddress.address], [BigNumber.from(0)], [0])
+    await baalAsAddress.submitProposal(proposal.votingPeriod, encodedAction, proposal.expiration, ethers.utils.id(proposal.details))
+    await baalAsAddress.submitVote(1, true)
+    await moveForwardPeriods(2)
+    return await baalAsAddress.processProposal(1, proposal.revertOnFailure)
+  }
+
+  async function enableShaman(shamanToEnable: SignerWithAddress) {
+    const enableShamanAction = await baal.interface.encodeFunctionData('setShamans', [[shamanToEnable.address], true])
+    return await submitAndProcessProposal(baal, enableShamanAction)
+  }
 
   beforeEach(async function () {
     const BaalContract = await ethers.getContractFactory('Baal')
@@ -210,7 +214,7 @@ describe('Baal contract', function () {
     })
   })
 
-  describe.only('shaman actions', function () {
+  describe('shaman actions', function () {
     it ('sad case - shaman is not whitelisted', async function (){
       expect(await baal.shamans(summoner.address)).to.be.false
       
@@ -232,7 +236,7 @@ describe('Baal contract', function () {
     })
 
     it('sad case - minting and burning array parity', async function () {
-      await enableShaman(baal, applicant, multisend, proposal)
+      await enableShaman(applicant)
       const baalAsApplicant = await baal.connect(applicant)
       
       await expect(
@@ -271,7 +275,7 @@ describe('Baal contract', function () {
     it('happy case - allows a proposal to enable a shaman', async function () {
       expect(await baal.shamans(summoner.address)).to.be.false
 
-      await enableShaman(baal, summoner, multisend, proposal)
+      await enableShaman(summoner)
 
       expect(await baal.shamans(summoner.address)).to.be.true
     })
@@ -282,6 +286,7 @@ describe('Baal contract', function () {
       await expect(
         baalAsShaman.mintShares([summoner.address], [minting])
       ).to.emit(baal, 'Transfer').withArgs(zeroAddress, summoner.address, minting)
+      .to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares, shares+minting)
       expect(await baal.balanceOf(summoner.address)).to.equal(shares + minting)
     })
 
@@ -291,6 +296,7 @@ describe('Baal contract', function () {
       await expect(
         baalAsShaman.burnShares([summoner.address], [burning])
       ).to.emit(baal, 'Transfer').withArgs(summoner.address, zeroAddress, burning)
+      .to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares, shares - burning)
       expect(await baal.balanceOf(summoner.address)).to.equal(shares - burning)
     })
 
@@ -310,6 +316,51 @@ describe('Baal contract', function () {
         baalAsShaman.burnLoot([summoner.address], [burning])
       ).to.emit(baal, 'TransferLoot').withArgs(summoner.address, zeroAddress, burning)
       expect((await (baal.members(summoner.address))).loot).to.equal(loot - burning)
+    })
+
+    it ('happy case - have shaman mint and burn delegated shares', async function () {
+      const minting = 100 
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(0)
+
+      // mint shares for a separate member than the summoner
+      await baalAsShaman.mintShares([applicant.address], [minting])
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(minting)
+      expect(await baal.delegates(applicant.address)).to.equal(applicant.address)
+      expect(await baal.getCurrentVotes(applicant.address)).to.equal(minting)
+      expect(await baal.getCurrentVotes(summoner.address)).to.equal(shares)
+
+      // delegate shares from applicant to the summoner
+      const baalAsApplicant = baal.connect(applicant)
+
+      await expect(
+        baalAsApplicant.delegate(summoner.address)
+      ).to.emit(baal, 'DelegateChanged').withArgs(applicant.address, applicant.address, summoner.address)
+      .to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares, shares + minting)
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(minting)
+      expect(await baal.delegates(applicant.address)).to.equal(summoner.address)
+      expect(await baal.getCurrentVotes(applicant.address)).to.equal(0)
+      expect(await baal.getCurrentVotes(summoner.address)).to.equal(shares + minting)
+
+      // mint shares for the delegator
+      await expect(
+        baalAsShaman.mintShares([applicant.address], [minting])
+      ).to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares + minting, shares + 2 * minting)
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(2 * minting)
+      expect(await baal.delegates(applicant.address)).to.equal(summoner.address)
+      expect(await baal.getCurrentVotes(applicant.address)).to.equal(0)
+      expect(await baal.getCurrentVotes(summoner.address)).to.equal(shares + 2 * minting)
+
+      // burn shares for the delegator
+      await baalAsShaman.burnShares([applicant.address], [minting])
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(minting)
+      expect(await baal.delegates(applicant.address)).to.equal(summoner.address)
+      expect(await baal.getCurrentVotes(applicant.address)).to.equal(0)
+      expect(await baal.getCurrentVotes(summoner.address)).to.equal(shares + minting)
     })
   })
 
