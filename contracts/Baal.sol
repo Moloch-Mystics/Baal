@@ -467,7 +467,7 @@ contract Baal is Executor, Initializable {
         if (prop.yesVotes > prop.noVotes) {
             proposalsPassed[proposal] = true; /*flag that proposal passed - allows minion-like extensions*/
             bool success = processActionProposal(prop); /*execute 'action'*/
-            if (revertOnFailure) require(success, "call failure");
+            if (revertOnFailure) require(success, "call failure in proposed action");
             if (!success) prop.actionFailed = true;
         }
 
