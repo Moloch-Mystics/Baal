@@ -96,8 +96,6 @@ contract Baal is Executor, Initializable, CloneFactory {
     mapping(uint256 => Proposal) public proposals; /*maps `proposal id` to struct details*/
     mapping(address => bool) public guildTokensEnabled; /*maps guild token addresses -> enabled status (prevents duplicates in guildTokens[]) */
 
-    mapping(uint256 => address) private _owners; /*maps token ID to owner*/
-
     mapping(address => uint256) public shamans; /*maps shaman addresses to their permission level*/
     /* permissions registry for shamans
     0 = no permission
@@ -253,11 +251,11 @@ contract Baal is Executor, Initializable, CloneFactory {
     /* Unborn -> Submitted -> Voting -> Grace -> Ready -> Processed 
                               \-> Cancelled  \-> Defeated   */
     enum ProposalState {
-        Unborn,    /* 0 - can submit w/ this id */
+        Unborn,    /* 0 - can submit */
         Submitted, /* 1 - can sponsor -> voting */
         Voting,    /* 2 - can be cancelled, otherwise proceeds to grace */
         Cancelled, /* 3 - terminal state, counts as processed */
-        Grace,     /* 4 - proceeds to ready/failed */
+        Grace,     /* 4 - proceeds to ready/defeated */
         Ready,     /* 5 - can be processed */
         Processed, /* 6 - terminal state */
         Defeated   /* 7 - terminal state, yes votes <= no votes, counts as processed */
@@ -392,7 +390,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         require(state(id) == ProposalState.Voting, "!voting");
 
         uint256 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
-        require(balanceOf[msg.sender] != 0, "!member"); /*check 'membership' - required to vote on proposals*/
+        require(balance > 0, "!member"); /*check 'membership' - required to vote on proposals*/
         require(!members[msg.sender].voted[id], "voted"); /*check vote not already cast*/
 
         unchecked {
@@ -677,7 +675,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     function cancelProposal(uint32 id) external {
         Proposal storage prop = proposals[id];
         require(state(id) == ProposalState.Voting, "!voting");
-        require(msg.sender == prop.sponsor || getPriorVotes(prop.sponsor, block.timestamp) < sponsorThreshold || isGovernor(msg.sender), "!cancellable");
+        require(msg.sender == prop.sponsor || getPriorVotes(prop.sponsor, block.timestamp - 1) < sponsorThreshold || isGovernor(msg.sender), "!cancellable");
         prop.status[0] = true;
     }
 
@@ -870,50 +868,55 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @param sharesToBurn Baal voting weight to burn.
     function ragequit(
         address to,
-        uint256 lootToBurn,
-        uint256 sharesToBurn
+        uint256 sharesToBurn,
+        uint256 lootToBurn
     ) external nonReentrant {
         // add member shares to rqYesVotes for all active proposals the member voted yes on
         Member storage member = members[msg.sender];
         bool done = false;
-        uint256 prevDelegationTimeStamp = 0;
-        uint32[] memory rqProposalIds;
-        for (uint256 a = member.delegateChain.length - 1; a > 0; a--) { // loop over delegations, starting with latest
-            Delegation memory d = member.delegateChain[a];
+        uint256 nextDelegationTimeStamp = 0;
+        for (uint256 a = 0; a < member.delegateChain.length; a++) { // loop over delegations (we start with latest and work backwards)
+            console.log('delegate #', member.delegateChain.length - a - 1);
+            Delegation memory d = member.delegateChain[member.delegateChain.length - a - 1]; // look up latest delegation
             Member storage delegate = members[d.delegate];
-            uint32 nextYesVoteId = delegate.highestIDYesVote;
-            while (nextYesVoteId > 0) {
-                Proposal memory prop = proposals[nextYesVoteId];
+            uint32 proposalId = delegate.highestIDYesVote;
+            while (proposalId > 0) { // loop backwards over voting history, starting with latest
+                console.log('proposal #', proposalId);
+                Proposal memory prop = proposals[proposalId];
+                ProposalState proposalState = state(proposalId);
 
                 // if member delegated to someone else after, skip until we find proposals during delegation
-                if (prevDelegationTimeStamp != 0 && prop.votingStarts > prevDelegationTimeStamp) {
-                    nextYesVoteId = delegate.orderedYesVotes[nextYesVoteId];
+                if (nextDelegationTimeStamp != 0 && prop.votingStarts > nextDelegationTimeStamp) {
+                    proposalId = delegate.orderedYesVotes[proposalId]; // set proposalId to the previous yes vote Id
+                    console.log('skip proposal');
                     continue;
                 }
 
                 // voting started before delegation, move on to next delegate
-                if (prop.votingStarts < d.fromTimeStamp) { 
+                if (prop.votingStarts < d.fromTimeStamp) {
+                    console.log('next delegate');
                     break;
                 }
  
                 // found processed proposal from an active delegate - we're done
-                if (prop.status[1] /* processed */) { 
+                if (proposalState == ProposalState.Processed ||
+                    proposalState == ProposalState.Defeated ||
+                    proposalState == ProposalState.Cancelled && prop.graceEnds < block.timestamp
+                ) {
+                    console.log('done');
                     done = true;
                     break;
                 }
 
-                // skip if the given proposal has already had rqYesVotes updated
-                for (uint256 c; c < rqProposalIds.length; c++) {
-                    if (prop.id == rqProposalIds[c]) {
-                        nextYesVoteId = delegate.orderedYesVotes[nextYesVoteId];
-                        continue;
-                    }
+                // skip setting rqYesVotes if proposal is cancelled
+                if (proposalState != ProposalState.Cancelled) {
+                    console.log('set rqYesVotes', sharesToBurn);
+                    proposals[proposalId].rqYesVotes += sharesToBurn;
                 }
 
-                proposals[nextYesVoteId].rqYesVotes += sharesToBurn;
-                nextYesVoteId = delegate.orderedYesVotes[nextYesVoteId];
+                proposalId = delegate.orderedYesVotes[proposalId]; // set proposalId to the previous yes vote Id
             }
-            prevDelegationTimeStamp = d.fromTimeStamp;
+            nextDelegationTimeStamp = d.fromTimeStamp;
             if (done) break;
         }
 
@@ -1203,7 +1206,6 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @notice Burn function for Baal `shares`.
     function _burnShares(address from, uint256 shares) private {
         balanceOf[from] -= shares; /*subtract `shares` for `from` account*/
-
         unchecked {
             totalSupply -= shares; /*subtract from total Baal `shares`*/
         }

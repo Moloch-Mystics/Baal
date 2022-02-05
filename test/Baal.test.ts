@@ -155,6 +155,7 @@ describe('Baal contract', function () {
   let ERC20: ContractFactory
   let lootToken: Loot
   let shamanBaal: Baal
+  let applicantBaal: Baal
   let weth: TestErc20
   let applicantWeth: TestErc20
   let multisend: MultiSend
@@ -193,6 +194,7 @@ describe('Baal contract', function () {
 
     baal = (await BaalContract.deploy()) as Baal
     shamanBaal = baal.connect(shaman) // needed to send txns to baal as the shaman
+    applicantBaal = baal.connect(applicant) // needed to send txns to baal as the shaman
 
     encodedInitParams = await getBaalParams(
       baal,
@@ -346,6 +348,7 @@ describe('Baal contract', function () {
       expect(sponsorThreshold).to.be.equal(2)
     })
   })
+  
   describe('erc20 shares - approve', function() {
     it('happy case', async function() {
       await baal.approve(shaman.address, 20)
@@ -618,7 +621,7 @@ describe('Baal contract', function () {
 
       const proposalData = await baal.proposals(1)
       expect(proposalData.votingStarts).to.equal(0)
-      const state = await baal.state(1) 
+      const state = await baal.state(1)
       expect(state).to.equal(STATES.SUBMITTED) 
 
       await baal.sponsorProposal(1)
@@ -700,6 +703,9 @@ describe('Baal contract', function () {
 
       const highestIDYesVote = await baal.members(summoner.address);
       expect(highestIDYesVote).to.equal(1);
+
+      const prevYesVote = await(baal.getPreviousYesVoteIdById(summoner.address, highestIDYesVote))
+      expect(prevYesVote).to.equal(0)
     });
 
     it("happy case - no vote", async function () {
@@ -711,8 +717,8 @@ describe('Baal contract', function () {
       ).votes;
       expect(prop.noVotes).to.equal(votes);
 
-      const highestIndexYesVote = await baal.members(summoner.address);
-      expect(highestIndexYesVote).to.equal(0);
+      const highestIDYesVote = await baal.members(summoner.address);
+      expect(highestIDYesVote).to.equal(0);
     });
 
     it("require fail - voting period has ended", async function () {
@@ -735,6 +741,109 @@ describe('Baal contract', function () {
       expect(shamanBaal.submitVote(1, yes)).to.be.revertedWith(
         revertMessages.submitVoteMember
       );
+    });
+
+    it('scenario - two yes votes - history recorded', async function () {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details)) // p2
+      await baal.submitVote(1, yes)
+      await baal.submitVote(2, yes)
+      const prop1 = await baal.proposals(1)
+      const votes1 = await baal.getPriorVotes(summoner.address, prop1.votingStarts)
+      expect(prop1.yesVotes).to.equal(votes1);
+
+      const prop2 = await baal.proposals(2)
+      const votes2 = await baal.getPriorVotes(summoner.address, prop2.votingStarts)
+      expect(prop2.yesVotes).to.equal(votes2);
+
+      const highestIDYesVote = await baal.members(summoner.address);
+      expect(highestIDYesVote).to.equal(2);
+
+      const prevYesVote1 = await(baal.getPreviousYesVoteIdById(summoner.address, highestIDYesVote))
+      expect(prevYesVote1).to.equal(1)
+
+      const prevYesVote2 = await(baal.getPreviousYesVoteIdById(summoner.address, prevYesVote1))
+      expect(prevYesVote2).to.equal(0)
+    });
+
+    it('scenario - two yes votes w/ no vote in between - history recorded (no skipped)', async function () {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details)) // p2
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details)) // p3
+      await baal.submitVote(1, yes)
+      await baal.submitVote(2, no)
+      await baal.submitVote(3, yes)
+      const prop1 = await baal.proposals(1)
+      const votes1 = await baal.getPriorVotes(summoner.address, prop1.votingStarts)
+      expect(prop1.yesVotes).to.equal(votes1);
+
+      const prop2 = await baal.proposals(2)
+      const votes2 = await baal.getPriorVotes(summoner.address, prop2.votingStarts)
+      expect(prop2.noVotes).to.equal(votes2);
+
+      const prop3 = await baal.proposals(3)
+      const votes3 = await baal.getPriorVotes(summoner.address, prop3.votingStarts)
+      expect(prop3.yesVotes).to.equal(votes3);
+
+      const highestIDYesVote = await baal.members(summoner.address);
+      expect(highestIDYesVote).to.equal(3);
+
+      const prevYesVote1 = await(baal.getPreviousYesVoteIdById(summoner.address, highestIDYesVote))
+      expect(prevYesVote1).to.equal(1)
+
+      const prevYesVote2 = await(baal.getPreviousYesVoteIdById(summoner.address, prevYesVote1))
+      expect(prevYesVote2).to.equal(0)
+    });
+
+    it('scenario - two yes votes (out of order)', async function () {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details)) // p2
+      await baal.submitVote(2, yes)
+      await baal.submitVote(1, yes)
+      const prop1 = await baal.proposals(1)
+      const votes1 = await baal.getPriorVotes(summoner.address, prop1.votingStarts)
+      expect(prop1.yesVotes).to.equal(votes1);
+
+      const prop2 = await baal.proposals(2)
+      const votes2 = await baal.getPriorVotes(summoner.address, prop2.votingStarts)
+      expect(prop2.yesVotes).to.equal(votes2);
+
+      const highestIDYesVote = await baal.members(summoner.address);
+      expect(highestIDYesVote).to.equal(2);
+
+      const prevYesVote1 = await(baal.getPreviousYesVoteIdById(summoner.address, highestIDYesVote))
+      expect(prevYesVote1).to.equal(1)
+
+      const prevYesVote2 = await(baal.getPreviousYesVoteIdById(summoner.address, prevYesVote1))
+      expect(prevYesVote2).to.equal(0)
+    });
+
+    it('scenario - three yes votes (insert in between)', async function () {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details)) // p2
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details)) // p3
+      await baal.submitVote(1, yes)
+      await baal.submitVote(3, yes)
+      await baal.submitVote(2, yes)
+      const prop1 = await baal.proposals(1)
+      const votes1 = await baal.getPriorVotes(summoner.address, prop1.votingStarts)
+      expect(prop1.yesVotes).to.equal(votes1);
+
+      const prop2 = await baal.proposals(2)
+      const votes2 = await baal.getPriorVotes(summoner.address, prop2.votingStarts)
+      expect(prop2.yesVotes).to.equal(votes2);
+
+      const prop3 = await baal.proposals(3)
+      const votes3 = await baal.getPriorVotes(summoner.address, prop3.votingStarts)
+      expect(prop3.yesVotes).to.equal(votes3);
+
+      const highestIDYesVote = await baal.members(summoner.address);
+      expect(highestIDYesVote).to.equal(3);
+
+      const prevYesVote1 = await(baal.getPreviousYesVoteIdById(summoner.address, highestIDYesVote))
+      expect(prevYesVote1).to.equal(2)
+
+      const prevYesVote2 = await(baal.getPreviousYesVoteIdById(summoner.address, prevYesVote1))
+      expect(prevYesVote2).to.equal(1)
+
+      const prevYesVote3 = await(baal.getPreviousYesVoteIdById(summoner.address, prevYesVote2))
+      expect(prevYesVote3).to.equal(0)
     });
   });
   
@@ -861,24 +970,243 @@ describe('Baal contract', function () {
   });
 
   describe("ragequit", function () {
-    beforeEach(async function () {
-      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
-    })
-
     it('happy case - full ragequit', async function () {
       const lootBefore = await lootToken.balanceOf(summoner.address)
-      await baal.ragequit(summoner.address, loot, shares)
+      const summonerWethBefore = await weth.balanceOf(summoner.address)
+      await weth.transfer(baal.address, 100)
+      await baal.ragequit(summoner.address, shares, loot)
+      const sharesAfter = await baal.balanceOf(summoner.address)
       const lootAfter = await lootToken.balanceOf(summoner.address)
+      const summonerWethAfter = await weth.balanceOf(summoner.address)
+      const baalWethAfter = await weth.balanceOf(baal.address)
       expect(lootAfter).to.equal(lootBefore.sub(loot))
+      expect(sharesAfter).to.equal(0)
+      expect(summonerWethAfter).to.equal(summonerWethBefore)
+      expect(baalWethAfter).to.equal(0)
     })
 
     it('happy case - partial ragequit', async function () {
       const lootBefore = await lootToken.balanceOf(summoner.address)
-      const lootToBurn = 200
-      const sharesToBurn = 70
-      await baal.ragequit(summoner.address, lootToBurn, sharesToBurn)
+      const lootToBurn = 250
+      const sharesToBurn = 50
+      const summonerWethBefore = await weth.balanceOf(summoner.address)
+      await weth.transfer(baal.address, 100)
+      await baal.ragequit(summoner.address, sharesToBurn, lootToBurn)
+      const sharesAfter = await baal.balanceOf(summoner.address)
       const lootAfter = await lootToken.balanceOf(summoner.address)
+      const summonerWethAfter = await weth.balanceOf(summoner.address)
+      const baalWethAfter = await weth.balanceOf(baal.address)
       expect(lootAfter).to.equal(lootBefore.sub(lootToBurn))
+      expect(sharesAfter).to.equal(50)
+      expect(summonerWethAfter).to.equal(summonerWethBefore.sub(50))
+      expect(baalWethAfter).to.equal(50)
+    })
+
+    // TODO ragequit with multiple tokens, especially after setting / unsetting tokens
+    // TODO test ragequitting to different address
+  })
+
+  describe("ragequit - setting rqYesVotes", function() {
+    it('1 delegate, 1 yes vote', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await baal.ragequit(summoner.address, shares, loot)
+      const prop = await baal.proposals(1)
+      expect(prop.rqYesVotes).to.equal(shares)
+    })
+
+    it('1 delegate, 1 yes vote - ready -> sets rqYesVotes', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await moveForwardPeriods(2)
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.READY)
+      await baal.ragequit(summoner.address, shares, loot)
+      const prop = await baal.proposals(1)
+      expect(prop.rqYesVotes).to.equal(shares)
+    })
+
+    it('1 delegate, 1 yes vote - processed -> no update', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await moveForwardPeriods(2)
+      await baal.processProposal(1, proposal.data)
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.PROCESSED)
+      await baal.ragequit(summoner.address, shares, loot)
+      const prop = await baal.proposals(1)
+      expect(prop.rqYesVotes).to.equal(0)
+    })
+
+    it('1 delegate, 1 yes vote - defeated -> no update', async function() {
+      await baal.transfer(shaman.address, 50)
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await shamanBaal.submitVote(1, false)
+      await moveForwardPeriods(2)
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.DEEFEATED)
+      await baal.ragequit(summoner.address, shares - 50, loot)
+      const prop = await baal.proposals(1)
+      expect(prop.yesVotes).to.equal(50)
+      expect(prop.noVotes).to.equal(50)
+      expect(prop.rqYesVotes).to.equal(0)
+    })
+
+    it('1 delegate, 1 yes vote - cancelled -> no update', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await shamanBaal.cancelProposal(1)
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.CANCELLED)
+      await baal.ragequit(summoner.address, shares, loot)
+      const prop = await baal.proposals(1)
+      expect(prop.rqYesVotes).to.equal(0)
+    })
+
+    it('1 delegate, 2 yes votes - both counted', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await baal.submitVote(2, true)
+      await baal.ragequit(summoner.address, shares, loot)
+      const prop1 = await baal.proposals(1)
+      expect(prop1.rqYesVotes).to.equal(shares)
+      const prop2 = await baal.proposals(2)
+      expect(prop2.rqYesVotes).to.equal(shares)
+    })
+
+    it('1 delegate, 2 yes votes [cancelled, yes] -> skips cancelled', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await baal.submitVote(2, true)
+      await shamanBaal.cancelProposal(2) // cancel p2
+      const state1 = await baal.state(1)
+      expect(state1).to.equal(STATES.VOTING)
+      const state2 = await baal.state(2)
+      expect(state2).to.equal(STATES.CANCELLED)
+      await baal.ragequit(summoner.address, shares, loot)
+      const prop1 = await baal.proposals(1)
+      expect(prop1.rqYesVotes).to.equal(shares)
+      const prop2 = await baal.proposals(2)
+      expect(prop2.rqYesVotes).to.equal(0)
+    })
+
+    it('2 delegates - early exit, no update', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await baal.delegate(shaman.address) // delegate between p1 and p2
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await shamanBaal.submitVote(2, true)
+      await moveForwardPeriods(2)
+      await baal.processProposal(1, proposal.data)
+      await baal.processProposal(2, proposal.data)
+      const state1 = await baal.state(1)
+      expect(state1).to.equal(STATES.PROCESSED)
+      const state2 = await baal.state(2)
+      expect(state2).to.equal(STATES.PROCESSED)
+      await baal.ragequit(summoner.address, shares, loot)
+      const prop1 = await baal.proposals(1)
+      expect(prop1.rqYesVotes).to.equal(0)
+      const prop2 = await baal.proposals(2)
+      expect(prop2.rqYesVotes).to.equal(0)
+    })
+
+    it('2 delegates - early exit (cancelled + post-grace), no update', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await baal.delegate(shaman.address) // delegate between p1 and p2
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await shamanBaal.submitVote(2, true)
+      await shamanBaal.cancelProposal(2)
+      await moveForwardPeriods(2)
+      await baal.processProposal(1, proposal.data)
+      const state1 = await baal.state(1)
+      expect(state1).to.equal(STATES.PROCESSED)
+      const state2 = await baal.state(2)
+      expect(state2).to.equal(STATES.CANCELLED)
+      await baal.ragequit(summoner.address, shares, loot)
+      const prop1 = await baal.proposals(1)
+      expect(prop1.rqYesVotes).to.equal(0)
+      const prop2 = await baal.proposals(2)
+      expect(prop2.rqYesVotes).to.equal(0)
+    })
+
+    it('2 delegates, move delegates between props', async function() {
+      // d2: [p4: yes, p3: yes (before delegation), p2: yes, p1: no]
+      // d1: [p4: yes (after delegation), p3: yes, p2: no, p1: yes]
+      // Order: p1, p2, p3, delegate -> d2, p4 
+      // Expect: p1, p3, p4 updated - p2 not updated
+      await shamanBaal.mintShares([shaman.address], [20]) // so shaman can sponsor/vote
+      await shamanBaal.mintShares([applicant.address], [20]) // so applicant can sponsor/vote
+      await baal.delegate(shaman.address) // delegate to shaman (d1) to start
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.delegate(applicant.address) // delegate to applicant (d2) before p4
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await shamanBaal.submitVote(1, true)
+      await shamanBaal.submitVote(2, false)
+      await shamanBaal.submitVote(3, true)
+      await shamanBaal.submitVote(4, true)
+      await applicantBaal.submitVote(1, false)
+      await applicantBaal.submitVote(2, true)
+      await applicantBaal.submitVote(3, true)
+      await applicantBaal.submitVote(4, true)
+
+      const state1 = await baal.state(1)
+      expect(state1).to.equal(STATES.VOTING)
+      const state2 = await baal.state(2)
+      expect(state2).to.equal(STATES.VOTING)
+      await baal.ragequit(summoner.address, shares, loot)
+      const prop1 = await baal.proposals(1)
+      expect(prop1.rqYesVotes).to.equal(shares)
+      const prop2 = await baal.proposals(2)
+      expect(prop2.rqYesVotes).to.equal(0)
+      const prop3 = await baal.proposals(3)
+      expect(prop3.rqYesVotes).to.equal(shares)
+      const prop4 = await baal.proposals(4)
+      expect(prop4.rqYesVotes).to.equal(shares)
+    })
+
+    it('3 delegates, including 1 repeat', async function() {
+      // d3: [p4: yes, p3: yes (before delegation), p2: no, p1: yes]
+      // d2: [p4: yes (after delegation), p3: yes, p2: yes (before delegation), p1: no]
+      // d1: [p4: yes (after), p3: yes (after), p2: no, p1: yes]
+      // Order: p1, p2, delegate -> d2, p3, delegate -> d3, p4
+      // Expect: p1, p3, p4 updated - p2 not updated
+      await shamanBaal.mintShares([shaman.address], [20]) // so shaman can sponsor/vote
+      await shamanBaal.mintShares([applicant.address], [20]) // so applicant can sponsor/vote
+      await baal.delegate(shaman.address) // delegate to shaman (d1/d3) to start
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.delegate(applicant.address) // delegate to applicant (d2) before p3
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.delegate(shaman.address) // re-delegate to shaman (d1/d3) before p4
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await shamanBaal.submitVote(1, true)
+      await shamanBaal.submitVote(2, false)
+      await shamanBaal.submitVote(3, true)
+      await shamanBaal.submitVote(4, true)
+      await applicantBaal.submitVote(1, false)
+      await applicantBaal.submitVote(2, true)
+      await applicantBaal.submitVote(3, true)
+      await applicantBaal.submitVote(4, true)
+
+      const state1 = await baal.state(1)
+      expect(state1).to.equal(STATES.VOTING)
+      const state2 = await baal.state(2)
+      expect(state2).to.equal(STATES.VOTING)
+      await baal.ragequit(summoner.address, shares, loot)
+      const prop1 = await baal.proposals(1)
+      expect(prop1.rqYesVotes).to.equal(shares)
+      const prop2 = await baal.proposals(2)
+      expect(prop2.rqYesVotes).to.equal(0)
+      const prop3 = await baal.proposals(3)
+      expect(prop3.rqYesVotes).to.equal(shares)
+      const prop4 = await baal.proposals(4)
+      expect(prop4.rqYesVotes).to.equal(shares)
     })
   })
 
