@@ -48,8 +48,10 @@ const revertMessages = {
   burnLootArrayParity: '!array parity',
   burnLootInsufficientShares: "reverted with reason string 'ERC20: burn amount exceeds balance'",
   cancelProposalNotVoting: '!voting',
-  cancelProposalNotCancellable: '!cancellable'
-
+  cancelProposalNotCancellable: '!cancellable',
+  baalOrAdmin: '!baal & !admin',
+  baalOrManager: '!baal & !manager',
+  baalOrGovernor: '!baal & !governor'
 }
 
 const STATES = {
@@ -165,9 +167,23 @@ describe('Baal contract', function () {
   let applicantWeth: TestErc20
   let multisend: MultiSend
 
+  // shaman baals, to test permissions
+  let s1Baal: Baal
+  let s2Baal: Baal
+  let s3Baal: Baal
+  let s4Baal: Baal
+  let s5Baal: Baal
+  let s6Baal: Baal
+
   let applicant: SignerWithAddress
   let summoner: SignerWithAddress
   let shaman: SignerWithAddress
+  let s1: SignerWithAddress
+  let s2: SignerWithAddress
+  let s3: SignerWithAddress
+  let s4: SignerWithAddress
+  let s5: SignerWithAddress
+  let s6: SignerWithAddress
 
   let proposal: { [key: string]: any }
 
@@ -189,7 +205,7 @@ describe('Baal contract', function () {
   beforeEach(async function () {
     const BaalContract = await ethers.getContractFactory('Baal')
     const MultisendContract = await ethers.getContractFactory('MultiSend')
-    ;[summoner, applicant, shaman] = await ethers.getSigners()
+    ;[summoner, applicant, shaman, s1, s2, s3, s4, s5, s6] = await ethers.getSigners()
 
     ERC20 = await ethers.getContractFactory('TestERC20')
     weth = (await ERC20.deploy('WETH', 'WETH', 10000000)) as TestErc20
@@ -200,6 +216,12 @@ describe('Baal contract', function () {
     baal = (await BaalContract.deploy()) as Baal
     shamanBaal = baal.connect(shaman) // needed to send txns to baal as the shaman
     applicantBaal = baal.connect(applicant) // needed to send txns to baal as the shaman
+    s1Baal = baal.connect(s1)
+    s2Baal = baal.connect(s2)
+    s3Baal = baal.connect(s3)
+    s4Baal = baal.connect(s4)
+    s5Baal = baal.connect(s5)
+    s6Baal = baal.connect(s6)
 
     encodedInitParams = await getBaalParams(
       baal,
@@ -474,7 +496,6 @@ describe('Baal contract', function () {
       expect(sponsorThreshold).to.be.equal(2)
     })
 
-
     it('cancelProposal - happy case - as gov shaman', async function() {
       await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
       await shamanBaal.cancelProposal(1) // cancel as gov shaman
@@ -553,6 +574,269 @@ describe('Baal contract', function () {
     })
   })
   
+  describe('shaman permissions: 0-6', function() {
+    beforeEach(async function() {
+      const shamanAddresses = [shaman.address, s1.address, s2.address, s3.address, s4.address, s5.address, s6.address]
+      const permissions = [0, 1, 2, 3, 4, 5, 6]
+      const setShaman = await baal.interface.encodeFunctionData('setShamans', [shamanAddresses, permissions])
+      const setShamanAction = encodeMultiAction(multisend, [setShaman], [baal.address], [BigNumber.from(0)], [0])
+      proposal.data = setShamanAction
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await moveForwardPeriods(2)
+      await baal.processProposal(1, proposal.data)
+      const shamanPermission = await baal.shamans(shaman.address)
+      expect(shamanPermission).to.equal(0)
+    })
+
+    it('permission = 0 - all actions fail', async function() {
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
+        [10, 20, 50, 1, 2]
+      )
+
+      // admin
+      expect(shamanBaal.setAdminConfig(true, true)).to.be.revertedWith(revertMessages.baalOrAdmin)
+
+      // manager
+      expect(shamanBaal.mintShares([shaman.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(shamanBaal.burnShares([shaman.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(shamanBaal.mintLoot([shaman.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(shamanBaal.burnLoot([shaman.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(shamanBaal.convertSharesToLoot(shaman.address)).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(shamanBaal.setGuildTokens([lootToken.address])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(shamanBaal.unsetGuildTokens([0])).to.be.revertedWith(revertMessages.baalOrManager)
+
+      // governor
+      expect(shamanBaal.setGovernanceConfig(governanceConfig)).to.be.revertedWith(revertMessages.baalOrGovernor)
+
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      expect(shamanBaal.cancelProposal(2)).to.be.revertedWith(revertMessages.cancelProposalNotCancellable)
+    })
+
+    it('permission = 1 - admin actions succeed', async function() {
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
+        [10, 20, 50, 1, 2]
+      )
+
+      // admin - success
+      await s1Baal.setAdminConfig(true, true)
+      expect(await s1Baal.sharesPaused()).to.equal(true)
+      expect(await s1Baal.lootPaused()).to.equal(true)
+
+      // manager - fail
+      expect(s1Baal.mintShares([s1.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s1Baal.burnShares([s1.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s1Baal.mintLoot([s1.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s1Baal.burnLoot([s1.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s1Baal.convertSharesToLoot(s1.address)).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s1Baal.setGuildTokens([lootToken.address])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s1Baal.unsetGuildTokens([0])).to.be.revertedWith(revertMessages.baalOrManager)
+
+      // governor - fail
+      expect(s1Baal.setGovernanceConfig(governanceConfig)).to.be.revertedWith(revertMessages.baalOrGovernor)
+
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      expect(s1Baal.cancelProposal(2)).to.be.revertedWith(revertMessages.cancelProposalNotCancellable)
+    })
+
+    it('permission = 2 - manager actions succeed', async function() {
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
+        [10, 20, 50, 1, 2]
+      )
+
+      // admin - fail
+      expect(s2Baal.setAdminConfig(true, true)).to.be.revertedWith(revertMessages.baalOrAdmin)
+
+      // manager - success
+      await s2Baal.mintShares([s2.address], [69])
+      expect(await baal.balanceOf(s2.address)).to.equal(69)
+      await s2Baal.burnShares([s2.address], [69])
+      expect(await baal.balanceOf(s2.address)).to.equal(0)
+      await s2Baal.mintLoot([s2.address], [69])
+      expect(await lootToken.balanceOf(s2.address)).to.equal(69)
+      await s2Baal.burnLoot([s2.address], [69])
+      expect(await lootToken.balanceOf(s2.address)).to.equal(0)
+      await s2Baal.convertSharesToLoot(summoner.address)
+      expect(await baal.balanceOf(summoner.address)).to.equal(0)
+      expect(await lootToken.balanceOf(summoner.address)).to.equal(600)
+      await s2Baal.setGuildTokens([lootToken.address])
+      expect(await baal.getGuildTokens()).to.eql([weth.address, lootToken.address])
+      await s2Baal.unsetGuildTokens([1])
+      expect(await baal.getGuildTokens()).to.eql([weth.address])
+      
+      await s2Baal.mintShares([summoner.address], [100]) // cleanup - mint summoner shares so they can submit/sponsor
+
+      // governor - fail
+      expect(s2Baal.setGovernanceConfig(governanceConfig)).to.be.revertedWith(revertMessages.baalOrGovernor)
+
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      expect(s2Baal.cancelProposal(2)).to.be.revertedWith(revertMessages.cancelProposalNotCancellable)
+    })
+
+    it('permission = 3 - admin + manager actions succeed', async function() {
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
+        [10, 20, 50, 1, 2]
+      )
+
+      // admin - success
+      await s3Baal.setAdminConfig(true, true)
+      expect(await s3Baal.sharesPaused()).to.equal(true)
+      expect(await s3Baal.lootPaused()).to.equal(true)
+
+      // manager - success
+      await s3Baal.mintShares([s3.address], [69])
+      expect(await baal.balanceOf(s3.address)).to.equal(69)
+      await s3Baal.burnShares([s3.address], [69])
+      expect(await baal.balanceOf(s3.address)).to.equal(0)
+      await s3Baal.mintLoot([s3.address], [69])
+      expect(await lootToken.balanceOf(s3.address)).to.equal(69)
+      await s3Baal.burnLoot([s3.address], [69])
+      expect(await lootToken.balanceOf(s3.address)).to.equal(0)
+      await s3Baal.convertSharesToLoot(summoner.address)
+      expect(await baal.balanceOf(summoner.address)).to.equal(0)
+      expect(await lootToken.balanceOf(summoner.address)).to.equal(600)
+      await s3Baal.setGuildTokens([lootToken.address])
+      expect(await baal.getGuildTokens()).to.eql([weth.address, lootToken.address])
+      await s3Baal.unsetGuildTokens([1])
+      expect(await baal.getGuildTokens()).to.eql([weth.address])
+      
+      await s3Baal.mintShares([summoner.address], [100]) // cleanup - mint summoner shares so they can submit/sponsor
+
+      // governor - fail
+      expect(s3Baal.setGovernanceConfig(governanceConfig)).to.be.revertedWith(revertMessages.baalOrGovernor)
+
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      expect(s3Baal.cancelProposal(2)).to.be.revertedWith(revertMessages.cancelProposalNotCancellable)
+    })
+
+    it('permission = 4 - governor actions succeed', async function() {
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
+        [10, 20, 50, 1, 2]
+      )
+
+      // admin - fail
+      expect(s4Baal.setAdminConfig(true, true)).to.be.revertedWith(revertMessages.baalOrAdmin)
+
+      // manager - fail
+      expect(s4Baal.mintShares([s4.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s4Baal.burnShares([s4.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s4Baal.mintLoot([s4.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s4Baal.burnLoot([s4.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s4Baal.convertSharesToLoot(s4.address)).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s4Baal.setGuildTokens([lootToken.address])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s4Baal.unsetGuildTokens([0])).to.be.revertedWith(revertMessages.baalOrManager)
+
+      // governor - succeed
+      await s4Baal.setGovernanceConfig(governanceConfig)
+      const voting = await baal.votingPeriod()
+      const grace = await baal.gracePeriod()
+      const offering = await baal.proposalOffering()
+      const quorum = await baal.quorumPercent()
+      const sponsorThreshold = await baal.sponsorThreshold()
+      expect(voting).to.be.equal(10)
+      expect(grace).to.be.equal(20)
+      expect(offering).to.be.equal(50)
+      expect(quorum).to.be.equal(1)
+      expect(sponsorThreshold).to.be.equal(2)
+
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await s4Baal.cancelProposal(2)
+      const state = await baal.state(2)
+      expect(state).to.equal(STATES.CANCELLED)
+    })
+
+    it('permission = 5 - admin + governor actions succeed', async function() {
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
+        [10, 20, 50, 1, 2]
+      )
+
+      // admin - success
+      await s5Baal.setAdminConfig(true, true)
+      expect(await s5Baal.sharesPaused()).to.equal(true)
+      expect(await s5Baal.lootPaused()).to.equal(true)
+
+      // manager - fail
+      expect(s5Baal.mintShares([s5.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s5Baal.burnShares([s5.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s5Baal.mintLoot([s5.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s5Baal.burnLoot([s5.address], [69])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s5Baal.convertSharesToLoot(s5.address)).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s5Baal.setGuildTokens([lootToken.address])).to.be.revertedWith(revertMessages.baalOrManager)
+      expect(s5Baal.unsetGuildTokens([0])).to.be.revertedWith(revertMessages.baalOrManager)
+
+      // governor - succeed
+      await s5Baal.setGovernanceConfig(governanceConfig)
+      const voting = await baal.votingPeriod()
+      const grace = await baal.gracePeriod()
+      const offering = await baal.proposalOffering()
+      const quorum = await baal.quorumPercent()
+      const sponsorThreshold = await baal.sponsorThreshold()
+      expect(voting).to.be.equal(10)
+      expect(grace).to.be.equal(20)
+      expect(offering).to.be.equal(50)
+      expect(quorum).to.be.equal(1)
+      expect(sponsorThreshold).to.be.equal(2)
+
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await s5Baal.cancelProposal(2)
+      const state = await baal.state(2)
+      expect(state).to.equal(STATES.CANCELLED)
+    })
+
+    it('permission = 6 - manager + governor actions succeed', async function() {
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
+        [10, 20, 50, 1, 2]
+      )
+
+      // admin - fail
+      expect(s6Baal.setAdminConfig(true, true)).to.be.revertedWith(revertMessages.baalOrAdmin)
+
+      // manager - success
+      await s6Baal.mintShares([s6.address], [69])
+      expect(await baal.balanceOf(s6.address)).to.equal(69)
+      await s6Baal.burnShares([s6.address], [69])
+      expect(await baal.balanceOf(s6.address)).to.equal(0)
+      await s6Baal.mintLoot([s6.address], [69])
+      expect(await lootToken.balanceOf(s6.address)).to.equal(69)
+      await s6Baal.burnLoot([s6.address], [69])
+      expect(await lootToken.balanceOf(s6.address)).to.equal(0)
+      await s6Baal.convertSharesToLoot(summoner.address)
+      expect(await baal.balanceOf(summoner.address)).to.equal(0)
+      expect(await lootToken.balanceOf(summoner.address)).to.equal(600)
+      await s6Baal.setGuildTokens([lootToken.address])
+      expect(await baal.getGuildTokens()).to.eql([weth.address, lootToken.address])
+      await s6Baal.unsetGuildTokens([1])
+      expect(await baal.getGuildTokens()).to.eql([weth.address])
+      
+      await s6Baal.mintShares([summoner.address], [100]) // cleanup - mint summoner shares so they can submit/sponsor
+
+      // governor - succeed
+      await s6Baal.setGovernanceConfig(governanceConfig)
+      const voting = await baal.votingPeriod()
+      const grace = await baal.gracePeriod()
+      const offering = await baal.proposalOffering()
+      const quorum = await baal.quorumPercent()
+      const sponsorThreshold = await baal.sponsorThreshold()
+      expect(voting).to.be.equal(10)
+      expect(grace).to.be.equal(20)
+      expect(offering).to.be.equal(50)
+      expect(quorum).to.be.equal(1)
+      expect(sponsorThreshold).to.be.equal(2)
+
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await s6Baal.cancelProposal(2)
+      const state = await baal.state(2)
+      expect(state).to.equal(STATES.CANCELLED)
+    })
+  })
+
   describe('erc20 shares - approve', function() {
     it('happy case', async function() {
       await baal.approve(shaman.address, 20)
