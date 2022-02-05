@@ -7,7 +7,7 @@ import { Baal } from '../src/types/Baal'
 import { TestErc20 } from '../src/types/TestErc20'
 import { Loot } from '../src/types/Loot'
 import { encodeMultiAction } from '../src/util'
-import { BigNumber } from '@ethersproject/bignumber'
+import { BigNumber, BigNumberish } from '@ethersproject/bignumber'
 import { buildContractCall } from '@gnosis.pm/safe-contracts'
 import { MultiSend } from '../src/types/MultiSend'
 import { ContractFactory } from 'ethers'
@@ -153,6 +153,17 @@ const verifyProposal = function(prop1: any, prop2: any, overrides?: any) {
       expect(prop1[key]).to.equal(prop2[key])
     }
   }
+}
+
+const setShamanProposal = async function(baal: Baal, multisend: MultiSend, shaman: SignerWithAddress, permission: BigNumberish) {
+  const setShaman = await baal.interface.encodeFunctionData('setShamans', [[shaman.address], [permission]])
+  const setShamanAction = encodeMultiAction(multisend, [setShaman], [baal.address], [BigNumber.from(0)], [0])
+  await baal.submitProposal(setShamanAction, 0, "")
+  const proposalId = await baal.proposalCount()
+  await baal.submitVote(proposalId, true)
+  await moveForwardPeriods(2)
+  await baal.processProposal(proposalId, setShamanAction)
+  return proposalId
 }
 
 describe('Baal contract', function () {
@@ -834,6 +845,326 @@ describe('Baal contract', function () {
       await s6Baal.cancelProposal(2)
       const state = await baal.state(2)
       expect(state).to.equal(STATES.CANCELLED)
+    })
+  })
+
+  describe('shaman locks', function() {
+    it('lockAdmin', async function() {
+      const lockAdmin = await baal.interface.encodeFunctionData('lockAdmin')
+      const lockAdminAction = encodeMultiAction(multisend, [lockAdmin], [baal.address], [BigNumber.from(0)], [0])
+      proposal.data = lockAdminAction
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await moveForwardPeriods(2)
+      await baal.processProposal(1, proposal.data)
+      expect(await baal.adminLock()).to.equal(true)
+    })
+
+    it('lockManager', async function() {
+      const lockManager = await baal.interface.encodeFunctionData('lockManager')
+      const lockManagerAction = encodeMultiAction(multisend, [lockManager], [baal.address], [BigNumber.from(0)], [0])
+      proposal.data = lockManagerAction
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await moveForwardPeriods(2)
+      await baal.processProposal(1, proposal.data)
+      expect(await baal.managerLock()).to.equal(true)
+    })
+
+    it('lockGovernor', async function() {
+      const lockGovernor = await baal.interface.encodeFunctionData('lockGovernor')
+      const lockGovernorAction = encodeMultiAction(multisend, [lockGovernor], [baal.address], [BigNumber.from(0)], [0])
+      proposal.data = lockGovernorAction
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await moveForwardPeriods(2)
+      await baal.processProposal(1, proposal.data)
+      expect(await baal.governorLock()).to.equal(true)
+    })
+  })
+
+  describe('setShamans - adminLock (1, 3, 5, 7)', function() {
+    beforeEach(async function (){
+      const lockAdmin = await baal.interface.encodeFunctionData('lockAdmin')
+      const lockAdminAction = encodeMultiAction(multisend, [lockAdmin], [baal.address], [BigNumber.from(0)], [0])
+      proposal.data = lockAdminAction
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await moveForwardPeriods(2)
+      await baal.processProposal(1, proposal.data)
+      expect(await baal.adminLock()).to.equal(true)
+    })
+
+    it('setShamans - 0 - success', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 0)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, false]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(0)
+    })
+
+    it('setShamans - 1 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 1)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(7)
+    })
+
+    it('setShamans - 2 - success', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 2)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, false]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(2)
+    })
+
+    it('setShamans - 3 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 3)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(7)
+    })
+
+    it('setShamans - 4 - success', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 4)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, false]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(4)
+    })
+
+    it('setShamans - 5 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 5)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(7)
+    })
+
+    it('setShamans - 6 - success', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 6)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, false]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(6)
+    })
+
+    it('setShamans - 7 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, summoner, 7) // use summoner bc shaman default = 7
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(summoner.address)).to.equal(0)
+    })
+  })
+
+  describe('setShamans - managerLock (2, 3, 6, 7)', function() {
+    beforeEach(async function (){
+      const lockManager = await baal.interface.encodeFunctionData('lockManager')
+      const lockManagerAction = encodeMultiAction(multisend, [lockManager], [baal.address], [BigNumber.from(0)], [0])
+      proposal.data = lockManagerAction
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await moveForwardPeriods(2)
+      await baal.processProposal(1, proposal.data)
+      expect(await baal.managerLock()).to.equal(true)
+    })
+
+    it('setShamans - 0 - success', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 0)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, false]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(0)
+    })
+
+    it('setShamans - 1 - success', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 1)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, false]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(1)
+    })
+
+    it('setShamans - 2 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 2)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(7)
+    })
+
+    it('setShamans - 3 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 3)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(7)
+    })
+
+    it('setShamans - 4 - success', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 4)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, false]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(4)
+    })
+
+    it('setShamans - 5 - success', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 5)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, false]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(5)
+    })
+
+    it('setShamans - 6 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 6)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(7)
+    })
+
+    it('setShamans - 7 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, summoner, 7) // use summoner bc shaman default = 7
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(summoner.address)).to.equal(0)
+    })
+  })
+
+  describe('setShamans - governorLock (4, 5, 6, 7)', function() {
+    beforeEach(async function (){
+      const lockGovernor = await baal.interface.encodeFunctionData('lockGovernor')
+      const lockGovernorAction = encodeMultiAction(multisend, [lockGovernor], [baal.address], [BigNumber.from(0)], [0])
+      proposal.data = lockGovernorAction
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await moveForwardPeriods(2)
+      await baal.processProposal(1, proposal.data)
+      expect(await baal.governorLock()).to.equal(true)
+    })
+
+    it('setShamans - 0 - success', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 0)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, false]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(0)
+    })
+
+    it('setShamans - 1 - success', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 1)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, false]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(1)
+    })
+
+    it('setShamans - 2 - success', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 2)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, false]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(2)
+    })
+
+    it('setShamans - 3 - success', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 3)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, false]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(3)
+    })
+
+    it('setShamans - 4 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 4)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(7)
+    })
+
+    it('setShamans - 5 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 5)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(7)
+    })
+
+    it('setShamans - 6 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 6)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(7)
+    })
+
+    it('setShamans - 7 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, summoner, 7) // use summoner bc shaman default = 7
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(summoner.address)).to.equal(0)
+    })
+  })
+
+  describe('setShamans - all locked', function() {
+    beforeEach(async function (){
+      const lockAdmin = await baal.interface.encodeFunctionData('lockAdmin')
+      const lockManager = await baal.interface.encodeFunctionData('lockManager')
+      const lockGovernor = await baal.interface.encodeFunctionData('lockGovernor')
+      const lockAllAction = encodeMultiAction(multisend, 
+        [lockAdmin, lockManager, lockGovernor], 
+        [baal.address, baal.address, baal.address], 
+        [BigNumber.from(0), BigNumber.from(0), BigNumber.from(0)], 
+        [0, 0, 0]
+      )
+      proposal.data = lockAllAction
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await moveForwardPeriods(2)
+      await baal.processProposal(1, proposal.data)
+      expect(await baal.adminLock()).to.equal(true)
+      expect(await baal.managerLock()).to.equal(true)
+      expect(await baal.governorLock()).to.equal(true)
+    })
+
+    it('setShamans - 0 - success', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 0)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, false]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(0)
+    })
+
+    it('setShamans - 1 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 1)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(7)
+    })
+
+    it('setShamans - 2 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 2)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(7)
+    })
+
+    it('setShamans - 3 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 3)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(7)
+    })
+
+    it('setShamans - 4 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 4)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(7)
+    })
+
+    it('setShamans - 5 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 5)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(7)
+    })
+
+    it('setShamans - 6 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, shaman, 6)
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(shaman.address)).to.equal(7)
+    })
+
+    it('setShamans - 7 - fail', async function() {
+      const id = await setShamanProposal(baal, multisend, summoner, 7) // use summoner bc shaman default = 7
+      const propStatus = await baal.getProposalStatus(id)
+      expect(propStatus).to.eql([false, true, true, true]) // [cancelled, processed, passed, actionFailed]
+      expect(await baal.shamans(summoner.address)).to.equal(0)
     })
   })
 
@@ -1697,8 +2028,6 @@ describe('Baal contract', function () {
       expect(prop4.rqYesVotes).to.equal(shares)
     })
   })
-
-  describe('setShamans', function() {})
 
   describe('getCurrentVotes', function () {
     it('happy case - account with votes', async function () {
