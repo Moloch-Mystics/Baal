@@ -647,9 +647,7 @@ contract Baal is Executor, Initializable, CloneFactory {
             address token = guildTokens[_tokenIndexes[i]];
             guildTokensEnabled[token] = false; // disable the token
             guildTokens[_tokenIndexes[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
-            guildTokens.pop(); /*pop account from `guildTokens` array*/
-
-            // TODO what if you provide the last token index as the 2nd tokenIndexes? does it get popped?    
+            guildTokens.pop(); /*pop account from `guildTokens` array*/  
         }
     }
 

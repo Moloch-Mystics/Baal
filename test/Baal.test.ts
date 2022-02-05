@@ -27,9 +27,6 @@ const revertMessages = {
   submitProposalExpired: 'expired',
   submitProposalOffering: 'Baal requires an offering',
   submitProposalVotingPeriod: '!votingPeriod',
-  submitProposalArrays: '!array parity',
-  submitProposalArrayMax: 'array max',
-  submitProposalFlag: '!flag',
   sponsorProposalExpired: 'expired',
   sponsorProposalSponsor: '!sponsor',
   sponsorProposalNotSubmitted: '!submitted',
@@ -41,10 +38,18 @@ const revertMessages = {
   submitVoteWithSigVoted: 'voted',
   submitVoteWithSigMember: '!member',
   processProposalNotReady: '!ready',
-  proposalMisnumbered: '!exist',
   unsetGuildTokensLastToken: 'reverted with panic code 0x32 (Array accessed at an out-of-bounds or negative index)',
   sharesTransferPaused: '!transferable',
-  sharesInsufficientBalance: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)'
+  sharesInsufficientBalance: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)',
+  mintSharesArrayParity: '!array parity',
+  burnSharesArrayParity: '!array parity',
+  burnSharesInsufficientShares: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)',
+  mintLootArrayParity: '!array parity',
+  burnLootArrayParity: '!array parity',
+  burnLootInsufficientShares: "reverted with reason string 'ERC20: burn amount exceeds balance'",
+  cancelProposalNotVoting: '!voting',
+  cancelProposalNotCancellable: '!cancellable'
+
 }
 
 const STATES = {
@@ -70,8 +75,8 @@ async function blockNumber() {
   return block.number
 }
 
-async function moveForwardPeriods(periods: number) {
-  const goToTime = (await blockTime()) + deploymentConfig.VOTING_PERIOD_IN_SECONDS * periods
+async function moveForwardPeriods(periods: number, extra?: number) {
+  const goToTime = (await blockTime()) + (deploymentConfig.VOTING_PERIOD_IN_SECONDS * periods) + (extra ? extra : 0)
   await ethers.provider.send("evm_mine", [goToTime])
   return true
 }
@@ -291,9 +296,89 @@ describe('Baal contract', function () {
       expect(await shamanBaal.lootPaused()).to.equal(true)
     })
 
-    it('mint shares', async function () {
+    it('mint shares - recipient has shares', async function () {
       await shamanBaal.mintShares([summoner.address], [69])
       expect(await shamanBaal.balanceOf(summoner.address)).to.equal(169)
+      const votes = await baal.getCurrentVotes(summoner.address)
+      expect(votes).to.equal(169)
+      const totalShares = await baal.totalSupply()
+      expect(totalShares).to.equal(169)
+    })
+
+    it('mint shares - new recipient', async function () {
+      await shamanBaal.mintShares([shaman.address], [69])
+      const now = await blockTime()
+      expect(await shamanBaal.balanceOf(shaman.address)).to.equal(69)
+
+      const votes = await baal.getCurrentVotes(shaman.address)
+      expect(votes).to.equal(69)
+
+      const shamanDelegate = await baal.delegates(shaman.address)
+      expect(shamanDelegate).to.equal(shaman.address)
+
+      const shamanDelegateChain0 = await baal.getDelegateChainByIndex(shaman.address, 0)
+      expect(shamanDelegateChain0.delegate).to.equal(shaman.address)
+      expect(shamanDelegateChain0.fromTimeStamp).to.equal(now)
+
+      const shamanDelegateChainLength = await baal.getDelegateChainLength(shaman.address)
+      expect(shamanDelegateChainLength).to.equal(1)
+    })
+
+    it('mint shares - recipient has delegate - new shares are also delegated', async function () {
+      await baal.delegate(shaman.address)
+      const t1 = await blockTime()
+      await shamanBaal.mintShares([summoner.address], [69])
+      
+      expect(await shamanBaal.balanceOf(summoner.address)).to.equal(169)
+
+      const summonerVotes = await baal.getCurrentVotes(summoner.address)
+      expect(summonerVotes).to.equal(0)
+
+      const shamanVotes = await baal.getCurrentVotes(shaman.address)
+      expect(shamanVotes).to.equal(169)
+
+      const summonerDelegate = await baal.delegates(summoner.address)
+      expect(summonerDelegate).to.equal(shaman.address)
+
+      const summonerDelegateChain0 = await baal.getDelegateChainByIndex(summoner.address, 1)
+      expect(summonerDelegateChain0.delegate).to.equal(shaman.address)
+      expect(summonerDelegateChain0.fromTimeStamp).to.equal(t1)
+
+      const summonerDelegateChainLength = await baal.getDelegateChainLength(summoner.address)
+      expect(summonerDelegateChainLength).to.equal(2)
+    })
+
+    it('mint shares - zero address - no votes', async function () {
+      // tests that we don't assign delegates / votes to zero address, even when it receives shares
+      await shamanBaal.mintShares([zeroAddress], [69])
+      expect(await shamanBaal.balanceOf(zeroAddress)).to.equal(69)
+      const votes = await baal.getCurrentVotes(zeroAddress)
+      expect(votes).to.equal(0)
+      const totalShares = await baal.totalSupply()
+      expect(totalShares).to.equal(169)
+    })
+
+    it('mint shares - zero mint amount - no votes', async function () {
+      await shamanBaal.mintShares([shaman.address], [0])
+      const now = await blockTime()
+      expect(await shamanBaal.balanceOf(shaman.address)).to.equal(0)
+      const votes = await baal.getCurrentVotes(shaman.address)
+      expect(votes).to.equal(0)
+      const totalShares = await baal.totalSupply()
+      expect(totalShares).to.equal(100)
+
+      const shamanVotes = await baal.getCurrentVotes(shaman.address)
+      expect(shamanVotes).to.equal(0)
+
+      const shamanDelegate = await baal.delegates(shaman.address)
+      expect(shamanDelegate).to.equal(zeroAddress)
+
+      const shamanDelegateChainLength = await baal.getDelegateChainLength(shaman.address)
+      expect(shamanDelegateChainLength).to.equal(0)
+    })
+
+    it('mint shares - require fail - array parity', async function () {
+      expect(shamanBaal.mintShares([summoner.address], [69, 69])).to.be.revertedWith(revertMessages.mintSharesArrayParity)
     })
 
     it('burn shares', async function () {
@@ -301,14 +386,36 @@ describe('Baal contract', function () {
       expect(await shamanBaal.balanceOf(summoner.address)).to.equal(31)
     })
 
+    it('burn shares - require fail - array parity', async function () {
+      expect(shamanBaal.burnShares([summoner.address], [69, 69])).to.be.revertedWith(revertMessages.burnSharesArrayParity)
+    })
+
+    it('burn shares - require fail - insufficent shares', async function () {
+      expect(shamanBaal.burnShares([summoner.address], [101])).to.be.revertedWith(revertMessages.burnSharesInsufficientShares)
+    })
+
     it('mint loot', async function () {
       await shamanBaal.mintLoot([summoner.address], [69])
       expect(await lootToken.balanceOf(summoner.address)).to.equal(569)
+      expect(await baal.totalLoot()).to.equal(569)
+    })
+
+    it('mint loot - require fail - array parity', async function () {
+      expect(shamanBaal.mintLoot([summoner.address], [69, 69])).to.be.revertedWith(revertMessages.burnSharesArrayParity)
     })
 
     it('burn loot', async function () {
       await shamanBaal.burnLoot([summoner.address], [69])
       expect(await lootToken.balanceOf(summoner.address)).to.equal(431)
+      expect(await baal.totalLoot()).to.equal(431)
+    })
+
+    it('burn loot - require fail - array parity', async function () {
+      expect(shamanBaal.burnLoot([summoner.address], [69, 69])).to.be.revertedWith(revertMessages.burnSharesArrayParity)
+    })
+
+    it('burn loot - require fail - insufficent shares', async function () {
+      expect(shamanBaal.burnLoot([summoner.address], [501])).to.be.revertedWith(revertMessages.burnLootInsufficientShares)
     })
 
     it('setGuildTokens', async function () {
@@ -346,6 +453,103 @@ describe('Baal contract', function () {
       expect(offering).to.be.equal(50)
       expect(quorum).to.be.equal(1)
       expect(sponsorThreshold).to.be.equal(2)
+    })
+
+    it('setGovernanceConfig - doesnt set voting/grace if =0', async function() {
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
+        [0, 0, 50, 1, 2]
+      )
+
+      await shamanBaal.setGovernanceConfig(governanceConfig)
+      const voting = await baal.votingPeriod()
+      const grace = await baal.gracePeriod()
+      const offering = await baal.proposalOffering()
+      const quorum = await baal.quorumPercent()
+      const sponsorThreshold = await baal.sponsorThreshold()
+      expect(voting).to.be.equal(deploymentConfig.VOTING_PERIOD_IN_SECONDS)
+      expect(grace).to.be.equal(deploymentConfig.GRACE_PERIOD_IN_SECONDS)
+      expect(offering).to.be.equal(50)
+      expect(quorum).to.be.equal(1)
+      expect(sponsorThreshold).to.be.equal(2)
+    })
+
+
+    it('cancelProposal - happy case - as gov shaman', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await shamanBaal.cancelProposal(1) // cancel as gov shaman
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.CANCELLED)
+    })
+
+    it('cancelProposal - happy case - as proposal sponsor', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.cancelProposal(1) // cancel as sponsor
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.CANCELLED)
+    })
+
+    it('cancelProposal - happy case - after undelegation', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.transfer(shamanBaal.address, shares) // transfer all shares/votes to shaman
+      await applicantBaal.cancelProposal(1) // cancel as rando
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.CANCELLED)
+    })
+
+    it('cancelProposal - require fail - not cancellable by rando', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      expect(applicantBaal.cancelProposal(1)).to.be.revertedWith(revertMessages.cancelProposalNotCancellable)
+    })
+
+    it('cancelProposal - require fail - !voting (submitted)', async function() {
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.SUBMITTED)
+      expect(baal.cancelProposal(1)).to.be.revertedWith(revertMessages.cancelProposalNotVoting)
+    })
+
+    it('cancelProposal - require fail - !voting (grace)', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await moveForwardPeriods(1, 1) // add 1 extra second to push us into grace period
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.GRACE)
+      expect(baal.cancelProposal(1)).to.be.revertedWith(revertMessages.cancelProposalNotVoting)
+    })
+
+    it('cancelProposal - require fail - !voting (defeated)', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await moveForwardPeriods(2)
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.DEEFEATED)
+      expect(baal.cancelProposal(1)).to.be.revertedWith(revertMessages.cancelProposalNotVoting)
+    })
+
+    it('cancelProposal - require fail - !voting (cancelled)', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.cancelProposal(1)
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.CANCELLED)
+      expect(baal.cancelProposal(1)).to.be.revertedWith(revertMessages.cancelProposalNotVoting)
+    })
+
+    it('cancelProposal - require fail - !voting (ready)', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await moveForwardPeriods(2)
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.READY)
+      expect(baal.cancelProposal(1)).to.be.revertedWith(revertMessages.cancelProposalNotVoting)
+    })
+
+    it('cancelProposal - require fail - !voting (processed)', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await moveForwardPeriods(2)
+      await baal.processProposal(1, proposal.data)
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.PROCESSED)
+      expect(baal.cancelProposal(1)).to.be.revertedWith(revertMessages.cancelProposalNotVoting)
     })
   })
   
@@ -1209,6 +1413,8 @@ describe('Baal contract', function () {
       expect(prop4.rqYesVotes).to.equal(shares)
     })
   })
+
+  describe('setShamans', function() {})
 
   describe('getCurrentVotes', function () {
     it('happy case - account with votes', async function () {
