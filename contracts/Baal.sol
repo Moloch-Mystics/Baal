@@ -56,7 +56,6 @@ contract Baal is Executor, Initializable, CloneFactory {
     uint256 public quorumPercent; /* minimum % of shares that must vote yes for it to pass*/
     uint256 public sponsorThreshold; /* minimum number of shares to sponsor a proposal (not %)*/
     uint256 public minRetentionPercent; /* auto-fails a proposal if more than (1- minRetentionPercent) * total shares exit before processing*/
-    uint256 public minStakingPercent; /* auto-fails a proposals if more than (1 - minStakingPercent) * yes voters exit before processing*/
     uint256 status; /*internal reentrancy check tracking value*/
 
     bool public adminLock; /* once set to true, no new admin roles can be assigned to shaman */
@@ -92,7 +91,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     mapping(address => address) public delegates; /*maps record of each account's `shares` delegate*/
     mapping(address => uint256) public nonces; /*maps record of states for signing & validating signatures*/
 
-    mapping(address => Member) public members; /*maps `members` accounts to struct details*/
+    mapping(address => mapping(uint32 => bool)) public memberVoted; /*maps members to their proposal votes (true = voted) */
     mapping(uint256 => Proposal) public proposals; /*maps `proposal id` to struct details*/
     mapping(address => bool) public guildTokensEnabled; /*maps guild token addresses -> enabled status (prevents duplicates in guildTokens[]) */
 
@@ -216,14 +215,6 @@ contract Baal is Executor, Initializable, CloneFactory {
     struct Delegation {
         uint256 fromTimeStamp; /* timestamp from which delegation began */
         address delegate; /* address of delegate */
-    }
-
-    struct Member {
-        /*Baal membership details*/
-        uint32 highestIDYesVote; /*highest proposal id on which a member `approved`*/
-        mapping(uint256 => bool) voted; /*maps voting decisions on proposals by `members` account*/
-        mapping(uint32 => uint32) orderedYesVotes; /* maps yes vote id to the previous yes vote proposal id */
-        Delegation[] delegateChain; /* append-only array of historical delegations */
     }
 
     struct Proposal {
@@ -391,13 +382,12 @@ contract Baal is Executor, Initializable, CloneFactory {
 
         uint256 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
         require(balance > 0, "!member"); /*check 'membership' - required to vote on proposals*/
-        require(!members[msg.sender].voted[id], "voted"); /*check vote not already cast*/
+        require(!memberVoted[msg.sender][id], "voted"); /*check vote not already cast*/
 
         unchecked {
             if (approved) {
                 /*if `approved`, cast delegated balance `yesVotes` to proposal*/
                 prop.yesVotes += balance;
-                addYesVoteToHistory(msg.sender, prop.id); // also sets member.highestIDYesVote
                 if (totalSupply + totalLoot() > prop.maxTotalSharesAndLootAtYesVote) {
                     prop.maxTotalSharesAndLootAtYesVote = totalSupply + totalLoot();
                 }
@@ -407,7 +397,7 @@ contract Baal is Executor, Initializable, CloneFactory {
             }
         }
 
-        members[msg.sender].voted[id] = true; /*record voting action to `members` struct per user account*/
+        memberVoted[msg.sender][id] = true; /*record voting action to `members` struct per user account*/
 
         emit SubmitVote(msg.sender, balance, id, approved); /*emit event reflecting vote*/
     }
@@ -449,13 +439,12 @@ contract Baal is Executor, Initializable, CloneFactory {
         uint256 balance = getPriorVotes(signatory, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
 
         require(balance > 0, "!member"); /* check that user has shares*/
-        require(!members[signatory].voted[id], "voted"); /*check vote not already cast*/
+        require(!memberVoted[signatory][id], "voted"); /*check vote not already cast*/
 
         unchecked {
             if (approved) {
                 /*if `approved`, cast delegated balance `yesVotes` to proposal*/
                 prop.yesVotes += balance;
-                addYesVoteToHistory(msg.sender, prop.id); // also sets member.highestIDYesVote
                 if (totalSupply + totalLoot() > prop.maxTotalSharesAndLootAtYesVote) {
                     prop.maxTotalSharesAndLootAtYesVote = totalSupply + totalLoot();
                 }
@@ -465,38 +454,9 @@ contract Baal is Executor, Initializable, CloneFactory {
             }
         }
 
-        members[signatory].voted[id] = true; /*record voting action to `members` struct per user account*/
+        memberVoted[signatory][id] = true; /*record voting action to `members` struct per user account*/
 
         emit SubmitVote(signatory, balance, id, approved); /*emit event reflecting vote*/
-    }
-
-    function addYesVoteToHistory(address memberAddr, uint32 id) internal {
-        Member storage member = members[memberAddr];
-        uint32 highestIDYesVote = member.highestIDYesVote; // use copy of storage param for immutability
-
-        if (highestIDYesVote == 0) { // first yes vote ever
-            member.orderedYesVotes[id] = 0;
-            member.highestIDYesVote = id; // update member (storage)
-
-        } else if (id > highestIDYesVote) { // yes vote is already latest
-            member.orderedYesVotes[id] = highestIDYesVote;
-            member.highestIDYesVote = id; // update member (storage)
-
-        } else { // find and insert yes vote in order
-            uint32 nextYesVoteId = highestIDYesVote;
-            uint32 prevYesVoteId = 0;
-            while (nextYesVoteId > 0) { 
-                // nextYesVoteId should become the ID of the next proposal yes vote (w/ ID higher than current)
-                // prevYesVoteId should become the ID of the prev proposal yes vote (w/ ID lower than current)
-                prevYesVoteId = member.orderedYesVotes[nextYesVoteId];
-                if (prevYesVoteId < id) {
-                    break;
-                }
-                nextYesVoteId = prevYesVoteId;
-            }
-            member.orderedYesVotes[id] = prevYesVoteId;
-            member.orderedYesVotes[nextYesVoteId] = id;
-        }
     }
 
     // ********************
@@ -538,11 +498,6 @@ contract Baal is Executor, Initializable, CloneFactory {
 
         // Make proposal fail if the minRetentionPercent is exceeded
         if (okToExecute && (totalSupply + totalLoot()) < prop.maxTotalSharesAndLootAtYesVote * minRetentionPercent / 100) {
-            okToExecute = false;
-        }
-
-        // Make proposal if too many yes voters ragequit before processing
-        if (okToExecute && prop.yesVotes - prop.rqYesVotes < prop.yesVotes * minStakingPercent / 100) {
             okToExecute = false;
         }
 
@@ -659,11 +614,10 @@ contract Baal is Executor, Initializable, CloneFactory {
             uint256 newOffering,
             uint256 quorum,
             uint256 sponsor,
-            uint256 minRetention,
-            uint256 minStaking
+            uint256 minRetention
         ) = abi.decode(
                 _governanceConfig,
-                (uint32, uint32, uint256, uint256, uint256, uint256, uint256)
+                (uint32, uint32, uint256, uint256, uint256, uint256)
             );
         if (voting != 0) votingPeriod = voting; /*if positive, reset min. voting periods to first `value`*/
         if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to second `value`*/
@@ -671,7 +625,6 @@ contract Baal is Executor, Initializable, CloneFactory {
         quorumPercent = quorum;
         sponsorThreshold = sponsor;
         minRetentionPercent = minRetention;
-        minStakingPercent = minStaking;
     }
 
     function cancelProposal(uint32 id) external nonReentrant {
@@ -850,7 +803,6 @@ contract Baal is Executor, Initializable, CloneFactory {
         /*If recipient is receiving their first shares, auto-self delegate*/
         if (balanceOf[to] == 0 && numCheckpoints[to] == 0 && amount > 0) {
             delegates[to] = to;
-            members[to].delegateChain.push(Delegation(block.timestamp, to));
         }
 
         unchecked {
@@ -910,11 +862,6 @@ contract Baal is Executor, Initializable, CloneFactory {
             _burnShares(msg.sender, sharesToBurn); /*subtract `shares` from user account & Baal totals with erc20 accounting*/
         }
 
-        // add member shares to rqYesVotes for all active proposals the member voted yes on
-        if (minStakingPercent > 0) {
-            _tallyRqYesVotes(sharesToBurn);
-        }
-
         for (uint256 i; i < tokens.length; i++) {
             (, bytes memory balanceData) = tokens[i].staticcall(
                 abi.encodeWithSelector(0x70a08231, address(this))
@@ -931,56 +878,6 @@ contract Baal is Executor, Initializable, CloneFactory {
         }
 
         emit Ragequit(msg.sender, to, lootToBurn, sharesToBurn); /*event reflects claims made against Baal*/
-    }
-
-    function _tallyRqYesVotes(uint256 sharesToBurn) internal {
-        Member storage member = members[msg.sender];
-        bool done = false;
-        uint256 nextDelegationTimeStamp = 0;
-        for (uint256 a = 0; a < member.delegateChain.length; a++) { // loop over delegations (we start with latest and work backwards)
-            console.log('delegate #', member.delegateChain.length - a - 1);
-            Delegation memory d = member.delegateChain[member.delegateChain.length - a - 1]; // look up latest delegation
-            Member storage delegate = members[d.delegate];
-            uint32 proposalId = delegate.highestIDYesVote;
-            while (proposalId > 0) { // loop backwards over voting history, starting with latest
-                console.log('proposal #', proposalId);
-                Proposal memory prop = proposals[proposalId];
-                ProposalState proposalState = state(proposalId);
-
-                // if member delegated to someone else after, skip until we find proposals during delegation
-                if (nextDelegationTimeStamp != 0 && prop.votingStarts > nextDelegationTimeStamp) {
-                    proposalId = delegate.orderedYesVotes[proposalId]; // set proposalId to the previous yes vote Id
-                    console.log('skip proposal');
-                    continue;
-                }
-
-                // voting started before delegation, move on to next delegate
-                if (prop.votingStarts < d.fromTimeStamp) {
-                    console.log('next delegate');
-                    break;
-                }
- 
-                // found processed proposal from an active delegate - we're done
-                if (proposalState == ProposalState.Processed ||
-                    proposalState == ProposalState.Defeated ||
-                    proposalState == ProposalState.Cancelled && prop.graceEnds < block.timestamp
-                ) {
-                    console.log('done');
-                    done = true;
-                    break;
-                }
-
-                // skip setting rqYesVotes if proposal is cancelled
-                if (proposalState != ProposalState.Cancelled) {
-                    console.log('set rqYesVotes', sharesToBurn);
-                    proposals[proposalId].rqYesVotes += sharesToBurn;
-                }
-
-                proposalId = delegate.orderedYesVotes[proposalId]; // set proposalId to the previous yes vote Id
-            }
-            nextDelegationTimeStamp = d.fromTimeStamp;
-            if (done) break;
-        }
     }
 
     /***************
@@ -1059,23 +956,6 @@ contract Baal is Executor, Initializable, CloneFactory {
             }
             votes = checkpoints[account][lower].votes;
         }
-    }
-
-    function didMemberVoteOnProposal(address memberAddr, uint32 id) public view returns (bool) {
-        return members[memberAddr].voted[id];
-    }
-
-    function getPreviousYesVoteIdById(address memberAddr, uint32 id) public view returns (uint32) {
-        return members[memberAddr].orderedYesVotes[id];
-    }
-
-    function getDelegateChainByIndex(address memberAddr, uint256 index) public view returns (Delegation memory d) {
-        d = members[memberAddr].delegateChain[index];
-        return d;
-    }
-
-    function getDelegateChainLength(address memberAddr) public view returns (uint256) {
-        return members[memberAddr].delegateChain.length;
     }
 
     /// @notice Returns array list of approved `guildTokens` in Baal for {ragequit}.
@@ -1158,13 +1038,6 @@ contract Baal is Executor, Initializable, CloneFactory {
         uint32 timestamp = uint32(block.timestamp);
         address currentDelegate = delegates[delegator];
         delegates[delegator] = delegatee;
-        Member storage member = members[delegator];
-        if (member.delegateChain.length > 0 && member.delegateChain[member.delegateChain.length - 1].fromTimeStamp == timestamp) {
-            member.delegateChain[member.delegateChain.length].delegate = delegatee;
-        } else {
-            member.delegateChain.push(Delegation(block.timestamp, delegatee));
-        }
-        // TODO the two data structures above are redundant
 
         _moveDelegates(
             currentDelegate,
@@ -1263,7 +1136,6 @@ contract Baal is Executor, Initializable, CloneFactory {
                 /*If recipient is receiving their first shares, auto-self delegate*/
                 if (balanceOf[to] == 0 && numCheckpoints[to] == 0 && shares > 0) {
                     delegates[to] = to;
-                    members[to].delegateChain.push(Delegation(block.timestamp, to));
                 }
 
                 balanceOf[to] += shares; /*add `shares` for `to` account*/
