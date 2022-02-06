@@ -92,6 +92,8 @@ const deploymentConfig = {
   VOTING_PERIOD_IN_SECONDS: 432000,
   PROPOSAL_OFFERING: 0,
   SPONSOR_THRESHOLD: 1,
+  MIN_RETENTION_PERCENT: 0,
+  MIN_STAKING_PERCENT: 0,
   QUORUM_PERCENT: 0,
   TOKEN_NAME: 'wrapped ETH',
   TOKEN_SYMBOL: 'WETH',
@@ -109,8 +111,11 @@ const getBaalParams = async function (
     VOTING_PERIOD_IN_SECONDS: any
     QUORUM_PERCENT: any
     SPONSOR_THRESHOLD: any
+    MIN_RETENTION_PERCENT: any
+    MIN_STAKING_PERCENT: any
     TOKEN_NAME: any
     TOKEN_SYMBOL: any
+    
   },
   adminConfig: [boolean, boolean],
   tokens: [string[]],
@@ -119,8 +124,11 @@ const getBaalParams = async function (
   loots: [string[], number[]]
 ) {
   const governanceConfig = abiCoder.encode(
-    ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
-    [config.VOTING_PERIOD_IN_SECONDS, config.GRACE_PERIOD_IN_SECONDS, config.PROPOSAL_OFFERING, config.QUORUM_PERCENT, config.SPONSOR_THRESHOLD]
+    ['uint32', 'uint32', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256'],
+    [
+      config.VOTING_PERIOD_IN_SECONDS, config.GRACE_PERIOD_IN_SECONDS, config.PROPOSAL_OFFERING, config.QUORUM_PERCENT, config.SPONSOR_THRESHOLD,
+      config.MIN_RETENTION_PERCENT, config.MIN_STAKING_PERCENT
+    ]
   )
 
   const setAdminConfig = await baal.interface.encodeFunctionData('setAdminConfig', adminConfig)
@@ -477,8 +485,8 @@ describe('Baal contract', function () {
 
     it('setGovernanceConfig', async function() {
       const governanceConfig = abiCoder.encode(
-        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
-        [10, 20, 50, 1, 2]
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256'],
+        [10, 20, 50, 1, 2, 3, 4]
       )
 
       await shamanBaal.setGovernanceConfig(governanceConfig)
@@ -487,17 +495,21 @@ describe('Baal contract', function () {
       const offering = await baal.proposalOffering()
       const quorum = await baal.quorumPercent()
       const sponsorThreshold = await baal.sponsorThreshold()
+      const minRetentionPercent = await baal.minRetentionPercent()
+      const minStakingPercent = await baal.minStakingPercent()
       expect(voting).to.be.equal(10)
       expect(grace).to.be.equal(20)
       expect(offering).to.be.equal(50)
       expect(quorum).to.be.equal(1)
       expect(sponsorThreshold).to.be.equal(2)
+      expect(minRetentionPercent).to.equal(3)
+      expect(minStakingPercent).to.equal(4)
     })
 
     it('setGovernanceConfig - doesnt set voting/grace if =0', async function() {
       const governanceConfig = abiCoder.encode(
-        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
-        [0, 0, 50, 1, 2]
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256'],
+        [0, 0, 50, 1, 2, 3, 4]
       )
 
       await shamanBaal.setGovernanceConfig(governanceConfig)
@@ -506,11 +518,15 @@ describe('Baal contract', function () {
       const offering = await baal.proposalOffering()
       const quorum = await baal.quorumPercent()
       const sponsorThreshold = await baal.sponsorThreshold()
+      const minRetentionPercent = await baal.minRetentionPercent()
+      const minStakingPercent = await baal.minStakingPercent()
       expect(voting).to.be.equal(deploymentConfig.VOTING_PERIOD_IN_SECONDS)
       expect(grace).to.be.equal(deploymentConfig.GRACE_PERIOD_IN_SECONDS)
       expect(offering).to.be.equal(50)
       expect(quorum).to.be.equal(1)
       expect(sponsorThreshold).to.be.equal(2)
+      expect(minRetentionPercent).to.equal(3)
+      expect(minStakingPercent).to.equal(4)
     })
 
     it('cancelProposal - happy case - as gov shaman', async function() {
@@ -592,6 +608,11 @@ describe('Baal contract', function () {
   })
   
   describe('shaman permissions: 0-6', function() {
+    const governanceConfig = abiCoder.encode(
+      ['uint32', 'uint32', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256'],
+      [10, 20, 50, 1, 2, 3, 4]
+    )
+
     beforeEach(async function() {
       const shamanAddresses = [shaman.address, s1.address, s2.address, s3.address, s4.address, s5.address, s6.address]
       const permissions = [0, 1, 2, 3, 4, 5, 6]
@@ -607,11 +628,6 @@ describe('Baal contract', function () {
     })
 
     it('permission = 0 - all actions fail', async function() {
-      const governanceConfig = abiCoder.encode(
-        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
-        [10, 20, 50, 1, 2]
-      )
-
       // admin
       expect(shamanBaal.setAdminConfig(true, true)).to.be.revertedWith(revertMessages.baalOrAdmin)
 
@@ -632,11 +648,6 @@ describe('Baal contract', function () {
     })
 
     it('permission = 1 - admin actions succeed', async function() {
-      const governanceConfig = abiCoder.encode(
-        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
-        [10, 20, 50, 1, 2]
-      )
-
       // admin - success
       await s1Baal.setAdminConfig(true, true)
       expect(await s1Baal.sharesPaused()).to.equal(true)
@@ -659,11 +670,6 @@ describe('Baal contract', function () {
     })
 
     it('permission = 2 - manager actions succeed', async function() {
-      const governanceConfig = abiCoder.encode(
-        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
-        [10, 20, 50, 1, 2]
-      )
-
       // admin - fail
       expect(s2Baal.setAdminConfig(true, true)).to.be.revertedWith(revertMessages.baalOrAdmin)
 
@@ -694,11 +700,6 @@ describe('Baal contract', function () {
     })
 
     it('permission = 3 - admin + manager actions succeed', async function() {
-      const governanceConfig = abiCoder.encode(
-        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
-        [10, 20, 50, 1, 2]
-      )
-
       // admin - success
       await s3Baal.setAdminConfig(true, true)
       expect(await s3Baal.sharesPaused()).to.equal(true)
@@ -731,11 +732,6 @@ describe('Baal contract', function () {
     })
 
     it('permission = 4 - governor actions succeed', async function() {
-      const governanceConfig = abiCoder.encode(
-        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
-        [10, 20, 50, 1, 2]
-      )
-
       // admin - fail
       expect(s4Baal.setAdminConfig(true, true)).to.be.revertedWith(revertMessages.baalOrAdmin)
 
@@ -768,11 +764,6 @@ describe('Baal contract', function () {
     })
 
     it('permission = 5 - admin + governor actions succeed', async function() {
-      const governanceConfig = abiCoder.encode(
-        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
-        [10, 20, 50, 1, 2]
-      )
-
       // admin - success
       await s5Baal.setAdminConfig(true, true)
       expect(await s5Baal.sharesPaused()).to.equal(true)
@@ -807,11 +798,6 @@ describe('Baal contract', function () {
     })
 
     it('permission = 6 - manager + governor actions succeed', async function() {
-      const governanceConfig = abiCoder.encode(
-        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
-        [10, 20, 50, 1, 2]
-      )
-
       // admin - fail
       expect(s6Baal.setAdminConfig(true, true)).to.be.revertedWith(revertMessages.baalOrAdmin)
 
@@ -1442,7 +1428,7 @@ describe('Baal contract', function () {
     })
   })
 
-  describe.only('erc20 loot - transferFrom', function() {
+  describe('erc20 loot - transferFrom', function() {
     it('sends tokens, not votes', async function() {
       await lootToken.approve(shaman.address, 500)
       await shamanLootToken.transferFrom(summoner.address, shaman.address, 500)
@@ -1904,11 +1890,67 @@ describe('Baal contract', function () {
       expect(baalWethAfter).to.equal(50)
     })
 
-    // TODO ragequit with multiple tokens, especially after setting / unsetting tokens
-    // TODO test ragequitting to different address
+    it('happy case - full ragequit to different address', async function () {
+      const lootBefore = await lootToken.balanceOf(summoner.address)
+      const summonerWethBefore = await weth.balanceOf(summoner.address)
+      await weth.transfer(baal.address, 100)
+      await baal.ragequit(applicant.address, shares, loot) // ragequit to applicant
+      const sharesAfter = await baal.balanceOf(summoner.address)
+      const lootAfter = await lootToken.balanceOf(summoner.address)
+      const summonerWethAfter = await weth.balanceOf(summoner.address)
+      const baalWethAfter = await weth.balanceOf(baal.address)
+      const applicantWethAfter = await weth.balanceOf(applicant.address)
+      expect(lootAfter).to.equal(lootBefore.sub(loot))
+      expect(sharesAfter).to.equal(0)
+      expect(summonerWethAfter).to.equal(summonerWethBefore.sub(100))
+      expect(baalWethAfter).to.equal(0)
+      expect(applicantWethAfter).to.equal(100)
+    })
+
+    it('skips tallying rqYesVotes when minStakingPercent = 0', async function() {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, true)
+      await baal.ragequit(summoner.address, shares, loot)
+      const prop = await baal.proposals(1)
+      expect(prop.rqYesVotes).to.equal(0)
+    })
+
+    it('happy case - full ragequit - two tokens', async function () {
+      // transfer 300 loot to DAO (summoner has 100 shares + 500 loot, so that's 50% of total)
+      // transfer 100 weth to DAO
+      // ragequit 100% of remaining shares & loot
+      // expect: receive 50% of weth / loot from DAO
+      await shamanBaal.setGuildTokens([lootToken.address]) // add loot token to guild tokens
+      const lootBefore = await lootToken.balanceOf(summoner.address)
+      const summonerWethBefore = await weth.balanceOf(summoner.address)
+      await weth.transfer(baal.address, 100)
+      await lootToken.transfer(baal.address, 300)
+      await baal.ragequit(summoner.address, shares, loot - 300)
+      const sharesAfter = await baal.balanceOf(summoner.address)
+      const lootAfter = await lootToken.balanceOf(summoner.address)
+      const baalLootAfter = await lootToken.balanceOf(baal.address)
+      const summonerWethAfter = await weth.balanceOf(summoner.address)
+      const baalWethAfter = await weth.balanceOf(baal.address)
+      expect(lootAfter).to.equal(150) // burn 200, receive 150
+      expect(sharesAfter).to.equal(0) 
+      expect(summonerWethAfter).to.equal(summonerWethBefore.sub(50)) // minus 100, plus 50
+      expect(baalWethAfter).to.equal(50)
+      expect(baalLootAfter).to.equal(150)
+    })
   })
 
   describe("ragequit - setting rqYesVotes", function() {
+    beforeEach(async function (){
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256'],
+        [deploymentConfig.VOTING_PERIOD_IN_SECONDS, deploymentConfig.GRACE_PERIOD_IN_SECONDS, 0, 0, 1, 1, 1]
+        // last number is minStakingPercent, must be non-zero to tally rqYesVotes
+      )
+
+      await shamanBaal.setGovernanceConfig(governanceConfig)
+      expect(await baal.minStakingPercent()).to.equal(1)
+    })
+
     it('1 delegate, 1 yes vote', async function() {
       await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
       await baal.submitVote(1, true)

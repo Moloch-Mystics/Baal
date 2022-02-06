@@ -55,8 +55,8 @@ contract Baal is Executor, Initializable, CloneFactory {
     uint256 public proposalOffering; /* non-member proposal offering*/
     uint256 public quorumPercent; /* minimum % of shares that must vote yes for it to pass*/
     uint256 public sponsorThreshold; /* minimum number of shares to sponsor a proposal (not %)*/
-    uint256 public minRetentionPercent; /* auto-fails a proposal if more than minRetentionPercent * total shares exit before processing*/
-    uint256 public stakingRequirement; /* auto-fails a proposals if more than 1/(stakingRequirement) yes voters exit before processing*/
+    uint256 public minRetentionPercent; /* auto-fails a proposal if more than (1- minRetentionPercent) * total shares exit before processing*/
+    uint256 public minStakingPercent; /* auto-fails a proposals if more than (1 - minStakingPercent) * yes voters exit before processing*/
     uint256 status; /*internal reentrancy check tracking value*/
 
     bool public adminLock; /* once set to true, no new admin roles can be assigned to shaman */
@@ -534,7 +534,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         if (prop.expiration != 0 && prop.expiration < block.timestamp) okToExecute = false;
 
         // Make proposal fail if it didn't pass quorum
-        if (okToExecute && prop.yesVotes * 100 / totalSupply < quorumPercent) okToExecute = false;
+        if (okToExecute && prop.yesVotes * 100 < quorumPercent * totalSupply) okToExecute = false;
 
         // Make proposal fail if the minRetentionPercent is exceeded
         if (okToExecute && (totalSupply + totalLoot()) < prop.maxTotalSharesAndLootAtYesVote * minRetentionPercent / 100) {
@@ -542,7 +542,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         }
 
         // Make proposal if too many yes voters ragequit before processing
-        if (okToExecute && prop.rqYesVotes * stakingRequirement > prop.yesVotes) {
+        if (okToExecute && prop.yesVotes - prop.rqYesVotes < prop.yesVotes * minStakingPercent / 100) {
             okToExecute = false;
         }
 
@@ -658,19 +658,23 @@ contract Baal is Executor, Initializable, CloneFactory {
             uint32 grace,
             uint256 newOffering,
             uint256 quorum,
-            uint256 sponsor
+            uint256 sponsor,
+            uint256 minRetention,
+            uint256 minStaking
         ) = abi.decode(
                 _governanceConfig,
-                (uint32, uint32, uint256, uint256, uint256)
+                (uint32, uint32, uint256, uint256, uint256, uint256, uint256)
             );
         if (voting != 0) votingPeriod = voting; /*if positive, reset min. voting periods to first `value`*/
         if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to second `value`*/
         proposalOffering = newOffering; /*set new proposal offering amount */
         quorumPercent = quorum;
         sponsorThreshold = sponsor;
+        minRetentionPercent = minRetention;
+        minStakingPercent = minStaking;
     }
 
-    function cancelProposal(uint32 id) external {
+    function cancelProposal(uint32 id) external nonReentrant {
         Proposal storage prop = proposals[id];
         require(state(id) == ProposalState.Voting, "!voting");
         require(msg.sender == prop.sponsor || getPriorVotes(prop.sponsor, block.timestamp - 1) < sponsorThreshold || isGovernor(msg.sender), "!cancellable");
@@ -869,7 +873,67 @@ contract Baal is Executor, Initializable, CloneFactory {
         uint256 sharesToBurn,
         uint256 lootToBurn
     ) external nonReentrant {
+        _ragequit(to, sharesToBurn, lootToBurn, guildTokens);
+    }
+
+    function advancedRagequit(
+        address to,
+        uint256 sharesToBurn,
+        uint256 lootToBurn,
+        address[] calldata tokens
+    ) external nonReentrant {
+        for (uint256 i; i < tokens.length; i++) {
+            if (i > 0) {
+                require(tokens[i] > tokens[i - 1], 'duplicate token');
+            }
+        }
+
+        _ragequit(to, sharesToBurn, lootToBurn, tokens);
+    }
+
+    function _ragequit(
+        address to,
+        uint256 sharesToBurn,
+        uint256 lootToBurn,
+        address[] memory tokens
+    ) internal {
+        uint256 totalShares = totalSupply;
+        uint256 totalLoot = totalLoot();
+
+        if (lootToBurn != 0) {
+            /*gas optimization*/
+            _burnLoot(msg.sender, lootToBurn); /*subtract `loot` from user account & Baal totals*/
+        }
+
+        if (sharesToBurn != 0) {
+            /*gas optimization*/
+            _burnShares(msg.sender, sharesToBurn); /*subtract `shares` from user account & Baal totals with erc20 accounting*/
+        }
+
         // add member shares to rqYesVotes for all active proposals the member voted yes on
+        if (minStakingPercent > 0) {
+            _tallyRqYesVotes(sharesToBurn);
+        }
+
+        for (uint256 i; i < tokens.length; i++) {
+            (, bytes memory balanceData) = tokens[i].staticcall(
+                abi.encodeWithSelector(0x70a08231, address(this))
+            ); /*get Baal token balances - 'balanceOf(address)'*/
+            uint256 balance = abi.decode(balanceData, (uint256)); /*decode Baal token balances for calculation*/
+
+            uint256 amountToRagequit = ((lootToBurn + sharesToBurn) * balance) /
+                (totalShares + totalLoot); /*calculate 'fair shair' claims*/
+
+            if (amountToRagequit != 0) {
+                /*gas optimization to allow higher maximum token limit*/
+                _safeTransfer(tokens[i], to, amountToRagequit); /*execute 'safe' token transfer*/
+            }
+        }
+
+        emit Ragequit(msg.sender, to, lootToBurn, sharesToBurn); /*event reflects claims made against Baal*/
+    }
+
+    function _tallyRqYesVotes(uint256 sharesToBurn) internal {
         Member storage member = members[msg.sender];
         bool done = false;
         uint256 nextDelegationTimeStamp = 0;
@@ -917,33 +981,6 @@ contract Baal is Executor, Initializable, CloneFactory {
             nextDelegationTimeStamp = d.fromTimeStamp;
             if (done) break;
         }
-
-        for (uint256 i; i < guildTokens.length; i++) {
-            (, bytes memory balanceData) = guildTokens[i].staticcall(
-                abi.encodeWithSelector(0x70a08231, address(this))
-            ); /*get Baal token balances - 'balanceOf(address)'*/
-            uint256 balance = abi.decode(balanceData, (uint256)); /*decode Baal token balances for calculation*/
-
-            uint256 amountToRagequit = ((lootToBurn + sharesToBurn) * balance) /
-                (totalSupply + totalLoot()); /*calculate 'fair shair' claims*/
-
-            if (amountToRagequit != 0) {
-                /*gas optimization to allow higher maximum token limit*/
-                _safeTransfer(guildTokens[i], to, amountToRagequit); /*execute 'safe' token transfer*/
-            }
-        }
-
-        if (lootToBurn != 0) {
-            /*gas optimization*/
-            _burnLoot(msg.sender, lootToBurn); /*subtract `loot` from user account & Baal totals*/
-        }
-
-        if (sharesToBurn != 0) {
-            /*gas optimization*/
-            _burnShares(msg.sender, sharesToBurn); /*subtract `shares` from user account & Baal totals with erc20 accounting*/
-        }
-
-        emit Ragequit(msg.sender, to, lootToBurn, sharesToBurn); /*event reflects claims made against Baal*/
     }
 
     /***************
