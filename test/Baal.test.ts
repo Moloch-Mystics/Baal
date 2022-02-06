@@ -41,6 +41,10 @@ const revertMessages = {
   unsetGuildTokensLastToken: 'reverted with panic code 0x32 (Array accessed at an out-of-bounds or negative index)',
   sharesTransferPaused: '!transferable',
   sharesInsufficientBalance: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)',
+  sharesInsufficientApproval: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)',
+  lootTransferPaused: '!transferable',
+  lootInsufficientBalance: "reverted with reason string 'ERC20: transfer amount exceeds balance'",
+  lootInsufficientApproval: 'ERC20: transfer amount exceeds allowance',
   mintSharesArrayParity: '!array parity',
   burnSharesArrayParity: '!array parity',
   burnSharesInsufficientShares: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)',
@@ -172,6 +176,7 @@ describe('Baal contract', function () {
   let LootFactory: ContractFactory
   let ERC20: ContractFactory
   let lootToken: Loot
+  let shamanLootToken: Loot
   let shamanBaal: Baal
   let applicantBaal: Baal
   let weth: TestErc20
@@ -251,6 +256,7 @@ describe('Baal contract', function () {
     const lootTokenAddress = await baal.lootToken()
 
     lootToken = LootFactory.attach(lootTokenAddress) as Loot
+    shamanLootToken = lootToken.connect(shaman)
 
     const selfTransferAction = encodeMultiAction(multisend, ['0x'], [baal.address], [BigNumber.from(0)], [0])
 
@@ -1387,6 +1393,83 @@ describe('Baal contract', function () {
       await shamanBaal.setAdminConfig(true, false) // pause shares
       await baal.approve(shaman.address, deploymentConfig.SPONSOR_THRESHOLD)
       expect(baal.transferFrom(summoner.address, shaman.address, deploymentConfig.SPONSOR_THRESHOLD)).to.be.revertedWith(revertMessages.sharesTransferPaused)
+    })
+
+    it('require fails - insufficeint approval', async function () {
+      await baal.approve(shaman.address, 1)
+      expect(baal.transferFrom(summoner.address, shaman.address, 2)).to.be.revertedWith(revertMessages.sharesInsufficientApproval)
+    })
+  })
+
+  describe('erc20 loot - approve', function() {
+    it('happy case', async function() {
+      await lootToken.approve(shaman.address, 20)
+      const allowance = await lootToken.allowance(summoner.address, shaman.address)
+      expect(allowance).to.equal(20)
+    })
+
+    it('overwrites previous value', async function() {
+      await lootToken.approve(shaman.address, 20)
+      const allowance = await lootToken.allowance(summoner.address, shaman.address)
+      expect(allowance).to.equal(20)
+
+      await lootToken.approve(shaman.address, 50)
+      const allowance2 = await lootToken.allowance(summoner.address, shaman.address)
+      expect(allowance2).to.equal(50)
+    })
+  })
+
+  describe('erc20 loot - transfer', function() {
+    it('sends tokens, not votes', async function() {
+      await lootToken.transfer(shaman.address, 500)
+      const summonerBalance = await lootToken.balanceOf(summoner.address)
+      const summonerVotes = await baal.getCurrentVotes(summoner.address)
+      const shamanBalance = await lootToken.balanceOf(shaman.address)
+      const shamanVotes = await baal.getCurrentVotes(shaman.address)
+      expect(summonerBalance).to.equal(0)
+      expect(summonerVotes).to.equal(100)
+      expect(shamanBalance).to.equal(500)
+      expect(shamanVotes).to.equal(0)
+    })
+
+    it('require fails - loot paused', async function () {
+      await shamanBaal.setAdminConfig(false, true) // pause loot
+      expect(lootToken.transfer(shaman.address, 1)).to.be.revertedWith(revertMessages.lootTransferPaused)
+    })
+
+    it('require fails - insufficient balance', async function () {
+      expect(lootToken.transfer(shaman.address, 501)).to.be.revertedWith(revertMessages.lootInsufficientBalance)
+    })
+  })
+
+  describe.only('erc20 loot - transferFrom', function() {
+    it('sends tokens, not votes', async function() {
+      await lootToken.approve(shaman.address, 500)
+      await shamanLootToken.transferFrom(summoner.address, shaman.address, 500)
+      const summonerBalance = await lootToken.balanceOf(summoner.address)
+      const summonerVotes = await baal.getCurrentVotes(summoner.address)
+      const shamanBalance = await lootToken.balanceOf(shaman.address)
+      const shamanVotes = await baal.getCurrentVotes(shaman.address)
+      expect(summonerBalance).to.equal(0)
+      expect(summonerVotes).to.equal(100)
+      expect(shamanBalance).to.equal(500)
+      expect(shamanVotes).to.equal(0)
+    })
+
+    it('require fails - loot paused', async function () {
+      await shamanBaal.setAdminConfig(false, true) // pause loot
+      await lootToken.approve(shaman.address, 500)
+      expect(shamanLootToken.transferFrom(summoner.address, shaman.address, 500)).to.be.revertedWith(revertMessages.lootTransferPaused)
+    })
+
+    it('require fails - insufficient balance', async function () {
+      await lootToken.approve(shaman.address, 500)
+      expect(shamanLootToken.transferFrom(summoner.address, shaman.address, 501)).to.be.revertedWith(revertMessages.lootInsufficientBalance)
+    })
+
+    it('require fails - insufficeint approval', async function () {
+      await lootToken.approve(shaman.address, 499)
+      expect(shamanLootToken.transferFrom(summoner.address, shaman.address, 500)).to.be.revertedWith(revertMessages.lootInsufficientApproval)
     })
   })
 
