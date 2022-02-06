@@ -60,9 +60,9 @@ async function blockNumber() {
   return block.number
 }
 
-async function moveForwardPeriods(periods: number) {
-  const goToTime = deploymentConfig.VOTING_PERIOD_IN_SECONDS * periods
-  await ethers.provider.send('evm_increaseTime', [goToTime])
+async function moveForwardPeriods(periods: number, extra?: number) {
+  const goToTime = (await blockTime()) + (deploymentConfig.VOTING_PERIOD_IN_SECONDS * periods) + (extra ? extra : 0)
+  await ethers.provider.send("evm_mine", [goToTime])
   return true
 }
 
@@ -71,6 +71,8 @@ const deploymentConfig = {
   VOTING_PERIOD_IN_SECONDS: 432000,
   PROPOSAL_OFFERING: 0,
   SPONSOR_THRESHOLD: 1,
+  MIN_RETENTION_PERCENT: 0,
+  MIN_STAKING_PERCENT: 0,
   QUORUM_PERCENT: 0,
   TOKEN_NAME: 'wrapped ETH',
   TOKEN_SYMBOL: 'WETH',
@@ -88,6 +90,8 @@ const getBaalParams = async function (
     VOTING_PERIOD_IN_SECONDS: any
     QUORUM_PERCENT: any
     SPONSOR_THRESHOLD: any
+    MIN_RETENTION_PERCENT: any
+    MIN_STAKING_PERCENT: any
     TOKEN_NAME: any
     TOKEN_SYMBOL: any
   },
@@ -98,8 +102,15 @@ const getBaalParams = async function (
   loots: [string[], number[]]
 ) {
   const governanceConfig = abiCoder.encode(
-    ['uint32', 'uint32', 'uint256', 'uint256', 'uint256'],
-    [config.VOTING_PERIOD_IN_SECONDS, config.GRACE_PERIOD_IN_SECONDS, config.PROPOSAL_OFFERING, config.QUORUM_PERCENT, config.SPONSOR_THRESHOLD]
+    ['uint32', 'uint32', 'uint256', 'uint256', 'uint256', 'uint256'],
+    [
+      config.VOTING_PERIOD_IN_SECONDS,
+      config.GRACE_PERIOD_IN_SECONDS,
+      config.PROPOSAL_OFFERING,
+      config.QUORUM_PERCENT,
+      config.SPONSOR_THRESHOLD,
+      config.MIN_RETENTION_PERCENT,
+    ]
   )
 
   const setAdminConfig = await baal.interface.encodeFunctionData('setAdminConfig', adminConfig)
@@ -129,14 +140,30 @@ describe.only('Tribute proposal type', function () {
   let LootFactory: ContractFactory
   let ERC20: ContractFactory
   let lootToken: Loot
+  let shamanLootToken: Loot
   let shamanBaal: Baal
+  let applicantBaal: Baal
   let weth: TestErc20
   let applicantWeth: TestErc20
   let multisend: MultiSend
 
+  // shaman baals, to test permissions
+  let s1Baal: Baal
+  let s2Baal: Baal
+  let s3Baal: Baal
+  let s4Baal: Baal
+  let s5Baal: Baal
+  let s6Baal: Baal
+
   let applicant: SignerWithAddress
   let summoner: SignerWithAddress
   let shaman: SignerWithAddress
+  let s1: SignerWithAddress
+  let s2: SignerWithAddress
+  let s3: SignerWithAddress
+  let s4: SignerWithAddress
+  let s5: SignerWithAddress
+  let s6: SignerWithAddress
 
   let proposal: { [key: string]: any }
 
@@ -158,18 +185,25 @@ describe.only('Tribute proposal type', function () {
   beforeEach(async function () {
     const BaalContract = await ethers.getContractFactory('Baal')
     const MultisendContract = await ethers.getContractFactory('MultiSend')
-    ;[summoner, applicant, shaman] = await ethers.getSigners()
+    ;[summoner, applicant, shaman, s1, s2, s3, s4, s5, s6] = await ethers.getSigners()
 
     ERC20 = await ethers.getContractFactory('TestERC20')
     weth = (await ERC20.deploy('WETH', 'WETH', 10000000)) as TestErc20
     applicantWeth = weth.connect(applicant)
-
+    
     await weth.transfer(applicant.address, 1000)
 
     multisend = (await MultisendContract.deploy()) as MultiSend
 
     baal = (await BaalContract.deploy()) as Baal
     shamanBaal = baal.connect(shaman) // needed to send txns to baal as the shaman
+    applicantBaal = baal.connect(applicant) // needed to send txns to baal as the shaman
+    s1Baal = baal.connect(s1)
+    s2Baal = baal.connect(s2)
+    s3Baal = baal.connect(s3)
+    s4Baal = baal.connect(s4)
+    s5Baal = baal.connect(s5)
+    s6Baal = baal.connect(s6)
 
     encodedInitParams = await getBaalParams(
       baal,
@@ -188,6 +222,7 @@ describe.only('Tribute proposal type', function () {
     const lootTokenAddress = await baal.lootToken()
 
     lootToken = LootFactory.attach(lootTokenAddress) as Loot
+    shamanLootToken = lootToken.connect(shaman)
 
     const selfTransferAction = encodeMultiAction(multisend, ['0x'], [baal.address], [BigNumber.from(0)], [0])
 
@@ -227,6 +262,36 @@ describe.only('Tribute proposal type', function () {
     })
 
     it('EXPLOIT - Allows another proposal to spend tokens intended for tribute', async function () {
+      // expect(await weth.balanceOf(baal.address)).to.equal(0)
+
+      // await applicantWeth.approve(baal.address, 100)
+
+      // const mintShares = await baal.interface.encodeFunctionData('mintShares', [[applicant.address], [100]])
+      // const sendTribute = await applicantWeth.interface.encodeFunctionData('transferFrom', [applicant.address, baal.address, 100])
+
+      // const encodedProposal = encodeMultiAction(
+      //   multisend,
+      //   [mintShares, sendTribute],
+      //   [baal.address, weth.address],
+      //   [BigNumber.from(0), BigNumber.from(0)],
+      //   [0, 0]
+      // )
+
+      // const decoded = decodeMultiAction(multisend, encodedProposal)
+
+      // // malicious proposal sends tokens but skips issuing shares
+      // const maliciousProposal = encodeMultiAction(multisend, [sendTribute], [weth.address], [BigNumber.from(0)], [0])
+      // // const encodedProposal = encodeMultiAction(multisend, [mintShares], [baal.address], [BigNumber.from(0)], [0])
+
+      // await baal.submitProposal(encodedProposal, proposal.expiration, ethers.utils.id(proposal.details))
+      // await baal.submitProposal(maliciousProposal, proposal.expiration, ethers.utils.id(proposal.details))
+      // await baal.submitVote(1, no)
+      // await baal.submitVote(2, yes)
+      // await moveForwardPeriods(2)
+      // await baal.processProposal(1, encodedProposal)
+      // // await baal.processProposal(2, maliciousProposal)
+      // expect(await weth.balanceOf(baal.address)).to.equal(100)
+      // expect(await baal.balanceOf(applicant.address)).to.equal(0)
       expect(await weth.balanceOf(baal.address)).to.equal(0)
 
       await applicantWeth.approve(baal.address, 100)
@@ -241,10 +306,6 @@ describe.only('Tribute proposal type', function () {
         [BigNumber.from(0), BigNumber.from(0)],
         [0, 0]
       )
-
-      const decoded = decodeMultiAction(multisend, encodedProposal)
-
-      // malicious proposal sends tokens but skips issuing shares
       const maliciousProposal = encodeMultiAction(multisend, [sendTribute], [weth.address], [BigNumber.from(0)], [0])
       // const encodedProposal = encodeMultiAction(multisend, [mintShares], [baal.address], [BigNumber.from(0)], [0])
 
@@ -253,8 +314,11 @@ describe.only('Tribute proposal type', function () {
       await baal.submitVote(1, no)
       await baal.submitVote(2, yes)
       await moveForwardPeriods(2)
-      await baal.processProposal(1, encodedProposal)
+      // await baal.processProposal(1, encodedProposal)
       await baal.processProposal(2, maliciousProposal)
+      const afterProcessed = await baal.proposals(1);
+      const afterStatus = await baal.getProposalStatus(1)
+      console.log({afterProcessed, afterStatus})
       expect(await weth.balanceOf(baal.address)).to.equal(100)
       expect(await baal.balanceOf(applicant.address)).to.equal(0)
     })
