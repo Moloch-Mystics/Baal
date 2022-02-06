@@ -6,8 +6,8 @@ export default async function signDelegation(
   signer: SignerWithAddress,
   name: string,
   delegatee: string,
-  nonce: string,
-  expiry: string
+  nonce: number,
+  expiry: number
 ) {
   const domain = {
     name,

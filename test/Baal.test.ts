@@ -14,6 +14,8 @@ import { ContractFactory, utils } from 'ethers'
 import { ConfigExtender } from 'hardhat/types'
 import { Test } from 'mocha'
 import signVote from '../src/signVote'
+import signDelegation from '../src/signDelegation'
+import signPermit from '../src/signPermit'
 
 use(solidity)
 
@@ -23,8 +25,7 @@ use(solidity)
 
 const revertMessages = {
   molochAlreadyInitialized: 'Initializable: contract is already initialized',
-  molochSetupSharesCannotBe0: 'shares cannot be 0',
-  molochConstructorVotingPeriodCannotBe0: 'votingPeriod cannot be 0',
+  molochSetupSharesNoShares: 'shares != 0',
   submitProposalExpired: 'expired',
   submitProposalOffering: 'Baal requires an offering',
   submitProposalVotingPeriod: '!votingPeriod',
@@ -1616,16 +1617,32 @@ describe('Baal contract', function () {
     });
   })
 
-  describe.only('submitVoteWithSig (w/ auto self-sponsor)', function () {
+  describe('submitVoteWithSig (w/ auto self-sponsor)', function () {
     beforeEach(async function () {
       await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
     })
 
     it('happy case - yes vote', async function () {
-      // await baal.submitVoteWithSig(1, yes)
       const signature = await signVote(chainId,baal.address,summoner,deploymentConfig.TOKEN_NAME,1,true)
-      console.log(`signer: ${summoner.address}`)
       await baal.submitVoteWithSig(1, true, signature)
+      const prop = await baal.proposals(1)
+      const nCheckpoints = await baal.numCheckpoints(summoner.address)
+      const votes = (await baal.checkpoints(summoner.address, nCheckpoints.sub(1))).votes
+      const priorVotes = await baal.getPriorVotes(summoner.address, prop.votingStarts)
+      expect(priorVotes).to.equal(votes)
+      expect(prop.yesVotes).to.equal(votes);
+    });
+  })
+
+  describe.only('delegateBySig', function () {
+    it('happy case - yes vote', async function () {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      const signature = await signDelegation(chainId,baal.address,summoner,deploymentConfig.TOKEN_NAME,shaman.address, 0, 0)
+      console.log(summoner.address)
+      await shamanBaal.delegateBySig(shaman.address, 0, 0, signature)
+      const summonerDelegate = await baal.delegates(summoner.address)
+      expect(summonerDelegate).to.equal(shaman.address)
+      await shamanBaal.submitVote(1, true)
       const prop = await baal.proposals(1)
       const nCheckpoints = await baal.numCheckpoints(summoner.address)
       const votes = (await baal.checkpoints(summoner.address, nCheckpoints.sub(1))).votes
@@ -2405,6 +2422,6 @@ describe('Baal contract - no shares minted - fails', function () {
       [[summoner.address], [loot]]
     )
 
-    expect(baal.setUp(encodedInitParams)).to.be.revertedWith(revertMessages.molochSetupSharesCannotBe0)
+    expect(baal.setUp(encodedInitParams)).to.be.revertedWith(revertMessages.molochSetupSharesNoShares)
   })
 })
