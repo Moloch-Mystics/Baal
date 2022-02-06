@@ -1635,20 +1635,13 @@ describe('Baal contract', function () {
   })
 
   describe.only('delegateBySig', function () {
-    it('happy case - yes vote', async function () {
+    it('happy case ', async function () {
       await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
       const signature = await signDelegation(chainId,baal.address,summoner,deploymentConfig.TOKEN_NAME,shaman.address, 0, 0)
       console.log(summoner.address)
       await shamanBaal.delegateBySig(shaman.address, 0, 0, signature)
       const summonerDelegate = await baal.delegates(summoner.address)
       expect(summonerDelegate).to.equal(shaman.address)
-      await shamanBaal.submitVote(1, true)
-      const prop = await baal.proposals(1)
-      const nCheckpoints = await baal.numCheckpoints(summoner.address)
-      const votes = (await baal.checkpoints(summoner.address, nCheckpoints.sub(1))).votes
-      const priorVotes = await baal.getPriorVotes(summoner.address, prop.votingStarts)
-      expect(priorVotes).to.equal(votes)
-      expect(prop.yesVotes).to.equal(votes);
     });
   })
 
