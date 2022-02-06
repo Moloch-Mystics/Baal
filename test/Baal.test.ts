@@ -38,6 +38,7 @@ const revertMessages = {
   submitVoteWithSigVoted: 'voted',
   submitVoteWithSigMember: '!member',
   processProposalNotReady: '!ready',
+  advancedRagequitUnordered: '!order',
   unsetGuildTokensLastToken: 'reverted with panic code 0x32 (Array accessed at an out-of-bounds or negative index)',
   sharesTransferPaused: '!transferable',
   sharesInsufficientBalance: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)',
@@ -1921,7 +1922,6 @@ describe('Baal contract', function () {
       // ragequit 100% of remaining shares & loot
       // expect: receive 50% of weth / loot from DAO
       await shamanBaal.setGuildTokens([lootToken.address]) // add loot token to guild tokens
-      const lootBefore = await lootToken.balanceOf(summoner.address)
       const summonerWethBefore = await weth.balanceOf(summoner.address)
       await weth.transfer(baal.address, 100)
       await lootToken.transfer(baal.address, 300)
@@ -2151,6 +2151,47 @@ describe('Baal contract', function () {
       expect(prop3.rqYesVotes).to.equal(shares)
       const prop4 = await baal.proposals(4)
       expect(prop4.rqYesVotes).to.equal(shares)
+    })
+  })
+
+  describe('advancedRagequit', function() {
+    it('collects tokens not on the list', async function () {
+      // note - skips having shaman add LOOT to guildTokens
+      // transfer 300 loot to DAO (summoner has 100 shares + 500 loot, so that's 50% of total)
+      // transfer 100 weth to DAO
+      // ragequit 100% of remaining shares & loot
+      // expect: receive 50% of weth / loot from DAO
+      const summonerWethBefore = await weth.balanceOf(summoner.address)
+      await weth.transfer(baal.address, 100)
+      await lootToken.transfer(baal.address, 300)
+      const tokens = [lootToken.address, weth.address].sort((a, b) => {
+        return parseInt(a.slice(2), 16) - parseInt(b.slice(2), 16)
+      })
+      await baal.advancedRagequit(summoner.address, shares, loot - 300, tokens)
+      const sharesAfter = await baal.balanceOf(summoner.address)
+      const lootAfter = await lootToken.balanceOf(summoner.address)
+      const baalLootAfter = await lootToken.balanceOf(baal.address)
+      const summonerWethAfter = await weth.balanceOf(summoner.address)
+      const baalWethAfter = await weth.balanceOf(baal.address)
+      expect(lootAfter).to.equal(150) // burn 200, receive 150
+      expect(sharesAfter).to.equal(0) 
+      expect(summonerWethAfter).to.equal(summonerWethBefore.sub(50)) // minus 100, plus 50
+      expect(baalWethAfter).to.equal(50)
+      expect(baalLootAfter).to.equal(150)
+    })
+
+    it('require fail - enforces ascending order', async function () {
+      await weth.transfer(baal.address, 100)
+      await lootToken.transfer(baal.address, 300)
+      const tokens = [lootToken.address, weth.address].sort((a, b) => {
+        return parseInt(a.slice(2), 16) - parseInt(b.slice(2), 16)
+      }).reverse()
+      expect(baal.advancedRagequit(summoner.address, shares, loot - 300, tokens)).to.be.revertedWith(revertMessages.advancedRagequitUnordered)
+    })
+
+    it('require fail - prevents actual duplicate', async function () {
+      await weth.transfer(baal.address, 100)
+      expect(baal.advancedRagequit(summoner.address, shares, loot - 300, [weth.address, weth.address])).to.be.revertedWith(revertMessages.advancedRagequitUnordered)
     })
   })
 

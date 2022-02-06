@@ -884,7 +884,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     ) external nonReentrant {
         for (uint256 i; i < tokens.length; i++) {
             if (i > 0) {
-                require(tokens[i] > tokens[i - 1], 'duplicate token');
+                require(tokens[i] > tokens[i - 1], '!order');
             }
         }
 
