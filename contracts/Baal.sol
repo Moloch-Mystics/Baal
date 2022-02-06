@@ -12,6 +12,7 @@ pragma solidity >=0.8.0;
 import "@gnosis.pm/safe-contracts/contracts/base/Executor.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./LootERC20.sol";
 
 import "hardhat/console.sol";
@@ -47,6 +48,7 @@ contract CloneFactory {
 /// @title Baal ';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
 contract Baal is Executor, Initializable, CloneFactory {
+    using ECDSA for bytes32;
 
     // ERC20 SHARES + LOOT
     uint8 public constant decimals = 18; /*unit scaling factor in erc20 `shares` accounting - '18' is default to match ETH & common erc20s*/
@@ -105,10 +107,10 @@ contract Baal is Executor, Initializable, CloneFactory {
 
     // SIGNATURE HELPERS
     mapping(address => uint256) public nonces; /*maps record of states for signing & validating signatures*/
-    bytes32 constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,uint chainId,address verifyingContract)");
-    bytes32 constant DELEGATION_TYPEHASH = keccak256("Delegation(address delegatee,uint nonce,uint expiry)"); 
+    bytes32 constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)");
+    bytes32 constant DELEGATION_TYPEHASH = keccak256("Delegation(address delegatee,uint nonce,uint expiry)");
     bytes32 constant PERMIT_TYPEHASH = keccak256("Permit(address owner,address spender,uint value,uint nonce,uint deadline)");
-    bytes32 constant VOTE_TYPEHASH = keccak256("Vote(uint proposalId,bool support)");
+    bytes32 constant VOTE_TYPEHASH = keccak256("Vote(uint proposalId,bool support)"); 
     
     // DATA STRUCTURES
     struct Proposal {
@@ -397,15 +399,11 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @notice Submit vote with EIP-712 signature - proposal must exist & voting period must not have ended.
     /// @param id Number of proposal in `proposals` mapping to cast vote on.
     /// @param approved If 'true', member will cast `yesVotes` onto proposal - if 'false', `noVotes` will be counted.
-    /// @param v The recovery byte of the signature.
-    /// @param r Half of the ECDSA signature pair.
-    /// @param s Half of the ECDSA signature pair.
+    /// @param signature Concatenated signature
     function submitVoteWithSig(
         uint32 id,
         bool approved,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
+        bytes calldata signature
     ) external nonReentrant {
         bytes32 domainSeparator = keccak256(
             abi.encode(
@@ -419,7 +417,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         bytes32 digest = keccak256(
             abi.encodePacked("\x19\x01", domainSeparator, structHash)
         ); /*calculate EIP-712 digest for signature*/
-        address signatory = ecrecover(digest, v, r, s); /*recover signer from hash data*/
+        address signatory = digest.recover(signature); /*recover signer from hash data*/
 
         require(signatory != address(0), "!signatory"); /*check signer is not null*/
 
@@ -611,16 +609,12 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @param delegatee The address to delegate 'votes' to.
     /// @param nonce The contract state required to match the signature.
     /// @param deadline The time at which to expire the signature.
-    /// @param v The recovery byte of the signature.
-    /// @param r Half of the ECDSA signature pair.
-    /// @param s Half of the ECDSA signature pair.
+    /// @param signature The concatenated signature
     function delegateBySig(
         address delegatee,
         uint256 nonce,
         uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
+        bytes calldata signature
     ) external {
         bytes32 domainSeparator = keccak256(
             abi.encode(
@@ -636,12 +630,15 @@ contract Baal is Executor, Initializable, CloneFactory {
         bytes32 digest = keccak256(
             abi.encodePacked("\x19\x01", domainSeparator, structHash)
         ); /*calculate EIP-712 digest for signature*/
-        address signatory = ecrecover(digest, v, r, s); /*recover signer from hash data*/
+        address signatory = digest.recover(signature); /*recover signer from hash data*/
+        console.log(signatory);
 
         require(signatory != address(0), "!signatory"); /*check signer is not null*/
         unchecked {
             require(nonce == nonces[signatory]++, "!nonce"); /*check given `nonce` is next in `nonces`*/
         }
+
+        require(deadline == 0 || deadline < block.timestamp, 'expired');
 
         _delegate(signatory, delegatee); /*execute delegation*/
     }
@@ -951,17 +948,13 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @param spender The address to be approved.
     /// @param amount The number of `shares` tokens that are approved (2^256-1 means infinite).
     /// @param deadline The time at which to expire the signature.
-    /// @param v The recovery byte of the signature.
-    /// @param r Half of the ECDSA signature pair.
-    /// @param s Half of the ECDSA signature pair.
+    /// @param signature Concatenated signature
     function permit(
         address owner,
         address spender,
         uint256 amount,
         uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
+        bytes calldata signature
     ) external {
         bytes32 domainSeparator = keccak256(
             abi.encode(
@@ -985,8 +978,9 @@ contract Baal is Executor, Initializable, CloneFactory {
             ); /*calculate EIP-712 struct hash*/
             bytes32 digest = keccak256(
                 abi.encodePacked("\x19\x01", domainSeparator, structHash)
-            ); /*calculate EIP-712 digest for signature*/
-            address signatory = ecrecover(digest, v, r, s); /*recover signer from hash data*/
+            ); /*calculat
+            e EIP-712 digest for signature*/
+        address signatory = digest.recover(signature); /*recover signer from hash data*/
             require(signatory != address(0), "!signatory"); /*check signer is not null*/
             require(signatory == owner, "!authorized"); /*check signer is `owner`*/
         }
