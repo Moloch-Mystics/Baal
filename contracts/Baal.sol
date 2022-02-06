@@ -19,9 +19,13 @@ import "hardhat/console.sol";
 
 interface ILoot {
     function setUp(string memory _name, string memory _symbol) external;
+
     function mint(address recipient, uint256 amount) external;
+
     function burn(address account, uint256 amount) external;
+
     function balanceOf(address account) external view returns (uint256);
+
     function totalSupply() external view returns (uint256);
 }
 
@@ -50,24 +54,15 @@ contract CloneFactory {
 contract Baal is Executor, Initializable, CloneFactory {
     using ECDSA for bytes32;
 
-    // ERC20 SHARES + LOOT
-    uint8 public constant decimals = 18; /*unit scaling factor in erc20 `shares` accounting - '18' is default to match ETH & common erc20s*/
-    uint256 public totalSupply; /*counter for total `members` voting `shares` with erc20 accounting*/
-    string public name; /*'name' for erc20 `shares` accounting*/
-    string public symbol; /*'symbol' for erc20 `shares` accounting*/
-    ILoot public lootToken; /*Sub ERC20 for loot mgmt*/
-    mapping(address => mapping(address => uint256)) public allowance; /*maps approved pulls of `shares` with erc20 accounting*/
-    mapping(address => uint256) public balanceOf; /*maps `members` accounts to `shares` with erc20 accounting*/
-    
-    // ADMIN PARAMETERS
     bool public lootPaused; /*tracks transferability of `loot` economic weight - amendable through 'period'[2] proposal*/
     bool public sharesPaused; /*tracks transferability of erc20 `shares` - amendable through 'period'[2] proposal*/
 
-    // MANAGER PARAMS
-    address[] guildTokens; /*array of default erc20 tokens to withdraw on ragequit */
-    mapping(address => bool) public guildTokensEnabled; /*maps guild token addresses -> enabled status (prevents duplicates in guildTokens[]) */
-    
-    // GOVERNANCE PARAMS
+    uint8 public constant decimals = 18; /*unit scaling factor in erc20 `shares` accounting - '18' is default to match ETH & common erc20s*/
+
+    ILoot public lootToken; /*Sub ERC20 for loot mgmt*/
+
+    uint256 public totalSupply; /*counter for total `members` voting `shares` with erc20 accounting*/
+
     uint32 public votingPeriod; /* voting period in seconds - amendable through 'period'[2] proposal*/
     uint32 public gracePeriod; /*time delay after proposal voting period for processing*/
     uint32 public proposalCount; /*counter for total `proposals` submitted*/
@@ -75,11 +70,45 @@ contract Baal is Executor, Initializable, CloneFactory {
     uint256 public quorumPercent; /* minimum % of shares that must vote yes for it to pass*/
     uint256 public sponsorThreshold; /* minimum number of shares to sponsor a proposal (not %)*/
     uint256 public minRetentionPercent; /* auto-fails a proposal if more than (1- minRetentionPercent) * total shares exit before processing*/
+    uint256 status; /*internal reentrancy check tracking value*/
 
-    // SHAMAN PERMISSIONS
     bool public adminLock; /* once set to true, no new admin roles can be assigned to shaman */
     bool public managerLock; /* once set to true, no new manager roles can be assigned to shaman */
     bool public governorLock; /* once set to true, no new governor roles can be assigned to shaman */
+
+    string public name; /*'name' for erc20 `shares` accounting*/
+    string public symbol; /*'symbol' for erc20 `shares` accounting*/
+
+    uint32 public latestSponsoredProposalId; /* the id of the last proposal to be sponsored */
+
+    bytes32 constant DOMAIN_TYPEHASH =
+        keccak256(
+            "EIP712Domain(string name,uint256 chainId,address verifyingContract)"
+        ); /*EIP-712 typehash for Baal domain*/
+    bytes32 constant DELEGATION_TYPEHASH =
+        keccak256("Delegation(address delegatee,uint nonce,uint expiry)"); /*EIP-712 typehash for Baal delegation*/
+    bytes32 constant PERMIT_TYPEHASH =
+        keccak256(
+            "Permit(address owner,address spender,uint value,uint nonce,uint deadline)"
+        ); /*EIP-712 typehash for EIP-2612 {permit}*/
+    bytes32 constant VOTE_TYPEHASH =
+        keccak256("Vote(uint proposalId,bool support)"); /*EIP-712 typehash for Baal proposal vote*/
+
+    address[] guildTokens; /*array list of erc20 tokens approved on summoning or by 'whitelist'[3] `proposals` for {ragequit} claims*/
+
+    address multisendLibrary; /*address of multisend library*/
+
+    mapping(address => mapping(address => uint256)) public allowance; /*maps approved pulls of `shares` with erc20 accounting*/
+    mapping(address => uint256) public balanceOf; /*maps `members` accounts to `shares` with erc20 accounting*/
+    mapping(address => mapping(uint256 => Checkpoint)) public checkpoints; /*maps record of vote `checkpoints` for each account by index*/
+    mapping(address => uint256) public numCheckpoints; /*maps number of `checkpoints` for each account*/
+    mapping(address => address) public delegates; /*maps record of each account's `shares` delegate*/
+    mapping(address => uint256) public nonces; /*maps record of states for signing & validating signatures*/
+
+    mapping(address => mapping(uint32 => bool)) public memberVoted; /*maps members to their proposal votes (true = voted) */
+    mapping(uint256 => Proposal) public proposals; /*maps `proposal id` to struct details*/
+    mapping(address => bool) public guildTokensEnabled; /*maps guild token addresses -> enabled status (prevents duplicates in guildTokens[]) */
+
     mapping(address => uint256) public shamans; /*maps shaman addresses to their permission level*/
     /* permissions registry for shamans
     0 = no permission
@@ -91,107 +120,6 @@ contract Baal is Executor, Initializable, CloneFactory {
     6 = manager + governance
     7 = admin + manager + governance */
 
-    // PROPOSAL TRACKING
-    mapping(address => mapping(uint32 => bool)) public memberVoted; /*maps members to their proposal votes (true = voted) */
-    mapping(uint256 => Proposal) public proposals; /*maps `proposal id` to struct details*/
-        
-    // DELEGATE TRACKING
-    mapping(address => mapping(uint256 => Checkpoint)) public checkpoints; /*maps record of vote `checkpoints` for each account by index*/
-    mapping(address => uint256) public numCheckpoints; /*maps number of `checkpoints` for each account*/
-    mapping(address => address) public delegates; /*maps record of each account's `shares` delegate*/
-
-    // MISCELLANEOUS PARAMS
-    uint256 status; /*internal reentrancy check tracking value*/
-    uint32 public latestSponsoredProposalId; /* the id of the last proposal to be sponsored */
-    address multisendLibrary; /*address of multisend library*/
-
-    // SIGNATURE HELPERS
-    mapping(address => uint256) public nonces; /*maps record of states for signing & validating signatures*/
-    bytes32 constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,uint chainId,address verifyingContract)");
-    bytes32 constant DELEGATION_TYPEHASH = keccak256("Delegation(address delegatee,uint nonce,uint expiry)"); 
-    bytes32 constant PERMIT_TYPEHASH = keccak256("Permit(address owner,address spender,uint value,uint nonce,uint deadline)");
-    bytes32 constant VOTE_TYPEHASH = keccak256("Vote(uint proposalId,bool support)");
-    
-    // DATA STRUCTURES
-    struct Proposal {
-        /*Baal proposal details*/
-        uint32 id; /*id of this proposal, used in existence checks (increments from 1)*/
-        uint32 prevProposalId; /* id of the previous proposal - set at sponsorship from latestSponsoredProposalId */
-        uint32 votingStarts; /*starting time for proposal in seconds since unix epoch*/
-        uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
-        uint32 graceEnds; /*termination date for proposal in seconds since unix epoch - derived from `gracePeriod` set on proposal*/
-        uint32 expiration; /*timestamp after which proposal should be considered invalid and skipped. */
-        uint256 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
-        uint256 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
-        uint256 maxTotalSharesAndLootAtYesVote; /* highest share+loot count during any individual yes vote*/
-        bool[4] status; /* [cancelled, processed, passed, actionFailed] */
-        // bool cancelled; /* true if proposal is cancelled (by sponsor/govshaman, or with enough undelegations), skips processing */
-        // bool processed; /* true if process proposal has been called for this proposal */
-        // bool passed; /* yes only if proposal pass and also passed all execution checks at processing time */
-        // bool actionFailed; /*label if proposal processed but action failed TODO gas optimize*/
-        address sponsor; /* address of the sponsor - set at sponsor proposal - relevant for cancellation */
-        bytes32 proposalDataHash; /*hash of raw data associated with state updates*/
-        string details; /*human-readable context for proposal*/
-    }
-
-    struct Checkpoint {
-        /*Baal checkpoint for marking number of delegated votes*/
-        uint32 fromTimeStamp; /*unix time for referencing voting balance*/
-        uint256 votes; /*votes at given unix time*/
-    }
-
-    /* Unborn -> Submitted -> Voting -> Grace -> Ready -> Processed 
-                              \-> Cancelled  \-> Defeated   */
-    enum ProposalState {
-        Unborn,    /* 0 - can submit */
-        Submitted, /* 1 - can sponsor -> voting */
-        Voting,    /* 2 - can be cancelled, otherwise proceeds to grace */
-        Cancelled, /* 3 - terminal state, counts as processed */
-        Grace,     /* 4 - proceeds to ready/defeated */
-        Ready,     /* 5 - can be processed */
-        Processed, /* 6 - terminal state */
-        Defeated   /* 7 - terminal state, yes votes <= no votes, counts as processed */
-    }
-
-    // MODIFIERS
-    modifier nonReentrant() {
-        /*reentrancy guard*/
-        require(status == 1, "reentrant");
-        status = 2;
-        _;
-        status = 1;
-    }
-
-    modifier baalOnly() {
-        require(msg.sender == address(this), "!baal");
-        _;
-    }
-
-    modifier baalOrAdminOnly() {
-        require(
-            msg.sender == address(this) || isAdmin(msg.sender),
-            "!baal & !admin"
-        ); /*check `shaman` is admin*/
-        _;
-    }
-
-    modifier baalOrManagerOnly() {
-        require(
-            msg.sender == address(this) || isManager(msg.sender),
-            "!baal & !manager"
-        ); /*check `shaman` is manager*/
-        _;
-    }
-
-    modifier baalOrGovernorOnly() {
-        require(
-            msg.sender == address(this) || isGovernor(msg.sender),
-            "!baal & !governor"
-        ); /*check `shaman` is governor*/
-        _;
-    }
-
-    // EVENTS
     event SummonComplete(
         bool lootPaused,
         bool sharesPaused,
@@ -255,6 +183,87 @@ contract Baal is Executor, Initializable, CloneFactory {
         uint256 newBalance
     ); /*emits when a delegate account's voting balance changes*/
 
+    modifier nonReentrant() {
+        /*reentrancy guard*/
+        require(status == 1, "reentrant");
+        status = 2;
+        _;
+        status = 1;
+    }
+
+    modifier baalOnly() {
+        require(msg.sender == address(this), "!baal");
+        _;
+    }
+
+    modifier baalOrAdminOnly() {
+        require(
+            msg.sender == address(this) || isAdmin(msg.sender),
+            "!baal & !admin"
+        ); /*check `shaman` is admin*/
+        _;
+    }
+
+    modifier baalOrManagerOnly() {
+        require(
+            msg.sender == address(this) || isManager(msg.sender),
+            "!baal & !manager"
+        ); /*check `shaman` is manager*/
+        _;
+    }
+
+    modifier baalOrGovernorOnly() {
+        require(
+            msg.sender == address(this) || isGovernor(msg.sender),
+            "!baal & !governor"
+        ); /*check `shaman` is governor*/
+        _;
+    }
+
+    struct Checkpoint {
+        /*Baal checkpoint for marking number of delegated votes*/
+        uint32 fromTimeStamp; /*unix time for referencing voting balance*/
+        uint256 votes; /*votes at given unix time*/
+    }
+
+    struct Delegation {
+        uint256 fromTimeStamp; /* timestamp from which delegation began */
+        address delegate; /* address of delegate */
+    }
+
+    struct Proposal {
+        /*Baal proposal details*/
+        uint32 id; /*id of this proposal, used in existence checks (increments from 1)*/
+        uint32 prevProposalId; /* id of the previous proposal - set at sponsorship from latestSponsoredProposalId */
+        uint32 votingStarts; /*starting time for proposal in seconds since unix epoch*/
+        uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
+        uint32 graceEnds; /*termination date for proposal in seconds since unix epoch - derived from `gracePeriod` set on proposal*/
+        uint32 expiration; /*timestamp after which proposal should be considered invalid and skipped. */
+        uint256 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
+        uint256 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
+        uint256 maxTotalSharesAndLootAtYesVote; /* highest share+loot count during any individual yes vote*/
+        bool[4] status; /* [cancelled, processed, passed, actionFailed] */
+        // bool cancelled; /* true if proposal is cancelled (by sponsor/govshaman, or with enough undelegations), skips processing */
+        // bool processed; /* true if process proposal has been called for this proposal */
+        // bool passed; /* yes only if proposal pass and also passed all execution checks at processing time */
+        // bool actionFailed; /*label if proposal processed but action failed TODO gas optimize*/
+        address sponsor; /* address of the sponsor - set at sponsor proposal - relevant for cancellation */
+        bytes32 proposalDataHash; /*hash of raw data associated with state updates*/
+        string details; /*human-readable context for proposal*/
+    }
+
+    /* Unborn -> Submitted -> Voting -> Grace -> Ready -> Processed 
+                              \-> Cancelled  \-> Defeated   */
+    enum ProposalState {
+        Unborn,    /* 0 - can submit */
+        Submitted, /* 1 - can sponsor -> voting */
+        Voting,    /* 2 - can be cancelled, otherwise proceeds to grace */
+        Cancelled, /* 3 - terminal state, counts as processed */
+        Grace,     /* 4 - proceeds to ready/defeated */
+        Ready,     /* 5 - can be processed */
+        Processed, /* 6 - terminal state */
+        Defeated   /* 7 - terminal state, yes votes <= no votes, counts as processed */
+    }
 
     /// @notice Summon Baal with voting configuration & initial array of `members` accounts with `shares` & `loot` weights.
     /// @param _initializationParams Encoded setup information.
@@ -418,11 +427,11 @@ contract Baal is Executor, Initializable, CloneFactory {
             abi.encodePacked("\x19\x01", domainSeparator, structHash)
         ); /*calculate EIP-712 digest for signature*/
         address signatory = digest.recover(signature); /*recover signer from hash data*/
-        console.log('signatory', signatory);
+        console.log(signatory);
 
-        // require(signatory != address(0), "!signatory"); /*check signer is not null*/
+        require(signatory != address(0), "!signatory"); /*check signer is not null*/
 
-        // _submitVote(signatory, id, approved);
+        _submitVote(signatory, id, approved);
     }
 
     function _submitVote(address voter, uint32 id, bool approved) internal {
@@ -452,6 +461,9 @@ contract Baal is Executor, Initializable, CloneFactory {
         emit SubmitVote(voter, balance, id, approved); /*emit event reflecting vote*/
     }
 
+    // ********************
+    // PROCESSING FUNCTIONS
+    // ********************
     /// @notice Process `proposal` & execute internal functions.
     /// @param id Number of proposal in `proposals` mapping to process for execution.
     function processProposal(uint32 id, bytes calldata proposalData)
@@ -521,6 +533,119 @@ contract Baal is Executor, Initializable, CloneFactory {
         );
     }
 
+    /// @notice Baal-or-admin-only function to set admin config (pause/unpause shares/loot)
+    function setAdminConfig(bool pauseShares, bool pauseLoot)
+        external
+        baalOrAdminOnly
+    {
+        sharesPaused = pauseShares; /*set pause `shares`*/
+        lootPaused = pauseLoot; /*set pause `loot`*/
+    }
+
+    /// @notice Baal-or-manager-only function to mint shares.
+    function mintShares(address[] calldata to, uint256[] calldata amount)
+        external
+        baalOrManagerOnly
+    {
+        require(to.length == amount.length, "!array parity"); /*check array lengths match*/
+        for (uint256 i = 0; i < to.length; i++) {
+            _mintShares(to[i], amount[i]); /*grant `to` `amount` `shares`*/
+        }
+    }
+
+    /// @notice Baal-or-manager-only function to burn shares.
+    function burnShares(address[] calldata to, uint256[] calldata amount)
+        external
+        baalOrManagerOnly
+    {
+        require(to.length == amount.length, "!array parity"); /*check array lengths match*/
+        for (uint256 i = 0; i < to.length; i++) {
+            _burnShares(to[i], amount[i]); /*grant `to` `amount` `shares`*/
+        }
+    }
+
+    /// @notice Baal-or-manager-only function to mint loot.
+    function mintLoot(address[] calldata to, uint256[] calldata amount)
+        external
+        baalOrManagerOnly
+    {
+        require(to.length == amount.length, "!array parity"); /*check array lengths match*/
+        for (uint256 i = 0; i < to.length; i++) {
+            _mintLoot(to[i], amount[i]); /*grant `to` `amount` `shares`*/
+        }
+    }
+
+    /// @notice Baal-or-manager-only function to burn loot.
+    function burnLoot(address[] calldata to, uint256[] calldata amount)
+        external
+        baalOrManagerOnly
+    {
+        require(to.length == amount.length, "!array parity"); /*check array lengths match*/
+        for (uint256 i = 0; i < to.length; i++) {
+            _burnLoot(to[i], amount[i]); /*grant `to` `amount` `shares`*/
+        }
+    }
+
+    /// @notice Baal-or-manager-only function to convert shares to loot.
+    function convertSharesToLoot(address to) external baalOrManagerOnly {
+        uint256 removedBalance = balanceOf[to]; /*gas-optimize variable*/
+        _burnShares(to, removedBalance); /*burn all of `to` `shares` & convert into `loot`*/
+        _mintLoot(to, removedBalance); /*mint equivalent `loot`*/
+    }
+
+    /// @notice Baal-only function to whitelist guildToken.
+    function setGuildTokens(address[] calldata _tokens)
+        external
+        baalOrManagerOnly
+    {
+        for (uint256 i; i < _tokens.length; i++) {
+            address token = _tokens[i];
+            if (guildTokensEnabled[token]) {
+                continue; // prevent duplicate tokens
+            }
+
+            guildTokens.push(token); /*push account to `guildTokens` array*/
+            guildTokensEnabled[token] = true;
+        }
+    }
+
+    /// @notice Baal-only function to remove guildToken
+    function unsetGuildTokens(uint256[] calldata _tokenIndexes)
+        external
+        baalOrManagerOnly
+    {
+        for (uint256 i; i < _tokenIndexes.length; i++) {
+            address token = guildTokens[_tokenIndexes[i]];
+            guildTokensEnabled[token] = false; // disable the token
+            guildTokens[_tokenIndexes[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
+            guildTokens.pop(); /*pop account from `guildTokens` array*/  
+        }
+    }
+
+    /// @notice Baal-or-governance-only function to change periods.
+    function setGovernanceConfig(bytes memory _governanceConfig)
+        external
+        baalOrGovernorOnly
+    {
+        (
+            uint32 voting,
+            uint32 grace,
+            uint256 newOffering,
+            uint256 quorum,
+            uint256 sponsor,
+            uint256 minRetention
+        ) = abi.decode(
+                _governanceConfig,
+                (uint32, uint32, uint256, uint256, uint256, uint256)
+            );
+        if (voting != 0) votingPeriod = voting; /*if positive, reset min. voting periods to first `value`*/
+        if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to second `value`*/
+        proposalOffering = newOffering; /*set new proposal offering amount */
+        quorumPercent = quorum;
+        sponsorThreshold = sponsor;
+        minRetentionPercent = minRetention;
+    }
+
     function cancelProposal(uint32 id) external nonReentrant {
         Proposal storage prop = proposals[id];
         require(state(id) == ProposalState.Voting, "!voting");
@@ -532,10 +657,203 @@ contract Baal is Executor, Initializable, CloneFactory {
         );
         prop.status[0] = true;
     }
-    
-    // ****************
-    // MEMBER FUNCTIONS
-    // ****************
+
+    /// @notice Baal-only function to set shaman status.
+    function setShamans(
+        address[] calldata _shamans,
+        uint256[] calldata _permissions
+    ) external baalOnly {
+        require(_shamans.length == _permissions.length, "!array parity"); /*check array lengths match*/
+        for (uint256 i; i < _shamans.length; i++) {
+            uint256 permission = _permissions[i];
+            if (adminLock)
+                require(
+                    permission != 1 &&
+                        permission != 3 &&
+                        permission != 5 &&
+                        permission != 7,
+                    "admin lock"
+                );
+            if (managerLock)
+                require(
+                    permission != 2 &&
+                        permission != 3 &&
+                        permission != 6 &&
+                        permission != 7,
+                    "manager lock"
+                );
+            if (governorLock)
+                require(
+                    permission != 4 &&
+                        permission != 5 &&
+                        permission != 6 &&
+                        permission != 7,
+                    "governor lock"
+                );
+            shamans[_shamans[i]] = permission;
+        }
+    }
+
+    function lockAdmin() external baalOnly {
+        adminLock = true;
+    }
+
+    function lockManager() external baalOnly {
+        managerLock = true;
+    }
+
+    function lockGovernor() external baalOnly {
+        governorLock = true;
+    }
+
+    /*******************
+    GUILD MGMT FUNCTIONS
+    *******************/
+    /// @notice Approve `to` to transfer up to `amount`.
+    /// @return success Whether or not the approval succeeded.
+    function approve(address to, uint256 amount)
+        external
+        returns (bool success)
+    {
+        allowance[msg.sender][to] = amount; /*adjust `allowance`*/
+
+        emit Approval(msg.sender, to, amount); /*emit event reflecting approval*/
+
+        success = true; /*confirm approval with ERC-20 accounting*/
+    }
+
+    /// @notice Delegate votes from user to `delegatee`.
+    /// @param delegatee The address to delegate votes to.
+    function delegate(address delegatee) external {
+        _delegate(msg.sender, delegatee);
+    }
+
+    /// @notice Delegates votes from `signatory` to `delegatee` with EIP-712 signature.
+    /// @param delegatee The address to delegate 'votes' to.
+    /// @param nonce The contract state required to match the signature.
+    /// @param deadline The time at which to expire the signature.
+    /// @param signature The concatenated signature
+    function delegateBySig(
+        address delegatee,
+        uint256 nonce,
+        uint256 deadline,
+        bytes calldata signature
+    ) external {
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                DOMAIN_TYPEHASH,
+                keccak256(bytes(name)),
+                block.chainid,
+                address(this)
+            )
+        ); /*calculate EIP-712 domain hash*/
+        bytes32 structHash = keccak256(
+            abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, deadline)
+        ); /*calculate EIP-712 struct hash*/
+        bytes32 digest = keccak256(
+            abi.encodePacked("\x19\x01", domainSeparator, structHash)
+        ); /*calculate EIP-712 digest for signature*/
+        address signatory = digest.recover(signature); /*recover signer from hash data*/
+
+        require(signatory != address(0), "!signatory"); /*check signer is not null*/
+        unchecked {
+            require(nonce == nonces[signatory]++, "!nonce"); /*check given `nonce` is next in `nonces`*/
+        }
+
+        _delegate(signatory, delegatee); /*execute delegation*/
+    }
+
+    /// @notice Triggers an approval from `owner` to `spender` with EIP-712 signature.
+    /// @param owner The address to approve from.
+    /// @param spender The address to be approved.
+    /// @param amount The number of `shares` tokens that are approved (2^256-1 means infinite).
+    /// @param deadline The time at which to expire the signature.
+    /// @param signature Concatenated signature
+    function permit(
+        address owner,
+        address spender,
+        uint256 amount,
+        uint256 deadline,
+        bytes calldata signature
+    ) external {
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                DOMAIN_TYPEHASH,
+                keccak256(bytes(name)),
+                block.chainid,
+                address(this)
+            )
+        ); /*calculate EIP-712 domain hash*/
+
+        unchecked {
+            bytes32 structHash = keccak256(
+                abi.encode(
+                    PERMIT_TYPEHASH,
+                    owner,
+                    spender,
+                    amount,
+                    nonces[owner]++,
+                    deadline
+                )
+            ); /*calculate EIP-712 struct hash*/
+            bytes32 digest = keccak256(
+                abi.encodePacked("\x19\x01", domainSeparator, structHash)
+            ); /*calculat
+            e EIP-712 digest for signature*/
+        address signatory = digest.recover(signature); /*recover signer from hash data*/
+            require(signatory != address(0), "!signatory"); /*check signer is not null*/
+            require(signatory == owner, "!authorized"); /*check signer is `owner`*/
+        }
+
+        require(block.timestamp <= deadline, "expired"); /*check signature is not expired*/
+
+        allowance[owner][spender] = amount; /*adjust `allowance`*/
+
+        emit Approval(owner, spender, amount); /*emit event reflecting approval*/
+    }
+
+    /// @notice Transfer `amount` tokens from user to `to`.
+    /// @param to The address of destination account.
+    /// @param amount The number of `shares` tokens to transfer.
+    /// @return success Whether or not the transfer succeeded.
+    function transfer(address to, uint256 amount) external returns (bool success) {
+        require(!sharesPaused, "!transferable");
+        success = _transfer(msg.sender, to, amount);
+    }
+
+    /// @notice Transfer `amount` tokens from `from` to `to`.
+    /// @param from The address of the source account.
+    /// @param to The address of the destination account.
+    /// @param amount The number of `shares` tokens to transfer.
+    /// @return success Whether or not the transfer succeeded.
+    function transferFrom(address from, address to, uint256 amount) external returns (bool success) {
+        require(!sharesPaused, "!transferable");
+        if (allowance[from][msg.sender] != type(uint256).max) {
+            allowance[from][msg.sender] -= amount;
+        }
+
+        success = _transfer(from, to, amount);
+    }
+
+    function _transfer(address from, address to, uint256 amount) private returns (bool success) {
+        balanceOf[from] -= amount;
+
+        /*If recipient is receiving their first shares, auto-self delegate*/
+        if (balanceOf[to] == 0 && numCheckpoints[to] == 0 && amount > 0) {
+            delegates[to] = to;
+        }
+
+        unchecked {
+            balanceOf[to] += amount;
+        }
+
+        _moveDelegates(delegates[from], delegates[to], amount);
+
+        emit Transfer(from, to, amount);
+
+        success = true;
+    }
+
     /// @notice Process member burn of `shares` and/or `loot` to claim 'fair share' of `guildTokens`.
     /// @param to Account that receives 'fair share'.
     /// @param lootToBurn Baal pure economic weight to burn.
@@ -600,439 +918,10 @@ contract Baal is Executor, Initializable, CloneFactory {
         emit Ragequit(msg.sender, to, lootToBurn, sharesToBurn); /*event reflects claims made against Baal*/
     }
 
-    /// @notice Delegate votes from user to `delegatee`.
-    /// @param delegatee The address to delegate votes to.
-    function delegate(address delegatee) external {
-        _delegate(msg.sender, delegatee);
-    }
-
-    /// @notice Delegates votes from `signatory` to `delegatee` with EIP-712 signature.
-    /// @param delegatee The address to delegate 'votes' to.
-    /// @param nonce The contract state required to match the signature.
-    /// @param deadline The time at which to expire the signature.
-    /// @param signature The concatenated signature
-    function delegateBySig(
-        address delegatee,
-        uint256 nonce,
-        uint256 deadline,
-        bytes calldata signature
-    ) external {
-        bytes32 domainSeparator = keccak256(
-            abi.encode(
-                DOMAIN_TYPEHASH,
-                keccak256(bytes(name)),
-                block.chainid,
-                address(this)
-            )
-        ); /*calculate EIP-712 domain hash*/
-        bytes32 structHash = keccak256(
-            abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, deadline)
-        ); /*calculate EIP-712 struct hash*/
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", domainSeparator, structHash)
-        ); /*calculate EIP-712 digest for signature*/
-        address signatory = digest.recover(signature); /*recover signer from hash data*/
-
-        require(signatory != address(0), "!signatory"); /*check signer is not null*/
-        unchecked {
-            require(nonce == nonces[signatory]++, "!nonce"); /*check given `nonce` is next in `nonces`*/
-        }
-
-        _delegate(signatory, delegatee); /*execute delegation*/
-    }
-
-    /// @notice Delegates Baal voting weight.
-    function _delegate(address delegator, address delegatee) private {
-        require(balanceOf[delegator] > 0, "!shares");
-        uint32 timestamp = uint32(block.timestamp);
-        address currentDelegate = delegates[delegator];
-        delegates[delegator] = delegatee;
-
-        _moveDelegates(
-            currentDelegate,
-            delegatee,
-            uint256(balanceOf[delegator])
-        );
-
-        emit DelegateChanged(delegator, currentDelegate, delegatee);
-    }
-
-    /// @notice Elaborates delegate update - cf., 'Compound Governance'.
-    function _moveDelegates(
-        address srcRep,
-        address dstRep,
-        uint256 amount
-    ) private {
-        unchecked {
-            if (srcRep != dstRep && amount != 0) {
-                if (srcRep != address(0)) {
-                    uint256 srcRepNum = numCheckpoints[srcRep];
-                    uint256 srcRepOld = srcRepNum != 0
-                        ? checkpoints[srcRep][srcRepNum - 1].votes
-                        : 0;
-                    uint256 srcRepNew = srcRepOld - amount;
-                    _writeCheckpoint(srcRep, srcRepNum, srcRepOld, srcRepNew);
-                }
-
-                if (dstRep != address(0)) {
-                    uint256 dstRepNum = numCheckpoints[dstRep];
-                    uint256 dstRepOld = dstRepNum != 0
-                        ? checkpoints[dstRep][dstRepNum - 1].votes
-                        : 0;
-                    uint256 dstRepNew = dstRepOld + amount;
-                    _writeCheckpoint(dstRep, dstRepNum, dstRepOld, dstRepNew);
-                }
-            }
-        }
-    }
-
-    /// @notice Elaborates delegate update - cf., 'Compound Governance'.
-    function _writeCheckpoint(
-        address delegatee,
-        uint256 nCheckpoints,
-        uint256 oldVotes,
-        uint256 newVotes
-    ) private {
-        uint32 timeStamp = uint32(block.timestamp);
-
-        unchecked {
-            if (
-                nCheckpoints != 0 &&
-                checkpoints[delegatee][nCheckpoints - 1].fromTimeStamp ==
-                timeStamp
-            ) {
-                checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
-            } else {
-                checkpoints[delegatee][nCheckpoints] = Checkpoint(
-                    timeStamp,
-                    newVotes
-                );
-                numCheckpoints[delegatee] = nCheckpoints + 1;
-            }
-        }
-
-        emit DelegateVotesChanged(delegatee, oldVotes, newVotes);
-    }
-
-    /*******************
-    GUILD MGMT FUNCTIONS
-    *******************/
-    /// @notice Baal-only function to set shaman status.
-    function setShamans(
-        address[] calldata _shamans,
-        uint256[] calldata _permissions
-    ) external baalOnly {
-        require(_shamans.length == _permissions.length, "!array parity"); /*check array lengths match*/
-        for (uint256 i; i < _shamans.length; i++) {
-            uint256 permission = _permissions[i];
-            if (adminLock)
-                require(
-                    permission != 1 &&
-                    permission != 3 &&
-                    permission != 5 &&
-                    permission != 7,
-                    "admin lock"
-                );
-            if (managerLock)
-                require(
-                    permission != 2 &&
-                    permission != 3 &&
-                    permission != 6 &&
-                    permission != 7,
-                    "manager lock"
-                );
-            if (governorLock)
-                require(
-                    permission != 4 &&
-                    permission != 5 &&
-                    permission != 6 &&
-                    permission != 7,
-                    "governor lock"
-                );
-            shamans[_shamans[i]] = permission;
-        }
-    }
-
-    function lockAdmin() external baalOnly {
-        adminLock = true;
-    }
-
-    function lockManager() external baalOnly {
-        managerLock = true;
-    }
-
-    function lockGovernor() external baalOnly {
-        governorLock = true;
-    }
-
-    // ****************
-    // SHAMAN FUNCTIONS
-    // ****************
-    /// @notice Baal-or-admin-only function to set admin config (pause/unpause shares/loot)
-    function setAdminConfig(bool pauseShares, bool pauseLoot)
-        external
-        baalOrAdminOnly
-    {
-        sharesPaused = pauseShares; /*set pause `shares`*/
-        lootPaused = pauseLoot; /*set pause `loot`*/
-    }
-
-    /// @notice Baal-or-manager-only function to mint shares.
-    function mintShares(address[] calldata to, uint256[] calldata amount)
-        external
-        baalOrManagerOnly
-    {
-        require(to.length == amount.length, "!array parity"); /*check array lengths match*/
-        for (uint256 i = 0; i < to.length; i++) {
-            _mintShares(to[i], amount[i]); /*grant `to` `amount` `shares`*/
-        }
-    }
-
-        /// @notice Minting function for Baal `shares`.
-    function _mintShares(address to, uint256 shares) private {
-        unchecked {
-            if (totalSupply + shares <= type(uint256).max / 2) {
-                /*If recipient is receiving their first shares, auto-self delegate*/
-                if (
-                    balanceOf[to] == 0 && numCheckpoints[to] == 0 && shares > 0
-                ) {
-                    delegates[to] = to;
-                }
-
-                balanceOf[to] += shares; /*add `shares` for `to` account*/
-                totalSupply += shares; /*add to total Baal `shares`*/
-
-                _moveDelegates(address(0), delegates[to], shares); /*update delegation*/
-
-                emit Transfer(address(0), to, shares); /*emit event reflecting mint of `shares` with erc20 accounting*/
-            }
-        }
-    }
-
-    /// @notice Baal-or-manager-only function to burn shares.
-    function burnShares(address[] calldata to, uint256[] calldata amount)
-        external
-        baalOrManagerOnly
-    {
-        require(to.length == amount.length, "!array parity"); /*check array lengths match*/
-        for (uint256 i = 0; i < to.length; i++) {
-            _burnShares(to[i], amount[i]); /*grant `to` `amount` `shares`*/
-        }
-    }
-
-        /// @notice Burn function for Baal `shares`.
-    function _burnShares(address from, uint256 shares) private {
-        balanceOf[from] -= shares; /*subtract `shares` for `from` account*/
-        unchecked {
-            totalSupply -= shares; /*subtract from total Baal `shares`*/
-        }
-
-        _moveDelegates(delegates[from], address(0), shares); /*update delegation*/
-
-        emit Transfer(from, address(0), shares); /*emit event reflecting burn of `shares` with erc20 accounting*/
-    }
-
-    /// @notice Baal-or-manager-only function to mint loot.
-    function mintLoot(address[] calldata to, uint256[] calldata amount)
-        external
-        baalOrManagerOnly
-    {
-        require(to.length == amount.length, "!array parity"); /*check array lengths match*/
-        for (uint256 i = 0; i < to.length; i++) {
-            _mintLoot(to[i], amount[i]); /*grant `to` `amount` `shares`*/
-        }
-    }
-
-    /// @notice Minting function for Baal `loot`.
-    function _mintLoot(address to, uint256 loot) private {
-        lootToken.mint(to, loot);
-        emit TransferLoot(address(0), to, loot); /*emit event reflecting mint of `loot`*/
-    }
-
-    /// @notice Baal-or-manager-only function to burn loot.
-    function burnLoot(address[] calldata to, uint256[] calldata amount)
-        external
-        baalOrManagerOnly
-    {
-        require(to.length == amount.length, "!array parity"); /*check array lengths match*/
-        for (uint256 i = 0; i < to.length; i++) {
-            _burnLoot(to[i], amount[i]); /*grant `to` `amount` `shares`*/
-        }
-    }
-
-    /// @notice Burn function for Baal `loot`.
-    function _burnLoot(address from, uint256 loot) private {
-        lootToken.burn(from, loot);
-        emit TransferLoot(from, address(0), loot); /*emit event reflecting burn of `loot`*/
-    }
-
-    /// @notice Baal-or-manager-only function to convert shares to loot.
-    function convertSharesToLoot(address to) external baalOrManagerOnly {
-        uint256 removedBalance = balanceOf[to]; /*gas-optimize variable*/
-        _burnShares(to, removedBalance); /*burn all of `to` `shares` & convert into `loot`*/
-        _mintLoot(to, removedBalance); /*mint equivalent `loot`*/
-    }
-
-    /// @notice Baal-only function to whitelist guildToken.
-    function setGuildTokens(address[] calldata _tokens)
-        external
-        baalOrManagerOnly
-    {
-        for (uint256 i; i < _tokens.length; i++) {
-            address token = _tokens[i];
-            if (guildTokensEnabled[token]) {
-                continue; // prevent duplicate tokens
-            }
-
-            guildTokens.push(token); /*push account to `guildTokens` array*/
-            guildTokensEnabled[token] = true;
-        }
-    }
-
-    /// @notice Baal-only function to remove guildToken
-    function unsetGuildTokens(uint256[] calldata _tokenIndexes)
-        external
-        baalOrManagerOnly
-    {
-        for (uint256 i; i < _tokenIndexes.length; i++) {
-            if (i > 0) {
-                require(_tokenIndexes[i] < _tokenIndexes[i - 1], '!descending');
-            }
-            address token = guildTokens[_tokenIndexes[i]];
-            guildTokensEnabled[token] = false; // disable the token
-            guildTokens[_tokenIndexes[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
-            guildTokens.pop(); /*pop account from `guildTokens` array*/  
-        }
-    }
-
-    /// @notice Baal-or-governance-only function to change periods.
-    function setGovernanceConfig(bytes memory _governanceConfig)
-        external
-        baalOrGovernorOnly
-    {
-        (
-            uint32 voting,
-            uint32 grace,
-            uint256 newOffering,
-            uint256 quorum,
-            uint256 sponsor,
-            uint256 minRetention
-        ) = abi.decode(
-                _governanceConfig,
-                (uint32, uint32, uint256, uint256, uint256, uint256)
-            );
-        if (voting != 0) votingPeriod = voting; /*if positive, reset min. voting periods to first `value`*/
-        if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to second `value`*/
-        proposalOffering = newOffering; /*set new proposal offering amount */
-        quorumPercent = quorum;
-        sponsorThreshold = sponsor;
-        minRetentionPercent = minRetention;
-    }
-
-    // **********************
-    // ERC20 SHARES FUNCTIONS
-    // **********************
-    /// @notice Approve `to` to transfer up to `amount`.
-    /// @return success Whether or not the approval succeeded.
-    function approve(address to, uint256 amount) external returns (bool success) {
-        allowance[msg.sender][to] = amount; /*adjust `allowance`*/
-        emit Approval(msg.sender, to, amount); /*emit event reflecting approval*/
-        success = true; /*confirm approval with ERC-20 accounting*/
-    }
-
-    /// @notice Triggers an approval from `owner` to `spender` with EIP-712 signature.
-    /// @param owner The address to approve from.
-    /// @param spender The address to be approved.
-    /// @param amount The number of `shares` tokens that are approved (2^256-1 means infinite).
-    /// @param deadline The time at which to expire the signature.
-    /// @param signature Concatenated signature
-    function permit(
-        address owner,
-        address spender,
-        uint256 amount,
-        uint256 deadline,
-        bytes calldata signature
-    ) external {
-        bytes32 domainSeparator = keccak256(
-            abi.encode(
-                DOMAIN_TYPEHASH,
-                keccak256(bytes(name)),
-                block.chainid,
-                address(this)
-            )
-        ); /*calculate EIP-712 domain hash*/
-
-        unchecked {
-            bytes32 structHash = keccak256(
-                abi.encode(
-                    PERMIT_TYPEHASH,
-                    owner,
-                    spender,
-                    amount,
-                    nonces[owner]++,
-                    deadline
-                )
-            ); /*calculate EIP-712 struct hash*/
-            bytes32 digest = keccak256(
-                abi.encodePacked("\x19\x01", domainSeparator, structHash)
-            ); /*calculat
-            e EIP-712 digest for signature*/
-        address signatory = digest.recover(signature); /*recover signer from hash data*/
-            require(signatory != address(0), "!signatory"); /*check signer is not null*/
-            require(signatory == owner, "!authorized"); /*check signer is `owner`*/
-        }
-
-        require(block.timestamp <= deadline, "expired"); /*check signature is not expired*/
-        allowance[owner][spender] = amount; /*adjust `allowance`*/
-
-        emit Approval(owner, spender, amount); /*emit event reflecting approval*/
-    }
-
-    /// @notice Transfer `amount` tokens from user to `to`.
-    /// @param to The address of destination account.
-    /// @param amount The number of `shares` tokens to transfer.
-    /// @return success Whether or not the transfer succeeded.
-    function transfer(address to, uint256 amount) external returns (bool success) {
-        require(!sharesPaused, "!transferable");
-        success = _transfer(msg.sender, to, amount);
-    }
-
-    /// @notice Transfer `amount` tokens from `from` to `to`.
-    /// @param from The address of the source account.
-    /// @param to The address of the destination account.
-    /// @param amount The number of `shares` tokens to transfer.
-    /// @return success Whether or not the transfer succeeded.
-    function transferFrom(address from, address to, uint256 amount) external returns (bool success) {
-        require(!sharesPaused, "!transferable");
-        if (allowance[from][msg.sender] != type(uint256).max) {
-            allowance[from][msg.sender] -= amount;
-        }
-
-        success = _transfer(from, to, amount);
-    }
-
-    function _transfer(address from, address to, uint256 amount) private returns (bool success) {
-        balanceOf[from] -= amount;
-
-        /*If recipient is receiving their first shares, auto-self delegate*/
-        if (balanceOf[to] == 0 && numCheckpoints[to] == 0 && amount > 0) {
-            delegates[to] = to;
-        }
-
-        unchecked {
-            balanceOf[to] += amount;
-        }
-
-        _moveDelegates(delegates[from], delegates[to], amount);
-
-        emit Transfer(from, to, amount);
-
-        success = true;
-    }
-
     /***************
     GETTER FUNCTIONS
     ***************/
+
     function state(uint32 id) public view returns (ProposalState) {
         Proposal memory prop = proposals[id];
         if (prop.id == 0) {
@@ -1137,17 +1026,14 @@ contract Baal is Executor, Initializable, CloneFactory {
             permission == 7);
     }
 
+    /***************
+    HELPER FUNCTIONS
+    ***************/
 
     function totalLoot() public view returns (uint256) {
         return lootToken.totalSupply();
     }
 
-    /***************
-    HELPER FUNCTIONS
-    ***************/
-    /// @notice Deposits ETH sent to Baal.
-    receive() external payable {}
-    
     /// @notice Returns confirmation for 'safe' ERC-721 (NFT) transfers to Baal.
     function onERC721Received(
         address,
@@ -1188,6 +1074,129 @@ contract Baal is Executor, Initializable, CloneFactory {
         returns (bytes32 hash)
     {
         return keccak256(abi.encode(_transactions));
+    }
+
+    /// @notice Deposits ETH sent to Baal.
+    receive() external payable {}
+
+    /// @notice Delegates Baal voting weight.
+    function _delegate(address delegator, address delegatee) private {
+        require(balanceOf[delegator] > 0, "!shares");
+        uint32 timestamp = uint32(block.timestamp);
+        address currentDelegate = delegates[delegator];
+        delegates[delegator] = delegatee;
+
+        _moveDelegates(
+            currentDelegate,
+            delegatee,
+            uint256(balanceOf[delegator])
+        );
+
+        emit DelegateChanged(delegator, currentDelegate, delegatee);
+    }
+
+    /// @notice Elaborates delegate update - cf., 'Compound Governance'.
+    function _moveDelegates(
+        address srcRep,
+        address dstRep,
+        uint256 amount
+    ) private {
+        unchecked {
+            if (srcRep != dstRep && amount != 0) {
+                if (srcRep != address(0)) {
+                    uint256 srcRepNum = numCheckpoints[srcRep];
+                    uint256 srcRepOld = srcRepNum != 0
+                        ? checkpoints[srcRep][srcRepNum - 1].votes
+                        : 0;
+                    uint256 srcRepNew = srcRepOld - amount;
+                    _writeCheckpoint(srcRep, srcRepNum, srcRepOld, srcRepNew);
+                }
+
+                if (dstRep != address(0)) {
+                    uint256 dstRepNum = numCheckpoints[dstRep];
+                    uint256 dstRepOld = dstRepNum != 0
+                        ? checkpoints[dstRep][dstRepNum - 1].votes
+                        : 0;
+                    uint256 dstRepNew = dstRepOld + amount;
+                    _writeCheckpoint(dstRep, dstRepNum, dstRepOld, dstRepNew);
+                }
+            }
+        }
+    }
+
+    /// @notice Elaborates delegate update - cf., 'Compound Governance'.
+    function _writeCheckpoint(
+        address delegatee,
+        uint256 nCheckpoints,
+        uint256 oldVotes,
+        uint256 newVotes
+    ) private {
+        uint32 timeStamp = uint32(block.timestamp);
+
+        unchecked {
+            if (
+                nCheckpoints != 0 &&
+                checkpoints[delegatee][nCheckpoints - 1].fromTimeStamp ==
+                timeStamp
+            ) {
+                checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
+            } else {
+                checkpoints[delegatee][nCheckpoints] = Checkpoint(
+                    timeStamp,
+                    newVotes
+                );
+                numCheckpoints[delegatee] = nCheckpoints + 1;
+            }
+        }
+
+        emit DelegateVotesChanged(delegatee, oldVotes, newVotes);
+    }
+
+    /// @notice Burn function for Baal `loot`.
+    function _burnLoot(address from, uint256 loot) private {
+        lootToken.burn(from, loot);
+
+        emit TransferLoot(from, address(0), loot); /*emit event reflecting burn of `loot`*/
+    }
+
+    /// @notice Burn function for Baal `shares`.
+    function _burnShares(address from, uint256 shares) private {
+        balanceOf[from] -= shares; /*subtract `shares` for `from` account*/
+        unchecked {
+            totalSupply -= shares; /*subtract from total Baal `shares`*/
+        }
+
+        _moveDelegates(delegates[from], address(0), shares); /*update delegation*/
+
+        emit Transfer(from, address(0), shares); /*emit event reflecting burn of `shares` with erc20 accounting*/
+    }
+
+    /// @notice Minting function for Baal `loot`.
+    function _mintLoot(address to, uint256 loot) private {
+        lootToken.mint(to, loot);
+        emit TransferLoot(address(0), to, loot); /*emit event reflecting mint of `loot`*/
+    }
+
+    /// @notice Minting function for Baal `shares`.
+    function _mintShares(address to, uint256 shares) private {
+        unchecked {
+            if (totalSupply + shares <= type(uint256).max / 2) {
+                /*If recipient is receiving their first shares, auto-self delegate*/
+                if (
+                    balanceOf[to] == 0 && numCheckpoints[to] == 0 && shares > 0
+                ) {
+                    delegates[to] = to;
+                }
+
+                balanceOf[to] += shares; /*add `shares` for `to` account*/
+
+                totalSupply += shares; /*add to total Baal `shares`*/
+
+                _moveDelegates(address(0), delegates[to], shares); /*update delegation*/
+
+                emit Transfer(address(0), to, shares); /*emit event reflecting mint of `shares` with erc20 accounting*/
+            }
+        }
     }
 
     /// @notice Provides 'safe' {transfer} for tokens that do not consistently return 'true/false'.
