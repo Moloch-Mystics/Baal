@@ -1393,7 +1393,7 @@ describe('Baal contract', function () {
   })
 
   describe('submitProposal', function () {
-    it.only('happy case', async function () {
+    it('happy case', async function () {
       // note - this also tests that members can submit proposals without offering tribute
       // note - this also tests that member proposals are self-sponsored (bc votingStarts != 0)
       const countBefore = await baal.proposalCount()
@@ -1525,6 +1525,7 @@ describe('Baal contract', function () {
       const priorVotes = await baal.getPriorVotes(summoner.address, prop.votingStarts)
       expect(priorVotes).to.equal(votes)
       expect(prop.yesVotes).to.equal(votes);
+      expect(prop.maxTotalSharesAndLootAtYesVote).to.equal(shares + loot)
     });
 
     it("happy case - no vote", async function () {
@@ -1582,6 +1583,32 @@ describe('Baal contract', function () {
         revertMessages.submitVoteNotVoting
       );
     })
+
+    it('scenario - increase shares during voting', async function () {
+      await shamanBaal.mintShares([shaman.address], [100]) // add 100 shares for shaman
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, yes)
+      const prop1 = await baal.proposals(1)
+      expect(prop1.maxTotalSharesAndLootAtYesVote).to.equal(shares + loot + 100)
+      await shamanBaal.mintShares([shaman.address], [100]) // add another 100 shares for shaman
+      await shamanBaal.submitVote(1, yes)
+      const prop = await baal.proposals(1)
+      expect(prop.yesVotes).to.equal(200); // 100 summoner and 1st 100 from shaman are counted
+      expect(prop.maxTotalSharesAndLootAtYesVote).to.equal(shares + loot + 200)
+    });
+
+    it('scenario - decrease shares during voting', async function () {
+      await shamanBaal.mintShares([shaman.address], [100]) // add 100 shares for shaman
+      await shamanBaal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitVote(1, yes)
+      const prop1 = await baal.proposals(1)
+      expect(prop1.maxTotalSharesAndLootAtYesVote).to.equal(shares + loot + 100)
+      await shamanBaal.ragequit(shaman.address, 50, 0)
+      await shamanBaal.submitVote(1, yes)
+      const prop = await baal.proposals(1)
+      expect(prop.yesVotes).to.equal(200); // 100 summoner and 1st 100 from shaman are counted (not affected by rq)
+      expect(prop.maxTotalSharesAndLootAtYesVote).to.equal(shares + loot + 100) // unchanged
+    });
   })
 
   describe.skip('submitVoteWithSig (w/ auto self-sponsor)', function () {
@@ -1600,7 +1627,7 @@ describe('Baal contract', function () {
     });
   })
 
-  describe.only("processProposal", function () {
+  describe("processProposal", function () {
     it("happy case yes wins", async function () {
       await baal.submitProposal(
         proposal.data,
@@ -1666,7 +1693,6 @@ describe('Baal contract', function () {
     });
 
     it("require fail - proposal data mismatch on processing", async function () {
-      const beforeProcessed = await baal.proposals(1);
       await baal.submitProposal(
         proposal.data,
         proposal.expiration,
@@ -1684,6 +1710,252 @@ describe('Baal contract', function () {
       expect(
         baal.processProposal(1, badSelfTransferAction)
       ).to.be.revertedWith("incorrect calldata");
+    });
+
+    it("require fail - proposal not in voting", async function () {
+      await shamanBaal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      expect(baal.processProposal(1, proposal.data)).to.be.revertedWith(revertMessages.processProposalNotReady) // fail at submitted
+      await baal.sponsorProposal(1)
+      expect(baal.processProposal(1, proposal.data)).to.be.revertedWith(revertMessages.processProposalNotReady) // fail at voting
+      await baal.submitVote(1, yes);
+      const beforeProcessed = await baal.proposals(1);
+      await moveForwardPeriods(1);
+      const state1 = await baal.state(1)
+      expect(state1).to.equal(STATES.GRACE)
+      expect(baal.processProposal(1, proposal.data)).to.be.revertedWith(revertMessages.processProposalNotReady) // fail at grace
+      await moveForwardPeriods(1);
+      await baal.processProposal(1, proposal.data); // propsal ready, works
+      const afterProcessed = await baal.proposals(1);
+      verifyProposal(afterProcessed, beforeProcessed)
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.PROCESSED)
+      const propStatus = await baal.getProposalStatus(1)
+      expect(propStatus).to.eql([false, true, true, false])
+    });
+
+    it("require fail - proposal cancelled", async function () {
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      await shamanBaal.cancelProposal(1)
+      await moveForwardPeriods(2);
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.CANCELLED)
+      expect(baal.processProposal(1, proposal.data)).to.be.revertedWith(revertMessages.processProposalNotReady)
+    });
+
+    it("require fail - proposal expired", async function () {
+      proposal.expiration = await blockTime() + deploymentConfig.VOTING_PERIOD_IN_SECONDS + deploymentConfig.GRACE_PERIOD_IN_SECONDS + 2
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      await moveForwardPeriods(2);
+      const state1 = await baal.state(1)
+      expect(state1).to.equal(STATES.READY)
+      const beforeProcessed = await baal.proposals(1)
+      await baal.processProposal(1, proposal.data)
+      const afterProcessed = await baal.proposals(1);
+      verifyProposal(afterProcessed, beforeProcessed)
+      const state2 = await baal.state(1)
+      expect(state2).to.equal(STATES.PROCESSED)
+      const propStatus = await baal.getProposalStatus(1)
+      expect(propStatus).to.eql([false, true, false, false]) // passed [3] is false
+    });
+
+    it("edge case - exactly at quorum", async function () {
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256', 'uint256'],
+        [
+          deploymentConfig.VOTING_PERIOD_IN_SECONDS, deploymentConfig.GRACE_PERIOD_IN_SECONDS, deploymentConfig.PROPOSAL_OFFERING, 
+          10, deploymentConfig.SPONSOR_THRESHOLD, deploymentConfig.MIN_RETENTION_PERCENT
+        ]
+      )
+
+      await shamanBaal.mintShares([shaman.address], [900]) // mint 900 shares so summoner has exectly 10% w/ 100 shares
+
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      await moveForwardPeriods(2);
+      const state1 = await baal.state(1)
+      expect(state1).to.equal(STATES.READY)
+      await shamanBaal.setGovernanceConfig(governanceConfig) // set quorum to 10%
+      const beforeProcessed = await baal.proposals(1)
+      await baal.processProposal(1, proposal.data)
+      const afterProcessed = await baal.proposals(1);
+      verifyProposal(afterProcessed, beforeProcessed)
+      const state2 = await baal.state(1)
+      expect(state2).to.equal(STATES.PROCESSED)
+      const propStatus = await baal.getProposalStatus(1)
+      expect(propStatus).to.eql([false, true, true, false]) // passed [3] is true
+    });
+
+    it("edge case - just under quorum", async function () {
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256', 'uint256'],
+        [
+          deploymentConfig.VOTING_PERIOD_IN_SECONDS, deploymentConfig.GRACE_PERIOD_IN_SECONDS, deploymentConfig.PROPOSAL_OFFERING, 
+          10, deploymentConfig.SPONSOR_THRESHOLD, deploymentConfig.MIN_RETENTION_PERCENT
+        ]
+      )
+
+      await shamanBaal.mintShares([shaman.address], [901]) // mint 901 shares so summoner has <10% w/ 100 shares
+
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      await moveForwardPeriods(2);
+      const state1 = await baal.state(1)
+      expect(state1).to.equal(STATES.READY)
+      await shamanBaal.setGovernanceConfig(governanceConfig) // set quorum to 10%
+      const beforeProcessed = await baal.proposals(1)
+      await baal.processProposal(1, proposal.data)
+      const afterProcessed = await baal.proposals(1);
+      verifyProposal(afterProcessed, beforeProcessed)
+      const state2 = await baal.state(1)
+      expect(state2).to.equal(STATES.PROCESSED)
+      const propStatus = await baal.getProposalStatus(1)
+      expect(propStatus).to.eql([false, true, false, false]) // passed [3] is false
+    });
+
+    it("edge case - exactly at minRetentionPercent", async function () {
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256', 'uint256'],
+        [
+          deploymentConfig.VOTING_PERIOD_IN_SECONDS, deploymentConfig.GRACE_PERIOD_IN_SECONDS, deploymentConfig.PROPOSAL_OFFERING, 
+          0, deploymentConfig.SPONSOR_THRESHOLD, 90 // min retention % = 90%, ragequit >10% of shares+loot to trigger
+        ]
+      )
+
+      await shamanBaal.setGovernanceConfig(governanceConfig) // set min retention to 90%
+
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      await moveForwardPeriods(2);
+      const state1 = await baal.state(1)
+      await baal.ragequit(summoner.address, 10, 50) // ragequit 10 shares out of 100 and 50 loot out of 500
+      expect(state1).to.equal(STATES.READY)
+      const beforeProcessed = await baal.proposals(1)
+      await baal.processProposal(1, proposal.data)
+      const afterProcessed = await baal.proposals(1);
+      verifyProposal(afterProcessed, beforeProcessed)
+      const state2 = await baal.state(1)
+      expect(state2).to.equal(STATES.PROCESSED)
+      const propStatus = await baal.getProposalStatus(1)
+      expect(propStatus).to.eql([false, true, true, false]) // passed [3] is true
+    });
+
+    it("edge case - just below minRetentionPercent - shares+loot", async function () {
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256', 'uint256'],
+        [
+          deploymentConfig.VOTING_PERIOD_IN_SECONDS, deploymentConfig.GRACE_PERIOD_IN_SECONDS, deploymentConfig.PROPOSAL_OFFERING, 
+          0, deploymentConfig.SPONSOR_THRESHOLD, 90 // min retention % = 90%, ragequit >10% of shares to trigger
+        ]
+      )
+
+      await shamanBaal.setGovernanceConfig(governanceConfig) // set min retention to 90%
+
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      await moveForwardPeriods(2);
+      const state1 = await baal.state(1)
+      await baal.ragequit(summoner.address, 11, 50) // ragequit 11 shares out of 100, and 50 out of 500
+      expect(state1).to.equal(STATES.READY)
+      const beforeProcessed = await baal.proposals(1)
+      await baal.processProposal(1, proposal.data)
+      const afterProcessed = await baal.proposals(1);
+      verifyProposal(afterProcessed, beforeProcessed)
+      const state2 = await baal.state(1)
+      expect(state2).to.equal(STATES.PROCESSED)
+      const propStatus = await baal.getProposalStatus(1)
+      expect(propStatus).to.eql([false, true, false, false]) // passed [3] is false - min retention exceeded
+    });
+
+    it("edge case - just below minRetentionPercent - just shares", async function () {
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256', 'uint256'],
+        [
+          deploymentConfig.VOTING_PERIOD_IN_SECONDS, deploymentConfig.GRACE_PERIOD_IN_SECONDS, deploymentConfig.PROPOSAL_OFFERING, 
+          0, deploymentConfig.SPONSOR_THRESHOLD, 90 // min retention % = 90%, ragequit >10% of shares to trigger
+        ]
+      )
+
+      await shamanBaal.setGovernanceConfig(governanceConfig) // set min retention to 90%
+
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      await moveForwardPeriods(2);
+      const state1 = await baal.state(1)
+      await baal.ragequit(summoner.address, 61, 0) // ragequit 61 shares out of 100, and 0 out of 500
+      expect(state1).to.equal(STATES.READY)
+      const beforeProcessed = await baal.proposals(1)
+      await baal.processProposal(1, proposal.data)
+      const afterProcessed = await baal.proposals(1);
+      verifyProposal(afterProcessed, beforeProcessed)
+      const state2 = await baal.state(1)
+      expect(state2).to.equal(STATES.PROCESSED)
+      const propStatus = await baal.getProposalStatus(1)
+      expect(propStatus).to.eql([false, true, false, false]) // passed [3] is false - min retention exceeded
+    });
+
+    it("edge case - just below minRetentionPercent - just loot", async function () {
+      const governanceConfig = abiCoder.encode(
+        ['uint32', 'uint32', 'uint256', 'uint256', 'uint256', 'uint256'],
+        [
+          deploymentConfig.VOTING_PERIOD_IN_SECONDS, deploymentConfig.GRACE_PERIOD_IN_SECONDS, deploymentConfig.PROPOSAL_OFFERING, 
+          0, deploymentConfig.SPONSOR_THRESHOLD, 90 // min retention % = 90%, ragequit >10% of shares to trigger
+        ]
+      )
+
+      await shamanBaal.setGovernanceConfig(governanceConfig) // set min retention to 90%
+
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      await moveForwardPeriods(2);
+      const state1 = await baal.state(1)
+      await baal.ragequit(summoner.address, 0, 61) // ragequit 0 shares out of 100, and 61 out of 500
+      expect(state1).to.equal(STATES.READY)
+      const beforeProcessed = await baal.proposals(1)
+      await baal.processProposal(1, proposal.data)
+      const afterProcessed = await baal.proposals(1);
+      verifyProposal(afterProcessed, beforeProcessed)
+      const state2 = await baal.state(1)
+      expect(state2).to.equal(STATES.PROCESSED)
+      const propStatus = await baal.getProposalStatus(1)
+      expect(propStatus).to.eql([false, true, false, false]) // passed [3] is false - min retention exceeded
     });
 
     it("scenario - offer tribute", async function () {
@@ -1709,6 +1981,86 @@ describe('Baal contract', function () {
       expect(applicantWethBalance).to.equal(0)
       const baalWethBalance = await weth.balanceOf(baal.address)
       expect(baalWethBalance).to.equal(100)
+    });
+
+    it("scenario - two propsals, prev is processed", async function () {
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(2, yes);
+      const beforeProcessed = await baal.proposals(2);
+      await moveForwardPeriods(2);
+      await baal.processProposal(1, proposal.data);
+      const state1 = await baal.state(1)
+      expect(state1).to.equal(STATES.PROCESSED) // prev prop processed
+      await baal.processProposal(2, proposal.data);
+      const afterProcessed = await baal.proposals(2);
+      verifyProposal(afterProcessed, beforeProcessed)
+      const state2 = await baal.state(2)
+      expect(state2).to.equal(STATES.PROCESSED)
+      const propStatus = await baal.getProposalStatus(2)
+      expect(propStatus).to.eql([false, true, true, false])
+    });
+
+    it("scenario - two propsals, prev is defeated", async function () {
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, no);
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(2, yes);
+      const beforeProcessed = await baal.proposals(2);
+      await moveForwardPeriods(2);
+      const state1 = await baal.state(1)
+      expect(state1).to.equal(STATES.DEEFEATED) // prev prop defeated
+      await baal.processProposal(2, proposal.data);
+      const afterProcessed = await baal.proposals(2);
+      verifyProposal(afterProcessed, beforeProcessed)
+      const state2 = await baal.state(2)
+      expect(state2).to.equal(STATES.PROCESSED)
+      const propStatus = await baal.getProposalStatus(2)
+      expect(propStatus).to.eql([false, true, true, false])
+    });
+
+    it("scenario - two propsals, prev is cancelled", async function () {
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      await shamanBaal.cancelProposal(1)
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(2, yes);
+      const beforeProcessed = await baal.proposals(2);
+      await moveForwardPeriods(2);
+      const state1 = await baal.state(1)
+      expect(state1).to.equal(STATES.CANCELLED) // prev prop cancelled
+      await baal.processProposal(2, proposal.data);
+      const afterProcessed = await baal.proposals(2);
+      verifyProposal(afterProcessed, beforeProcessed)
+      const state2 = await baal.state(2)
+      expect(state2).to.equal(STATES.PROCESSED)
+      const propStatus = await baal.getProposalStatus(2)
+      expect(propStatus).to.eql([false, true, true, false])
     });
   });
 

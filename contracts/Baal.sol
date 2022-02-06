@@ -610,7 +610,12 @@ contract Baal is Executor, Initializable, CloneFactory {
     function cancelProposal(uint32 id) external nonReentrant {
         Proposal storage prop = proposals[id];
         require(state(id) == ProposalState.Voting, "!voting");
-        require(msg.sender == prop.sponsor || getPriorVotes(prop.sponsor, block.timestamp - 1) < sponsorThreshold || isGovernor(msg.sender), "!cancellable");
+        require(
+            msg.sender == prop.sponsor || 
+            getPriorVotes(prop.sponsor, block.timestamp - 1) < sponsorThreshold || 
+            isGovernor(msg.sender), 
+            "!cancellable"
+        );
         prop.status[0] = true;
     }
 
