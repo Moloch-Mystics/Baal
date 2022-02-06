@@ -228,7 +228,6 @@ contract Baal is Executor, Initializable, CloneFactory {
         uint256 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
         uint256 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
         uint256 maxTotalSharesAndLootAtYesVote; /* highest share+loot count during any individual yes vote*/
-        uint256 rqYesVotes; /* yes voting shares that have ragequit since voting yes */
         bool[4] status; /* [cancelled, processed, passed, actionFailed] */
         // bool cancelled; /* true if proposal is cancelled (by sponsor/govshaman, or with enough undelegations), skips processing */
         // bool processed; /* true if process proposal has been called for this proposal */
@@ -326,7 +325,6 @@ contract Baal is Executor, Initializable, CloneFactory {
                 0, /* yes votes */
                 0, /* no votes */
                 0, /* highestMaxSharesAndLootAtYesVote */
-                0, /* rqYesVotes */
                 [false, false, false, false], /* [cancelled, processed, passed, actionFailed] */
                 selfSponsor ? msg.sender : address(0),
                 proposalDataHash,
