@@ -22,8 +22,7 @@ use(solidity)
 
 const revertMessages = {
   molochAlreadyInitialized: 'Initializable: contract is already initialized',
-  molochSetupSharesCannotBe0: 'shares cannot be 0',
-  molochConstructorVotingPeriodCannotBe0: 'votingPeriod cannot be 0',
+  molochSetupSharesNoShares: 'shares != 0',
   submitProposalExpired: 'expired',
   submitProposalOffering: 'Baal requires an offering',
   submitProposalVotingPeriod: '!votingPeriod',
@@ -2442,6 +2441,6 @@ describe('Baal contract - no shares minted - fails', function () {
       [[summoner.address], [loot]]
     )
 
-    expect(baal.setUp(encodedInitParams)).to.be.revertedWith(revertMessages.molochSetupSharesCannotBe0)
+    expect(baal.setUp(encodedInitParams)).to.be.revertedWith(revertMessages.molochSetupSharesNoShares)
   })
 })
