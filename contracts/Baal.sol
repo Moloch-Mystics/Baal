@@ -579,6 +579,9 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @notice Baal-only function to remove guildToken
     function unsetGuildTokens(uint256[] calldata _tokenIndexes) external baalOrManagerOnly {
         for (uint256 i; i < _tokenIndexes.length; i++) {
+            if (i > 0) {
+                require(_tokenIndexes[i] < _tokenIndexes[i - 1], '!descending');
+            }
             address token = guildTokens[_tokenIndexes[i]];
             guildTokensEnabled[token] = false; // disable the token
             guildTokens[_tokenIndexes[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
