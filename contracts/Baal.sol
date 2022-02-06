@@ -83,7 +83,7 @@ contract Baal is Executor, Initializable, CloneFactory {
 
     bytes32 constant DOMAIN_TYPEHASH =
         keccak256(
-            "EIP712Domain(string name,uint chainId,address verifyingContract)"
+            "EIP712Domain(string name,uint256 chainId,address verifyingContract)"
         ); /*EIP-712 typehash for Baal domain*/
     bytes32 constant DELEGATION_TYPEHASH =
         keccak256("Delegation(address delegatee,uint nonce,uint expiry)"); /*EIP-712 typehash for Baal delegation*/
