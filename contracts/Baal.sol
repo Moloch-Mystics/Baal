@@ -375,29 +375,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @param id Number of proposal in `proposals` mapping to cast vote on.
     /// @param approved If 'true', member will cast `yesVotes` onto proposal - if 'false', `noVotes` will be counted.
     function submitVote(uint32 id, bool approved) external nonReentrant {
-        Proposal storage prop = proposals[id]; /*alias proposal storage pointers*/
-        require(state(id) == ProposalState.Voting, "!voting");
-
-        uint256 balance = getPriorVotes(msg.sender, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
-        require(balance > 0, "!member"); /*check 'membership' - required to vote on proposals*/
-        require(!memberVoted[msg.sender][id], "voted"); /*check vote not already cast*/
-
-        unchecked {
-            if (approved) {
-                /*if `approved`, cast delegated balance `yesVotes` to proposal*/
-                prop.yesVotes += balance;
-                if (totalSupply + totalLoot() > prop.maxTotalSharesAndLootAtYesVote) {
-                    prop.maxTotalSharesAndLootAtYesVote = totalSupply + totalLoot();
-                }
-            } else {
-                /*otherwise, cast delegated balance `noVotes` to proposal*/
-                prop.noVotes += balance;
-            }
-        }
-
-        memberVoted[msg.sender][id] = true; /*record voting action to `members` struct per user account*/
-
-        emit SubmitVote(msg.sender, balance, id, approved); /*emit event reflecting vote*/
+        _submitVote(msg.sender, id, approved);
     }
 
     /// @notice Submit vote with EIP-712 signature - proposal must exist & voting period must not have ended.
@@ -413,9 +391,6 @@ contract Baal is Executor, Initializable, CloneFactory {
         bytes32 r,
         bytes32 s
     ) external nonReentrant {
-        Proposal storage prop = proposals[id]; /*alias proposal storage pointers*/
-        require(state(id) == ProposalState.Voting, "!voting");
-
         bytes32 domainSeparator = keccak256(
             abi.encode(
                 DOMAIN_TYPEHASH,
@@ -434,10 +409,17 @@ contract Baal is Executor, Initializable, CloneFactory {
 
         require(signatory != address(0), "!signatory"); /*check signer is not null*/
 
-        uint256 balance = getPriorVotes(signatory, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
+        _submitVote(signatory, id, approved);
+    }
+
+    function _submitVote(address voter, uint32 id, bool approved) internal {
+        Proposal storage prop = proposals[id]; /*alias proposal storage pointers*/
+        require(state(id) == ProposalState.Voting, "!voting");
+
+        uint256 balance = getPriorVotes(voter, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
 
         require(balance > 0, "!member"); /* check that user has shares*/
-        require(!memberVoted[signatory][id], "voted"); /*check vote not already cast*/
+        require(!memberVoted[voter][id], "voted"); /*check vote not already cast*/
 
         unchecked {
             if (approved) {
@@ -452,9 +434,9 @@ contract Baal is Executor, Initializable, CloneFactory {
             }
         }
 
-        memberVoted[signatory][id] = true; /*record voting action to `members` struct per user account*/
+        memberVoted[voter][id] = true; /*record voting action to `members` struct per user account*/
 
-        emit SubmitVote(signatory, balance, id, approved); /*emit event reflecting vote*/
+        emit SubmitVote(voter, balance, id, approved); /*emit event reflecting vote*/
     }
 
     // ********************

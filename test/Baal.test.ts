@@ -6,11 +6,11 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 import { Baal } from '../src/types/Baal'
 import { TestErc20 } from '../src/types/TestErc20'
 import { Loot } from '../src/types/Loot'
-import { encodeMultiAction } from '../src/util'
+import { encodeMultiAction, hashOperation } from '../src/util'
 import { BigNumber, BigNumberish } from '@ethersproject/bignumber'
 import { buildContractCall } from '@gnosis.pm/safe-contracts'
 import { MultiSend } from '../src/types/MultiSend'
-import { ContractFactory } from 'ethers'
+import { ContractFactory, utils } from 'ethers'
 import { ConfigExtender } from 'hardhat/types'
 import { Test } from 'mocha'
 
@@ -22,7 +22,7 @@ use(solidity)
 
 const revertMessages = {
   molochAlreadyInitialized: 'Initializable: contract is already initialized',
-  molochConstructorSharesCannotBe0: 'shares cannot be 0',
+  molochSetupSharesCannotBe0: 'shares cannot be 0',
   molochConstructorVotingPeriodCannotBe0: 'votingPeriod cannot be 0',
   submitProposalExpired: 'expired',
   submitProposalOffering: 'Baal requires an offering',
@@ -1393,18 +1393,21 @@ describe('Baal contract', function () {
   })
 
   describe('submitProposal', function () {
-    it('happy case', async function () {
+    it.only('happy case', async function () {
       // note - this also tests that members can submit proposals without offering tribute
       // note - this also tests that member proposals are self-sponsored (bc votingStarts != 0)
       const countBefore = await baal.proposalCount()
 
       await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
-      // TODO test return value
+      // TODO test return value - use a helper contract to submit + save the returned ID
 
       const now = await blockTime()
 
       const countAfter = await baal.proposalCount()
       expect(countAfter).to.equal(countBefore + 1)
+
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.VOTING)
 
       const proposalData = await baal.proposals(1)
       expect(proposalData.id).to.equal(1)
@@ -1412,10 +1415,11 @@ describe('Baal contract', function () {
       expect(proposalData.votingEnds).to.equal(now + deploymentConfig.VOTING_PERIOD_IN_SECONDS)
       expect(proposalData.yesVotes).to.equal(0)
       expect(proposalData.noVotes).to.equal(0)
-      // TODO status checks
       expect(proposalData.expiration).to.equal(proposal.expiration)
       expect(proposalData.details).to.equal(ethers.utils.id(proposal.details))
-      // TODO test data hash is accurate
+      expect(hashOperation(proposal.data)).to.equal(proposalData.proposalDataHash)
+      const proposalStatus = await baal.getProposalStatus(1)
+      expect(proposalStatus).to.eql([false, false, false, false])
     })
 
     it('require fail - expiration passed', async function() {
@@ -1580,7 +1584,23 @@ describe('Baal contract', function () {
     })
   })
 
-  describe("processProposal", function () {
+  describe.skip('submitVoteWithSig (w/ auto self-sponsor)', function () {
+    beforeEach(async function () {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+    })
+
+    it('happy case - yes vote', async function () {
+      // await baal.submitVoteWithSig(1, yes)
+      const prop = await baal.proposals(1)
+      const nCheckpoints = await baal.numCheckpoints(summoner.address)
+      const votes = (await baal.checkpoints(summoner.address, nCheckpoints.sub(1))).votes
+      const priorVotes = await baal.getPriorVotes(summoner.address, prop.votingStarts)
+      expect(priorVotes).to.equal(votes)
+      expect(prop.yesVotes).to.equal(votes);
+    });
+  })
+
+  describe.only("processProposal", function () {
     it("happy case yes wins", async function () {
       await baal.submitProposal(
         proposal.data,
@@ -1593,8 +1613,10 @@ describe('Baal contract', function () {
       await baal.processProposal(1, proposal.data);
       const afterProcessed = await baal.proposals(1);
       verifyProposal(afterProcessed, beforeProcessed)
-      // TODO check proposal status flags
-      /* TODO test that execution happened*/
+      const state = await baal.state(1)
+      expect(state).to.equal(STATES.PROCESSED)
+      const propStatus = await baal.getProposalStatus(1)
+      expect(propStatus).to.eql([false, true, true, false])
     });
 
     it("require fail - no wins, proposal is defeated", async function () {
@@ -1687,7 +1709,6 @@ describe('Baal contract', function () {
       expect(applicantWethBalance).to.equal(0)
       const baalWethBalance = await weth.balanceOf(baal.address)
       expect(baalWethBalance).to.equal(100)
-      /* TODO test that execution happened*/
     });
   });
 
@@ -1968,5 +1989,62 @@ describe('Baal contract - tribute required', function () {
         revertMessages.submitProposalOffering
       )
     })
+  })
+})
+
+describe('Baal contract - no shares minted - fails', function () {
+  let customConfig = { ...deploymentConfig, PROPOSAL_OFFERING: 69, SPONSOR_THRESHOLD: 1 }
+
+  let baal: Baal
+  let shamanBaal: Baal
+  let weth: TestErc20
+  let multisend: MultiSend
+
+  let lootSingleton: Loot
+  let LootFactory: ContractFactory
+  let lootToken: Loot
+
+  let applicant: SignerWithAddress
+  let summoner: SignerWithAddress
+  let shaman: SignerWithAddress
+
+  let encodedInitParams: any
+
+  const loot = 500
+  const shares = 100
+  const sharesPaused = false
+  const lootPaused = false
+
+  this.beforeAll(async function () {
+    LootFactory = await ethers.getContractFactory('Loot')
+    lootSingleton = (await LootFactory.deploy()) as Loot
+  })
+
+  it('fails when 0 shares are provided', async function () {
+    const BaalContract = await ethers.getContractFactory('Baal')
+    const MultisendContract = await ethers.getContractFactory('MultiSend')
+    ;[summoner, applicant, shaman] = await ethers.getSigners()
+
+    const ERC20 = await ethers.getContractFactory('TestERC20')
+    weth = (await ERC20.deploy('WETH', 'WETH', 10000000)) as TestErc20
+
+    multisend = (await MultisendContract.deploy()) as MultiSend
+
+    baal = (await BaalContract.deploy()) as Baal
+    shamanBaal = baal.connect(shaman) // needed to send txns to baal as the shaman
+
+    const encodedInitParams = await getBaalParams(
+      baal,
+      multisend,
+      lootSingleton,
+      customConfig,
+      [sharesPaused, lootPaused],
+      [[weth.address]],
+      [[shaman.address], [7]],
+      [[summoner.address], [0]], // 0 shares
+      [[summoner.address], [loot]]
+    )
+
+    expect(baal.setUp(encodedInitParams)).to.be.revertedWith(revertMessages.molochSetupSharesCannotBe0)
   })
 })
