@@ -1393,7 +1393,7 @@ describe('Baal contract', function () {
   })
 
   describe('submitProposal', function () {
-    it.only('happy case', async function () {
+    it('happy case', async function () {
       // note - this also tests that members can submit proposals without offering tribute
       // note - this also tests that member proposals are self-sponsored (bc votingStarts != 0)
       const countBefore = await baal.proposalCount()

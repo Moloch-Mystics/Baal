@@ -119,7 +119,8 @@ contract TributeEscrow {
         Escrow storage escrow = escrows[address(baal)][proposalId];
         require(!escrow.released, "Already released");
 
-        require(baal.didProposalPass(proposalId), "Not passed");
+        bool[4] memory status = baal.getProposalStatus(proposalId);
+        require(status[2], "Not passed");
         escrow.released = true;
 
         IERC20 token = IERC20(escrow.token);

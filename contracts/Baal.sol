@@ -1028,10 +1028,6 @@ contract Baal is Executor, Initializable, CloneFactory {
             permission == 7);
     }
 
-    function didProposalPass(uint256 proposalId) public view returns (bool) {
-        return proposals[proposalId].passed;
-    }
-
     /***************
     HELPER FUNCTIONS
     ***************/
