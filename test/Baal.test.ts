@@ -1643,6 +1643,15 @@ describe('Baal contract', function () {
       const summonerDelegate = await baal.delegates(summoner.address)
       expect(summonerDelegate).to.equal(shaman.address)
     });
+    
+    it('require fail - nonce is re-used', async function () {
+      await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
+      const signature = await signDelegation(chainId,baal.address,summoner,deploymentConfig.TOKEN_NAME,shaman.address, 0, 0)
+      console.log(summoner.address)
+      await shamanBaal.delegateBySig(shaman.address, 0, 0, signature)
+      expect(shamanBaal.delegateBySig(shaman.address, 0, 0, signature)).to.be.revertedWith('!nonce')
+
+    });
   })
 
   describe("processProposal", function () {
