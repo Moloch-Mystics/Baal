@@ -13,6 +13,7 @@ import { MultiSend } from '../src/types/MultiSend'
 import { ContractFactory, utils } from 'ethers'
 import { ConfigExtender } from 'hardhat/types'
 import { Test } from 'mocha'
+import signVote from '../src/signVote'
 
 use(solidity)
 
@@ -96,8 +97,8 @@ const deploymentConfig = {
   MIN_RETENTION_PERCENT: 0,
   MIN_STAKING_PERCENT: 0,
   QUORUM_PERCENT: 0,
-  TOKEN_NAME: 'wrapped ETH',
-  TOKEN_SYMBOL: 'WETH',
+  TOKEN_NAME: 'Baal Shares',
+  TOKEN_SYMBOL: 'BAAL',
 }
 
 const abiCoder = ethers.utils.defaultAbiCoder
@@ -192,6 +193,8 @@ describe('Baal contract', function () {
   let applicantWeth: TestErc20
   let multisend: MultiSend
 
+  let chainId: number
+
   // shaman baals, to test permissions
   let s1Baal: Baal
   let s2Baal: Baal
@@ -225,6 +228,8 @@ describe('Baal contract', function () {
   this.beforeAll(async function () {
     LootFactory = await ethers.getContractFactory('Loot')
     lootSingleton = (await LootFactory.deploy()) as Loot
+    const network = await ethers.provider.getNetwork()
+    chainId = network.chainId
   })
 
   beforeEach(async function () {
@@ -1655,13 +1660,16 @@ describe('Baal contract', function () {
     });
   })
 
-  describe.skip('submitVoteWithSig (w/ auto self-sponsor)', function () {
+  describe.only('submitVoteWithSig (w/ auto self-sponsor)', function () {
     beforeEach(async function () {
       await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
     })
 
     it('happy case - yes vote', async function () {
       // await baal.submitVoteWithSig(1, yes)
+      const signature = await signVote(chainId,baal.address,summoner,deploymentConfig.TOKEN_NAME,1,true)
+      console.log(`signer: ${summoner.address}`)
+      await baal.submitVoteWithSig(1, true, signature)
       const prop = await baal.proposals(1)
       const nCheckpoints = await baal.numCheckpoints(summoner.address)
       const votes = (await baal.checkpoints(summoner.address, nCheckpoints.sub(1))).votes
