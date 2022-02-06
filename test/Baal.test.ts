@@ -23,8 +23,7 @@ use(solidity)
 
 const revertMessages = {
   molochAlreadyInitialized: 'Initializable: contract is already initialized',
-  molochSetupSharesCannotBe0: 'shares cannot be 0',
-  molochConstructorVotingPeriodCannotBe0: 'votingPeriod cannot be 0',
+  molochSetupSharesNoShares: 'shares != 0',
   submitProposalExpired: 'expired',
   submitProposalOffering: 'Baal requires an offering',
   submitProposalVotingPeriod: '!votingPeriod',
@@ -40,7 +39,8 @@ const revertMessages = {
   submitVoteWithSigMember: '!member',
   processProposalNotReady: '!ready',
   advancedRagequitUnordered: '!order',
-  unsetGuildTokensLastToken: 'reverted with panic code 0x32 (Array accessed at an out-of-bounds or negative index)',
+  unsetGuildTokensOutOfBound: 'reverted with panic code 0x32 (Array accessed at an out-of-bounds or negative index)',
+  unsetGuildTokensDescending: '!descending',
   sharesTransferPaused: '!transferable',
   sharesInsufficientBalance: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)',
   sharesInsufficientApproval: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)',
@@ -458,10 +458,54 @@ describe('Baal contract', function () {
     })
 
     it('unsetGuildTokens', async function () {
-      // TODO, try in various orders (e.g. [1,2,3,4] - remove 1 and 3)
       await shamanBaal.unsetGuildTokens([0])
       const guildTokensAfter = await shamanBaal.getGuildTokens()
       expect(guildTokensAfter.length).to.be.equal(0)
+    })
+
+    it('unsetGuildTokens - remove middle index', async function () {
+      await shamanBaal.setGuildTokens([lootToken.address, baal.address]) // add two tokens
+      await shamanBaal.unsetGuildTokens([1])
+      const guildTokensAfter = await shamanBaal.getGuildTokens()
+      expect(guildTokensAfter).to.eql([weth.address, baal.address])
+    })
+
+    it('unsetGuildTokens - remove first index', async function () {
+      await shamanBaal.setGuildTokens([lootToken.address, baal.address]) // add two tokens
+      await shamanBaal.unsetGuildTokens([0])
+      const guildTokensAfter = await shamanBaal.getGuildTokens()
+      expect(guildTokensAfter).to.eql([baal.address, lootToken.address]) // order switched
+    })
+
+    it('unsetGuildTokens - remove last index', async function () {
+      await shamanBaal.setGuildTokens([lootToken.address, baal.address]) // add two tokens
+      await shamanBaal.unsetGuildTokens([2])
+      const guildTokensAfter = await shamanBaal.getGuildTokens()
+      expect(guildTokensAfter).to.eql([weth.address, lootToken.address])
+    })
+
+    it('unsetGuildTokens - remove two indices - require fail - descending', async function () {
+      await shamanBaal.setGuildTokens([lootToken.address, baal.address]) // add two tokens
+      expect(shamanBaal.unsetGuildTokens([0, 2])).to.be.revertedWith(revertMessages.unsetGuildTokensDescending)
+    })
+
+    it('unsetGuildTokens - remove two indices - descending', async function () {
+      await shamanBaal.setGuildTokens([lootToken.address, baal.address]) // add two tokens
+      await shamanBaal.unsetGuildTokens([2, 0])
+      const guildTokensAfter = await shamanBaal.getGuildTokens()
+      expect(guildTokensAfter).to.eql([lootToken.address])
+    })
+
+    it('unsetGuildTokens - remove all tokens', async function () {
+      await shamanBaal.setGuildTokens([lootToken.address, baal.address]) // add two tokens
+      await shamanBaal.unsetGuildTokens([2, 1, 0])
+      const guildTokensAfter = await shamanBaal.getGuildTokens()
+      expect(guildTokensAfter).to.eql([])
+    })
+
+    it('unsetGuildTokens - require fail - out of bounds', async function () {
+      await shamanBaal.setGuildTokens([lootToken.address, baal.address]) // add two tokens
+      expect(shamanBaal.unsetGuildTokens([3])).to.be.revertedWith(revertMessages.unsetGuildTokensOutOfBound)
     })
 
     it('setGovernanceConfig', async function() {
@@ -2405,6 +2449,6 @@ describe('Baal contract - no shares minted - fails', function () {
       [[summoner.address], [loot]]
     )
 
-    expect(baal.setUp(encodedInitParams)).to.be.revertedWith(revertMessages.molochSetupSharesCannotBe0)
+    expect(baal.setUp(encodedInitParams)).to.be.revertedWith(revertMessages.molochSetupSharesNoShares)
   })
 })
