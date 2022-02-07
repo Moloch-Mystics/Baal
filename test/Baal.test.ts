@@ -697,6 +697,89 @@ describe('Baal contract', function () {
       expect(s2Baal.cancelProposal(2)).to.be.revertedWith(revertMessages.cancelProposalNotCancellable)
     })
 
+    it('permission = 2 - assert events emitted for minting shares', async function () {
+      const minting = 100
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares)
+      await expect(
+        s2Baal.mintShares([summoner.address], [minting])
+      ).to.emit(baal, 'Transfer').withArgs(zeroAddress, summoner.address, minting)
+      .to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares, shares+minting)
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares + minting)
+    })
+
+    it ('permission = 2 - assert events emitted for burning shares', async function () {
+      const burning = 100;
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares)
+      await expect(
+        s2Baal.burnShares([summoner.address], [burning])
+      ).to.emit(baal, 'Transfer').withArgs(summoner.address, zeroAddress, burning)
+      .to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares, shares - burning)
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares - burning)
+    })
+
+    it('permission = 2 - assert events emitted for minting loot', async function() {
+      const minting = 100
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot)
+      await expect(
+        s2Baal.mintLoot([summoner.address], [minting])
+      ).to.emit(baal, 'TransferLoot').withArgs(zeroAddress, summoner.address, minting)
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot + minting)
+    })
+
+    it ('permission = 2 - assert events emitted for burning loot', async function () {
+      const burning = 100
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot)
+      await expect(
+        s2Baal.burnLoot([summoner.address], [burning])
+      ).to.emit(baal, 'TransferLoot').withArgs(summoner.address, zeroAddress, burning)
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot - burning)
+    })
+
+    it ('permission = 2 - have shaman mint and burn delegated shares', async function () {
+      const minting = 100
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(0)
+
+      // mint shares for a separate member than the summoner
+      await s2Baal.mintShares([applicant.address], [minting])
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(minting)
+      expect(await baal.delegates(applicant.address)).to.equal(applicant.address)
+      expect(await baal.getCurrentVotes(applicant.address)).to.equal(minting)
+      expect(await baal.getCurrentVotes(summoner.address)).to.equal(shares)
+
+      // delegate shares from applicant to the summoner
+      const baalAsApplicant = baal.connect(applicant)
+
+      await expect(
+        baalAsApplicant.delegate(summoner.address)
+      ).to.emit(baal, 'DelegateChanged').withArgs(applicant.address, applicant.address, summoner.address)
+      .to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares, shares + minting)
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(minting)
+      expect(await baal.delegates(applicant.address)).to.equal(summoner.address)
+      expect(await baal.getCurrentVotes(applicant.address)).to.equal(0)
+      expect(await baal.getCurrentVotes(summoner.address)).to.equal(shares + minting)
+
+      // mint shares for the delegator
+      await expect(
+        baalAsShaman.mintShares([applicant.address], [minting])
+      ).to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares + minting, shares + 2 * minting)
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(2 * minting)
+      expect(await baal.delegates(applicant.address)).to.equal(summoner.address)
+      expect(await baal.getCurrentVotes(applicant.address)).to.equal(0)
+      expect(await baal.getCurrentVotes(summoner.address)).to.equal(shares + 2 * minting)
+
+      // burn shares for the delegator
+      await baalAsShaman.burnShares([applicant.address], [minting])
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(minting)
+      expect(await baal.delegates(applicant.address)).to.equal(summoner.address)
+      expect(await baal.getCurrentVotes(applicant.address)).to.equal(0)
+      expect(await baal.getCurrentVotes(summoner.address)).to.equal(shares + minting)
+    })
+
     it('permission = 3 - admin + manager actions succeed', async function() {
       // admin - success
       await s3Baal.setAdminConfig(true, true)
@@ -1346,7 +1429,7 @@ describe('Baal contract', function () {
     })
   })
 
-  describe.only('shaman actions', function () {
+  describe('shaman actions', function () {
     it ('sad case - shaman is not whitelisted', async function (){
       expect(await baal.shamans(summoner.address)).to.be.equal(0)
       
