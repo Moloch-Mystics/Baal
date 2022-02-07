@@ -1429,62 +1429,6 @@ describe('Baal contract', function () {
     })
   })
 
-  describe('shaman actions', function () {
-    it ('sad case - shaman is not whitelisted', async function (){
-      expect(await baal.shamans(summoner.address)).to.be.equal(0)
-      
-      await expect(
-        baal.mintShares([summoner.address], [100])
-      ).to.be.revertedWith(revertMessages.baalOrManager)
-
-      await expect(
-        baal.burnShares([summoner.address], [100])
-      ).to.be.revertedWith(revertMessages.baalOrManager)
-
-      await expect(
-        baal.mintLoot([summoner.address], [100])
-      ).to.be.revertedWith(revertMessages.baalOrManager)
-
-      await expect(
-        baal.burnLoot([summoner.address], [100])
-      ).to.be.revertedWith(revertMessages.baalOrManager)
-    })
-
-    it('sad case - minting and burning array parity', async function () {
-      await expect(
-        shamanBaal.mintShares([summoner.address, applicant.address], [0])
-      ).to.be.revertedWith(revertMessages.mintSharesArrayParity)
-
-      await expect(
-        shamanBaal.burnShares([summoner.address, applicant.address], [0])
-      ).to.be.revertedWith(revertMessages.burnSharesArrayParity)
-
-      await expect(
-        shamanBaal.mintLoot([summoner.address, applicant.address], [0])
-      ).to.be.revertedWith(revertMessages.mintLootArrayParity)
-
-      await expect(
-        shamanBaal.burnLoot([summoner.address, applicant.address], [0])
-      ).to.be.revertedWith(revertMessages.burnLootArrayParity)
-
-      await expect(
-        shamanBaal.mintShares([summoner.address], [0, 100])
-      ).to.be.revertedWith(revertMessages.mintSharesArrayParity)
-
-      await expect(
-        shamanBaal.burnShares([summoner.address], [0, 100])
-      ).to.be.revertedWith(revertMessages.burnSharesArrayParity)
-
-      await expect(
-        shamanBaal.mintLoot([summoner.address], [0, 100])
-      ).to.be.revertedWith(revertMessages.mintLootArrayParity)
-
-      await expect(
-        shamanBaal.burnLoot([summoner.address], [0, 100])
-      ).to.be.revertedWith(revertMessages.burnLootArrayParity)
-    })
-  })
-
   describe('erc20 loot - approve', function() {
     it('happy case', async function() {
       await lootToken.approve(shaman.address, 20)
