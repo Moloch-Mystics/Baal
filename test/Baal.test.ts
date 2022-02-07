@@ -450,7 +450,7 @@ describe('Baal contract', function () {
     })
 
     it('mint loot - require fail - array parity', async function () {
-      expect(shamanBaal.mintLoot([summoner.address], [69, 69])).to.be.revertedWith(revertMessages.burnSharesArrayParity)
+      expect(shamanBaal.mintLoot([summoner.address], [69, 69])).to.be.revertedWith(revertMessages.mintSharesArrayParity)
     })
 
     it('burn loot', async function () {
@@ -460,7 +460,7 @@ describe('Baal contract', function () {
     })
 
     it('burn loot - require fail - array parity', async function () {
-      expect(shamanBaal.burnLoot([summoner.address], [69, 69])).to.be.revertedWith(revertMessages.burnSharesArrayParity)
+      expect(shamanBaal.burnLoot([summoner.address], [69, 69])).to.be.revertedWith(revertMessages.burnLootArrayParity)
     })
 
     it('burn loot - require fail - insufficent shares', async function () {
