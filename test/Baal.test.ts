@@ -233,12 +233,12 @@ describe('Baal contract', function () {
   const yes = true
   const no = false
 
-  async function submitAndProcessProposal(baalAsAddress: Baal, action: any) {
+  async function submitAndProcessProposal(baalAsAddress: Baal, action: any, proposalId: BigNumberish) {
     const encodedAction = encodeMultiAction(multisend, [action], [baalAsAddress.address], [BigNumber.from(0)], [0])
     await baalAsAddress.submitProposal(encodedAction, proposal.expiration, ethers.utils.id(proposal.details))
-    await baalAsAddress.submitVote(1, true)
+    await baalAsAddress.submitVote(proposalId, true)
     await moveForwardPeriods(2)
-    return await baalAsAddress.processProposal(1, encodedAction)
+    return await baalAsAddress.processProposal(proposalId, encodedAction)
   }
 
   this.beforeAll(async function () {
@@ -2212,6 +2212,66 @@ describe('Baal contract', function () {
       const propStatus = await baal.getProposalStatus(2)
       expect(propStatus).to.eql([false, true, true, false])
     });
+
+    it('happy case - mint shares via proposal', async function () {
+      const minting = 100
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(0)
+
+      const mintSharesAction = await baal.interface.encodeFunctionData('mintShares', [[applicant.address], [minting]])
+
+      await expect(
+        submitAndProcessProposal(baal, mintSharesAction, 1)
+      ).to.emit(baal, 'ProcessProposal').withArgs(1)
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(minting)
+    })
+
+    it('happy case - burn shares via proposal', async function () {
+      const burning = 100
+
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares)
+
+      const burnSharesAction = await baal.interface.encodeFunctionData('burnShares', [[summoner.address], [burning]])
+
+      await expect(
+        submitAndProcessProposal(baal, burnSharesAction, 1)
+      ).to.emit(baal, 'ProcessProposal').withArgs(1)
+
+      expect(await baal.balanceOf(summoner.address)).to.equal(shares - burning)
+    })
+
+    it('happy case - mint loot via proposal', async function () {
+      const minting = 100
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(0)
+
+      const mintSharesAction = await baal.interface.encodeFunctionData('mintLoot', [[applicant.address], [minting]])
+
+      await expect(
+        submitAndProcessProposal(baal, mintSharesAction, 1)
+      ).to.emit(baal, 'ProcessProposal').withArgs(1)
+
+      expect((await (baal.members(applicant.address))).loot).to.equal(minting)
+    })
+
+    it('happy case - burn loot via proposal', async function () {
+      const burning = 100
+
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot)
+
+      const burnLootAction = await baal.interface.encodeFunctionData('burnLoot', [[summoner.address], [burning]])
+
+      await expect(
+        submitAndProcessProposal(baal, burnLootAction, 1)
+      ).to.emit(baal, 'ProcessProposal').withArgs(1)
+
+      expect((await (baal.members(summoner.address))).loot).to.equal(loot - burning)
+    })
+
+    // setting and unsetting shamans covered
+
+    // TODO set / unset tokens via proposal
   });
 
   describe("ragequit", function () {
