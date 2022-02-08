@@ -1531,26 +1531,6 @@ describe('Baal contract', function () {
       expect(proposalStatus).to.eql([false, false, false, false])
     })
 
-    it('require fail - voting period too low', async function () {
-      expect(
-        baal.submitProposal(
-          proposal.data,
-          proposal.expiration,
-          ethers.utils.id(proposal.details)
-        )
-      ).to.be.revertedWith(revertMessages.submitProposalVotingPeriod)
-    })
-
-    it('require fail - voting period too high', async function () {
-      expect(
-        baal.submitProposal(
-          proposal.data,
-          proposal.expiration,
-          ethers.utils.id(proposal.details)
-        )
-      ).to.be.revertedWith(revertMessages.submitProposalVotingPeriod)
-    })
-
     it('require fail - expiration passed', async function() {
       const now = await blockTime()
       expect(baal.submitProposal(proposal.data, now, ethers.utils.id(proposal.details))).to.be.revertedWith(revertMessages.submitProposalExpired)
