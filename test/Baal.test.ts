@@ -2224,21 +2224,21 @@ describe('Baal contract', function () {
     it('happy case - mint loot via proposal', async function () {
       const minting = 100
 
-      expect(await baal.balanceOf(applicant.address)).to.equal(0)
+      expect(await lootToken.balanceOf(applicant.address)).to.equal(0)
 
-      const mintSharesAction = await baal.interface.encodeFunctionData('mintLoot', [[applicant.address], [minting]])
+      const mintLootAction = await baal.interface.encodeFunctionData('mintLoot', [[applicant.address], [minting]])
 
       await expect(
-        submitAndProcessProposal(baal, mintSharesAction, 1)
+        submitAndProcessProposal(baal, mintLootAction, 1)
       ).to.emit(baal, 'ProcessProposal').withArgs(1)
 
-      expect((await (baal.members(applicant.address))).loot).to.equal(minting)
+      expect(await lootToken.balanceOf(applicant.address)).to.equal(minting)
     })
 
     it('happy case - burn loot via proposal', async function () {
       const burning = 100
 
-      expect((await (baal.members(summoner.address))).loot).to.equal(loot)
+      expect(await lootToken.balanceOf(summoner.address)).to.equal(loot)
 
       const burnLootAction = await baal.interface.encodeFunctionData('burnLoot', [[summoner.address], [burning]])
 
@@ -2246,7 +2246,7 @@ describe('Baal contract', function () {
         submitAndProcessProposal(baal, burnLootAction, 1)
       ).to.emit(baal, 'ProcessProposal').withArgs(1)
 
-      expect((await (baal.members(summoner.address))).loot).to.equal(loot - burning)
+      expect(await lootToken.balanceOf(summoner.address)).to.equal(loot - burning)
     })
 
     // setting and unsetting shamans covered
