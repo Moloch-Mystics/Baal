@@ -471,7 +471,7 @@ describe('Baal contract', function () {
       const minting = 100
       expect(await baal.balanceOf(summoner.address)).to.equal(shares)
       await expect(
-        s2Baal.mintShares([summoner.address], [minting])
+        shamanBaal.mintShares([summoner.address], [minting])
       ).to.emit(baal, 'Transfer').withArgs(zeroAddress, summoner.address, minting)
       .to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares, shares+minting)
       expect(await baal.balanceOf(summoner.address)).to.equal(shares + minting)
@@ -481,7 +481,7 @@ describe('Baal contract', function () {
       const burning = 100;
       expect(await baal.balanceOf(summoner.address)).to.equal(shares)
       await expect(
-        s2Baal.burnShares([summoner.address], [burning])
+        shamanBaal.burnShares([summoner.address], [burning])
       ).to.emit(baal, 'Transfer').withArgs(summoner.address, zeroAddress, burning)
       .to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares, shares - burning)
       expect(await baal.balanceOf(summoner.address)).to.equal(shares - burning)
@@ -489,29 +489,29 @@ describe('Baal contract', function () {
 
     it('assert events emitted for minting loot', async function() {
       const minting = 100
-      expect((await (baal.members(summoner.address))).loot).to.equal(loot)
+      expect(await lootToken.balanceOf(summoner.address)).to.equal(loot)
       await expect(
-        s2Baal.mintLoot([summoner.address], [minting])
+        shamanBaal.mintLoot([summoner.address], [minting])
       ).to.emit(baal, 'TransferLoot').withArgs(zeroAddress, summoner.address, minting)
-      expect((await (baal.members(summoner.address))).loot).to.equal(loot + minting)
+      expect(await lootToken.balanceOf(summoner.address)).to.equal(loot + minting)
     })
 
-    it ('assert events emitted for burning loot', async function () {
+    it('assert events emitted for burning loot', async function () {
       const burning = 100
-      expect((await (baal.members(summoner.address))).loot).to.equal(loot)
+      expect(await lootToken.balanceOf(summoner.address)).to.equal(loot)
       await expect(
-        s2Baal.burnLoot([summoner.address], [burning])
+        shamanBaal.burnLoot([summoner.address], [burning])
       ).to.emit(baal, 'TransferLoot').withArgs(summoner.address, zeroAddress, burning)
-      expect((await (baal.members(summoner.address))).loot).to.equal(loot - burning)
+      expect(await lootToken.balanceOf(summoner.address)).to.equal(loot - burning)
     })
 
-    it ('have shaman mint and burn _delegated_ shares', async function () {
+    it('have shaman mint and burn _delegated_ shares', async function () {
       const minting = 100
 
       expect(await baal.balanceOf(applicant.address)).to.equal(0)
 
       // mint shares for a separate member than the summoner
-      await s2Baal.mintShares([applicant.address], [minting])
+      await shamanBaal.mintShares([applicant.address], [minting])
 
       expect(await baal.balanceOf(applicant.address)).to.equal(minting)
       expect(await baal.delegates(applicant.address)).to.equal(applicant.address)
@@ -533,7 +533,7 @@ describe('Baal contract', function () {
 
       // mint shares for the delegator
       await expect(
-        baalAsShaman.mintShares([applicant.address], [minting])
+        shamanBaal.mintShares([applicant.address], [minting])
       ).to.emit(baal, 'DelegateVotesChanged').withArgs(summoner.address, shares + minting, shares + 2 * minting)
 
       expect(await baal.balanceOf(applicant.address)).to.equal(2 * minting)
@@ -542,7 +542,7 @@ describe('Baal contract', function () {
       expect(await baal.getCurrentVotes(summoner.address)).to.equal(shares + 2 * minting)
 
       // burn shares for the delegator
-      await baalAsShaman.burnShares([applicant.address], [minting])
+      await shamanBaal.burnShares([applicant.address], [minting])
 
       expect(await baal.balanceOf(applicant.address)).to.equal(minting)
       expect(await baal.delegates(applicant.address)).to.equal(summoner.address)
