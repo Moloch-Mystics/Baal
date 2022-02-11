@@ -59,7 +59,9 @@ const revertMessages = {
   cancelProposalNotCancellable: '!cancellable',
   baalOrAdmin: '!baal & !admin',
   baalOrManager: '!baal & !manager',
-  baalOrGovernor: '!baal & !governor'
+  baalOrGovernor: '!baal & !governor',
+  permitNotAuthorized: '!authorized',
+  permitExpired: 'expired'
 }
 
 const STATES = {
@@ -1500,6 +1502,82 @@ describe('Baal contract', function () {
       expect(shamanLootToken.transferFrom(summoner.address, shaman.address, 500)).to.be.revertedWith(revertMessages.lootInsufficientApproval)
     })
   })
+
+  describe.only('erc20 loot - increase allowance with permit', function() {
+    it('increase allowance with valid permit', async function() {
+      const deadline = await blockTime() + 10000
+      const nonce = await lootToken.nonces(summoner.address)
+      const permitSignature = await signPermit(chainId,lootToken.address, summoner, await lootToken.name(), summoner.address, shaman.address,500,nonce,deadline)
+      await lootToken.permit(summoner.address, shaman.address, 500, deadline,permitSignature)
+      const shamanAllowance = await lootToken.allowance(summoner.address, shaman.address)
+      expect(shamanAllowance).to.equal(500)
+    })
+
+    it('Require fail -  invalid nonce', async function() {
+      const deadline = await blockTime() + 10000
+      const nonce = await lootToken.nonces(summoner.address)
+      const permitSignature = await signPermit(chainId,lootToken.address, summoner, await lootToken.name(), summoner.address, shaman.address,500,nonce.add(1),deadline)
+      expect(lootToken.permit(summoner.address, shaman.address, 500, deadline,permitSignature)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+    })
+
+    it('Require fail - invalid chain Id', async function() {
+      const deadline = await blockTime() + 10000
+      const nonce = await lootToken.nonces(summoner.address)
+      const permitSignature = await signPermit(420,lootToken.address, summoner, await lootToken.name(), summoner.address, shaman.address,500,nonce,deadline)
+      expect(lootToken.permit(summoner.address, shaman.address, 500, deadline,permitSignature)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+    })
+
+    it('Require fail - invalid name', async function() {
+      const deadline = await blockTime() + 10000
+      const nonce = await lootToken.nonces(summoner.address)
+      const permitSignature = await signPermit(chainId,lootToken.address, summoner, 'invalid', summoner.address, shaman.address,500,nonce,deadline)
+      expect(lootToken.permit(summoner.address, shaman.address, 500, deadline,permitSignature)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+    })
+
+    it('Require fail - invalid address', async function() {
+      const deadline = await blockTime() + 10000
+      const nonce = await lootToken.nonces(summoner.address)
+      const permitSignature = await signPermit(chainId,zeroAddress, summoner, await lootToken.name(), summoner.address, shaman.address,500,nonce,deadline)
+      expect(lootToken.permit(summoner.address, shaman.address, 500, deadline,permitSignature)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+    })
+
+    it('Require fail - invalid owner', async function() {
+      const deadline = await blockTime() + 10000
+      const nonce = await lootToken.nonces(summoner.address)
+      const permitSignature = await signPermit(chainId,lootToken.address, summoner, await lootToken.name(), s1.address, shaman.address,500,nonce,deadline)
+      expect(lootToken.permit(summoner.address, shaman.address, 500, deadline,permitSignature)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+    })
+
+    it('Require fail - invalid spender', async function() {
+      const deadline = await blockTime() + 10000
+      const nonce = await lootToken.nonces(summoner.address)
+      const permitSignature = await signPermit(chainId,lootToken.address, summoner, await lootToken.name(), summoner.address, s1.address,500,nonce,deadline)
+      expect(lootToken.permit(summoner.address, shaman.address, 500, deadline,permitSignature)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+    })
+
+    it('Require fail - invalid amount', async function() {
+      const deadline = await blockTime() + 10000
+      const nonce = await lootToken.nonces(summoner.address)
+      const permitSignature = await signPermit(chainId,lootToken.address, summoner, await lootToken.name(), summoner.address, shaman.address,499,nonce,deadline)
+      expect(lootToken.permit(summoner.address, shaman.address, 500, deadline,permitSignature)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+    })
+
+    it('Require fail - invalid deadline', async function() {
+      const deadline = await blockTime() + 10000
+      const nonce = await lootToken.nonces(summoner.address)
+      const permitSignature = await signPermit(chainId,lootToken.address, summoner, await lootToken.name(), summoner.address, shaman.address,500,nonce,deadline - 1)
+      expect(lootToken.permit(summoner.address, shaman.address, 500, deadline,permitSignature)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+    })
+
+    it('Require fail - expired deadline', async function() {
+      const deadline = await blockTime() - 1
+      const nonce = await lootToken.nonces(summoner.address)
+      const permitSignature = await signPermit(chainId,lootToken.address, summoner, await lootToken.name(), summoner.address, shaman.address,500,nonce,deadline)
+      expect(lootToken.permit(summoner.address, shaman.address, 500, deadline,permitSignature)).to.be.revertedWith(revertMessages.permitExpired)
+    })
+
+  })
+
 
   describe('submitProposal', function () {
     it('happy case', async function () {
