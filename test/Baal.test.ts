@@ -25,6 +25,7 @@ use(solidity)
 
 const revertMessages = {
   molochAlreadyInitialized: 'Initializable: contract is already initialized',
+  lootAlreadyInitialized: 'Initializable: contract is already initialized',
   molochSetupSharesNoShares: 'shares != 0',
   submitProposalExpired: 'expired',
   submitProposalOffering: 'Baal requires an offering',
@@ -47,7 +48,7 @@ const revertMessages = {
   sharesInsufficientApproval: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)',
   lootTransferPaused: '!transferable',
   lootInsufficientBalance: "reverted with reason string 'ERC20: transfer amount exceeds balance'",
-  lootInsufficientApproval: 'ERC20: transfer amount exceeds allowance',
+  lootInsufficientApproval: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)',
   mintSharesArrayParity: '!array parity',
   burnSharesArrayParity: '!array parity',
   burnSharesInsufficientShares: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)',
@@ -347,6 +348,10 @@ describe('Baal contract', function () {
 
     it('require fail - initializer (setup) cant be called twice', async function () {
       expect(baal.setUp(encodedInitParams)).to.be.revertedWith(revertMessages.molochAlreadyInitialized)
+    })
+
+    it('require fail - initializer (setup) cant be called twice on loot', async function () {
+      expect(lootToken.setUp('NAME', 'SYMBOL')).to.be.revertedWith(revertMessages.lootAlreadyInitialized)
     })
   })
 
@@ -1464,7 +1469,7 @@ describe('Baal contract', function () {
       expect(lootToken.transfer(shaman.address, 501)).to.be.revertedWith(revertMessages.lootInsufficientBalance)
     })
   })
-
+  
   describe('erc20 loot - transferFrom', function() {
     it('sends tokens, not votes', async function() {
       await lootToken.approve(shaman.address, 500)
