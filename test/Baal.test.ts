@@ -1503,7 +1503,7 @@ describe('Baal contract', function () {
     })
   })
 
-  describe.only('erc20 loot - increase allowance with permit', function() {
+  describe('erc20 loot - increase allowance with permit', function() {
     it('increase allowance with valid permit', async function() {
       const deadline = await blockTime() + 10000
       const nonce = await lootToken.nonces(summoner.address)
