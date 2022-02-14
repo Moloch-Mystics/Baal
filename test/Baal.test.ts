@@ -645,7 +645,8 @@ describe('Baal contract', function () {
       await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
       await baal.submitVote(1, true)
       await moveForwardPeriods(2)
-      await baal.processProposal(1, proposal.data)
+      await baal.
+      processProposal(1, proposal.data)
       const shamanPermission = await baal.shamans(shaman.address)
       expect(shamanPermission).to.equal(0)
     })
@@ -1695,6 +1696,8 @@ describe('Baal contract', function () {
       expect(priorVotes).to.equal(votes)
       expect(prop.yesVotes).to.equal(votes);
     });
+
+    // TODO - nonces / deadline checks
   })
 
   describe("processProposal", function () {

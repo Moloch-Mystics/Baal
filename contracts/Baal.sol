@@ -70,7 +70,6 @@ contract Baal is Executor, Initializable, CloneFactory {
     // GOVERNANCE PARAMS
     uint32 public votingPeriod; /* voting period in seconds - amendable through 'period'[2] proposal*/
     uint32 public gracePeriod; /*time delay after proposal voting period for processing*/
-    uint32 public proposalCount; /*counter for total `proposals` submitted*/
     uint256 public proposalOffering; /* non-member proposal offering*/
     uint256 public quorumPercent; /* minimum % of shares that must vote yes for it to pass*/
     uint256 public sponsorThreshold; /* minimum number of shares to sponsor a proposal (not %)*/
@@ -92,6 +91,8 @@ contract Baal is Executor, Initializable, CloneFactory {
     7 = admin + manager + governance */
 
     // PROPOSAL TRACKING
+    uint32 public proposalCount; /*counter for total `proposals` submitted*/
+    uint32 public latestSponsoredProposalId; /* the id of the last proposal to be sponsored */
     mapping(address => mapping(uint32 => bool)) public memberVoted; /*maps members to their proposal votes (true = voted) */
     mapping(uint256 => Proposal) public proposals; /*maps `proposal id` to struct details*/
         
@@ -102,7 +103,6 @@ contract Baal is Executor, Initializable, CloneFactory {
 
     // MISCELLANEOUS PARAMS
     uint256 status; /*internal reentrancy check tracking value*/
-    uint32 public latestSponsoredProposalId; /* the id of the last proposal to be sponsored */
     address multisendLibrary; /*address of multisend library*/
 
     // SIGNATURE HELPERS
@@ -128,7 +128,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         // bool cancelled; /* true if proposal is cancelled (by sponsor/govshaman, or with enough undelegations), skips processing */
         // bool processed; /* true if process proposal has been called for this proposal */
         // bool passed; /* yes only if proposal pass and also passed all execution checks at processing time */
-        // bool actionFailed; /*label if proposal processed but action failed TODO gas optimize*/
+        // bool actionFailed; /*label if proposal processed but action failed*/
         address sponsor; /* address of the sponsor - set at sponsor proposal - relevant for cancellation */
         bytes32 proposalDataHash; /*hash of raw data associated with state updates*/
         string details; /*human-readable context for proposal*/
@@ -480,7 +480,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         bool okToExecute = true;
 
         // Make proposal fail if after expiration
-        if (prop.expiration != 0 && prop.expiration < block.timestamp)
+        if (prop.expiration != 0 && prop.expiration > block.timestamp)
             okToExecute = false;
 
         // Make proposal fail if it didn't pass quorum
@@ -934,7 +934,6 @@ contract Baal is Executor, Initializable, CloneFactory {
     // **********************
     // ERC20 SHARES FUNCTIONS
     // **********************
-
     /// @notice Approve `to` to transfer up to `amount`.
     /// @return success Whether or not the approval succeeded.
     function approve(address to, uint256 amount) external returns (bool success) {
