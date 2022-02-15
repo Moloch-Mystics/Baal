@@ -1,4 +1,5 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
+import { BigNumber } from 'ethers'
 
 export default async function signPermit(
   chainId: number,
@@ -7,9 +8,9 @@ export default async function signPermit(
   name: string,
   owner: string,
   spender: string,
-  value: string,
-  nonce: string,
-  deadline: string
+  value: number,
+  nonce: BigNumber,
+  deadline: number
 
 ) {
   const domain = {

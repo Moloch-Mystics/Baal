@@ -16,7 +16,7 @@ export default async function signDelegation(
   }
 
   const types = {
-    Permit: [
+    Delegation: [
       { name: 'delegatee', type: 'address' },
       { name: 'nonce', type: 'uint' },
       { name: 'expiry', type: 'uint' },
