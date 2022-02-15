@@ -480,7 +480,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         bool okToExecute = true; /*Initialize and invalidate if conditions are not met below*/
 
         // Make proposal fail if after expiration
-        if (prop.expiration != 0 && prop.expiration > block.timestamp)
+        if (prop.expiration != 0 && prop.expiration < block.timestamp)
             okToExecute = false;
 
         // Make proposal fail if it didn't pass quorum
@@ -939,6 +939,9 @@ contract Baal is Executor, Initializable, CloneFactory {
         baalOrManagerOnly
     {
         for (uint256 i; i < _tokenIndexes.length; i++) {
+            if (i > 0) {
+                require(_tokenIndexes[i] < _tokenIndexes[i - 1], '!descending');
+            }
             address token = guildTokens[_tokenIndexes[i]];
             guildTokensEnabled[token] = false; // disable the token
             guildTokens[_tokenIndexes[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
