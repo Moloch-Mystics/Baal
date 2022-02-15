@@ -328,24 +328,22 @@ contract Baal is Executor, Initializable, CloneFactory {
 
         bytes32 proposalDataHash = hashOperation(proposalData);
 
-        unchecked {
-            proposalCount++; /*increment proposal counter*/
-            proposals[proposalCount] = Proposal( /*push params into proposal struct - start voting period timer if member submission*/
-                proposalCount,
-                selfSponsor ? latestSponsoredProposalId : 0, /* prevProposalId */
-                selfSponsor ? uint32(block.timestamp) : 0, /* votingStarts */
-                selfSponsor ? uint32(block.timestamp) + votingPeriod : 0, /* votingEnds */
-                selfSponsor ? uint32(block.timestamp) + votingPeriod + gracePeriod : 0, /* graceEnds */
-                expiration, 
-                0, /* yes votes */
-                0, /* no votes */
-                0, /* highestMaxSharesAndLootAtYesVote */
-                [false, false, false, false], /* [cancelled, processed, passed, actionFailed] */
-                selfSponsor ? msg.sender : address(0),
-                proposalDataHash,
-                details
-            );
-        }
+        proposalCount++; /*increment proposal counter*/
+        proposals[proposalCount] = Proposal( /*push params into proposal struct - start voting period timer if member submission*/
+            proposalCount,
+            selfSponsor ? latestSponsoredProposalId : 0, /* prevProposalId */
+            selfSponsor ? uint32(block.timestamp) : 0, /* votingStarts */
+            selfSponsor ? uint32(block.timestamp) + votingPeriod : 0, /* votingEnds */
+            selfSponsor ? uint32(block.timestamp) + votingPeriod + gracePeriod : 0, /* graceEnds */
+            expiration, 
+            0, /* yes votes */
+            0, /* no votes */
+            0, /* highestMaxSharesAndLootAtYesVote */
+            [false, false, false, false], /* [cancelled, processed, passed, actionFailed] */
+            selfSponsor ? msg.sender : address(0),
+            proposalDataHash,
+            details
+        );
 
         if (selfSponsor) {
             latestSponsoredProposalId = proposalCount;
@@ -374,13 +372,11 @@ contract Baal is Executor, Initializable, CloneFactory {
 
         prop.votingStarts = uint32(block.timestamp);
 
-        unchecked {
-            prop.votingEnds = uint32(block.timestamp) + votingPeriod;
-            prop.graceEnds =
-                uint32(block.timestamp) +
-                votingPeriod +
-                gracePeriod;
-        }
+        prop.votingEnds = uint32(block.timestamp) + votingPeriod;
+        prop.graceEnds =
+            uint32(block.timestamp) +
+            votingPeriod +
+            gracePeriod;
 
         prop.prevProposalId = latestSponsoredProposalId;
         prop.sponsor = msg.sender;
@@ -433,17 +429,15 @@ contract Baal is Executor, Initializable, CloneFactory {
         require(balance > 0, "!member"); /* check that user has shares*/
         require(!memberVoted[voter][id], "voted"); /*check vote not already cast*/
 
-        unchecked {
-            if (approved) {
-                /*if `approved`, cast delegated balance `yesVotes` to proposal*/
-                prop.yesVotes += balance;
-                if (totalSupply + totalLoot() > prop.maxTotalSharesAndLootAtYesVote) {
-                    prop.maxTotalSharesAndLootAtYesVote = totalSupply + totalLoot();
-                }
-            } else {
-                /*otherwise, cast delegated balance `noVotes` to proposal*/
-                prop.noVotes += balance;
+        if (approved) {
+            /*if `approved`, cast delegated balance `yesVotes` to proposal*/
+            prop.yesVotes += balance;
+            if (totalSupply + totalLoot() > prop.maxTotalSharesAndLootAtYesVote) {
+                prop.maxTotalSharesAndLootAtYesVote = totalSupply + totalLoot();
             }
+        } else {
+            /*otherwise, cast delegated balance `noVotes` to proposal*/
+            prop.noVotes += balance;
         }
 
         memberVoted[voter][id] = true; /*record voting action to `members` struct per user account*/
@@ -634,9 +628,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         console.log(signatory);
 
         require(signatory != address(0), "!signatory"); /*check signer is not null*/
-        unchecked {
-            require(nonce == nonces[signatory]++, "!nonce"); /*check given `nonce` is next in `nonces`*/
-        }
+        require(nonce == nonces[signatory]++, "!nonce"); /*check given `nonce` is next in `nonces`*/
 
         require(deadline == 0 || deadline < block.timestamp, 'expired');
 
@@ -665,25 +657,24 @@ contract Baal is Executor, Initializable, CloneFactory {
         address dstRep,
         uint256 amount
     ) private {
-        unchecked {
-            if (srcRep != dstRep && amount != 0) {
-                if (srcRep != address(0)) {
-                    uint256 srcRepNum = numCheckpoints[srcRep];
-                    uint256 srcRepOld = srcRepNum != 0
-                        ? checkpoints[srcRep][srcRepNum - 1].votes
-                        : 0;
-                    uint256 srcRepNew = srcRepOld - amount;
-                    _writeCheckpoint(srcRep, srcRepNum, srcRepOld, srcRepNew);
-                }
 
-                if (dstRep != address(0)) {
-                    uint256 dstRepNum = numCheckpoints[dstRep];
-                    uint256 dstRepOld = dstRepNum != 0
-                        ? checkpoints[dstRep][dstRepNum - 1].votes
-                        : 0;
-                    uint256 dstRepNew = dstRepOld + amount;
-                    _writeCheckpoint(dstRep, dstRepNum, dstRepOld, dstRepNew);
-                }
+        if (srcRep != dstRep && amount != 0) {
+            if (srcRep != address(0)) {
+                uint256 srcRepNum = numCheckpoints[srcRep];
+                uint256 srcRepOld = srcRepNum != 0
+                    ? checkpoints[srcRep][srcRepNum - 1].votes
+                    : 0;
+                uint256 srcRepNew = srcRepOld - amount;
+                _writeCheckpoint(srcRep, srcRepNum, srcRepOld, srcRepNew);
+            }
+
+            if (dstRep != address(0)) {
+                uint256 dstRepNum = numCheckpoints[dstRep];
+                uint256 dstRepOld = dstRepNum != 0
+                    ? checkpoints[dstRep][dstRepNum - 1].votes
+                    : 0;
+                uint256 dstRepNew = dstRepOld + amount;
+                _writeCheckpoint(dstRep, dstRepNum, dstRepOld, dstRepNew);
             }
         }
     }
@@ -697,20 +688,18 @@ contract Baal is Executor, Initializable, CloneFactory {
     ) private {
         uint32 timeStamp = uint32(block.timestamp);
 
-        unchecked {
-            if (
-                nCheckpoints != 0 &&
-                checkpoints[delegatee][nCheckpoints - 1].fromTimeStamp ==
-                timeStamp
-            ) {
-                checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
-            } else {
-                checkpoints[delegatee][nCheckpoints] = Checkpoint(
-                    timeStamp,
-                    newVotes
-                );
-                numCheckpoints[delegatee] = nCheckpoints + 1;
-            }
+        if (
+            nCheckpoints != 0 &&
+            checkpoints[delegatee][nCheckpoints - 1].fromTimeStamp ==
+            timeStamp
+        ) {
+            checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
+        } else {
+            checkpoints[delegatee][nCheckpoints] = Checkpoint(
+                timeStamp,
+                newVotes
+            );
+            numCheckpoints[delegatee] = nCheckpoints + 1;
         }
 
         emit DelegateVotesChanged(delegatee, oldVotes, newVotes);
@@ -792,22 +781,20 @@ contract Baal is Executor, Initializable, CloneFactory {
 
         /// @notice Minting function for Baal `shares`.
     function _mintShares(address to, uint256 shares) private {
-        unchecked {
-            if (totalSupply + shares <= type(uint256).max / 2) {
-                /*If recipient is receiving their first shares, auto-self delegate*/
-                if (
-                    balanceOf[to] == 0 && numCheckpoints[to] == 0 && shares > 0
-                ) {
-                    delegates[to] = to;
-                }
-
-                balanceOf[to] += shares; /*add `shares` for `to` account*/
-                totalSupply += shares; /*add to total Baal `shares`*/
-
-                _moveDelegates(address(0), delegates[to], shares); /*update delegation*/
-
-                emit Transfer(address(0), to, shares); /*emit event reflecting mint of `shares` with erc20 accounting*/
+        if (totalSupply + shares <= type(uint256).max / 2) {
+            /*If recipient is receiving their first shares, auto-self delegate*/
+            if (
+                balanceOf[to] == 0 && numCheckpoints[to] == 0 && shares > 0
+            ) {
+                delegates[to] = to;
             }
+
+            balanceOf[to] += shares; /*add `shares` for `to` account*/
+            totalSupply += shares; /*add to total Baal `shares`*/
+
+            _moveDelegates(address(0), delegates[to], shares); /*update delegation*/
+
+            emit Transfer(address(0), to, shares); /*emit event reflecting mint of `shares` with erc20 accounting*/
         }
     }
 
@@ -825,9 +812,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         /// @notice Burn function for Baal `shares`.
     function _burnShares(address from, uint256 shares) private {
         balanceOf[from] -= shares; /*subtract `shares` for `from` account*/
-        unchecked {
-            totalSupply -= shares; /*subtract from total Baal `shares`*/
-        }
+        totalSupply -= shares; /*subtract from total Baal `shares`*/
 
         _moveDelegates(delegates[from], address(0), shares); /*update delegation*/
 
@@ -964,25 +949,22 @@ contract Baal is Executor, Initializable, CloneFactory {
             )
         ); /*calculate EIP-712 domain hash*/
 
-        unchecked {
-            bytes32 structHash = keccak256(
-                abi.encode(
-                    PERMIT_TYPEHASH,
-                    owner,
-                    spender,
-                    amount,
-                    nonces[owner]++,
-                    deadline
-                )
-            ); /*calculate EIP-712 struct hash*/
-            bytes32 digest = keccak256(
-                abi.encodePacked("\x19\x01", domainSeparator, structHash)
-            ); /*calculat
-            e EIP-712 digest for signature*/
+        bytes32 structHash = keccak256(
+            abi.encode(
+                PERMIT_TYPEHASH,
+                owner,
+                spender,
+                amount,
+                nonces[owner]++,
+                deadline
+            )
+        ); /*calculate EIP-712 struct hash*/
+        bytes32 digest = keccak256(
+            abi.encodePacked("\x19\x01", domainSeparator, structHash)
+        ); /*calculate EIP-712 digest for signature*/
         address signatory = digest.recover(signature); /*recover signer from hash data*/
-            require(signatory != address(0), "!signatory"); /*check signer is not null*/
-            require(signatory == owner, "!authorized"); /*check signer is `owner`*/
-        }
+        require(signatory != address(0), "!signatory"); /*check signer is not null*/
+        require(signatory == owner, "!authorized"); /*check signer is `owner`*/
 
         require(block.timestamp <= deadline, "expired"); /*check signature is not expired*/
         allowance[owner][spender] = amount; /*adjust `allowance`*/
@@ -1021,9 +1003,7 @@ contract Baal is Executor, Initializable, CloneFactory {
             delegates[to] = to;
         }
 
-        unchecked {
-            balanceOf[to] += amount;
-        }
+        balanceOf[to] += amount;
 
         _moveDelegates(delegates[from], delegates[to], amount);
 
@@ -1069,11 +1049,9 @@ contract Baal is Executor, Initializable, CloneFactory {
         returns (uint256 votes)
     {
         uint256 nCheckpoints = numCheckpoints[account];
-        unchecked {
-            votes = nCheckpoints != 0
-                ? checkpoints[account][nCheckpoints - 1].votes
-                : 0;
-        }
+        votes = nCheckpoints != 0
+            ? checkpoints[account][nCheckpoints - 1].votes
+            : 0;
     }
 
     /// @notice Returns the prior number of `votes` for `account` as of `timeStamp`.
@@ -1090,23 +1068,21 @@ contract Baal is Executor, Initializable, CloneFactory {
         uint256 nCheckpoints = numCheckpoints[account];
         if (nCheckpoints == 0) return 0;
 
-        unchecked {
-            if (
-                checkpoints[account][nCheckpoints - 1].fromTimeStamp <=
-                timeStamp
-            ) return checkpoints[account][nCheckpoints - 1].votes;
-            if (checkpoints[account][0].fromTimeStamp > timeStamp) return 0;
-            uint256 lower = 0;
-            uint256 upper = nCheckpoints - 1;
-            while (upper > lower) {
-                uint256 center = upper - (upper - lower) / 2;
-                Checkpoint memory cp = checkpoints[account][center];
-                if (cp.fromTimeStamp == timeStamp) return cp.votes;
-                else if (cp.fromTimeStamp < timeStamp) lower = center;
-                else upper = center - 1;
-            }
-            votes = checkpoints[account][lower].votes;
+        if (
+            checkpoints[account][nCheckpoints - 1].fromTimeStamp <=
+            timeStamp
+        ) return checkpoints[account][nCheckpoints - 1].votes;
+        if (checkpoints[account][0].fromTimeStamp > timeStamp) return 0;
+        uint256 lower = 0;
+        uint256 upper = nCheckpoints - 1;
+        while (upper > lower) {
+            uint256 center = upper - (upper - lower) / 2;
+            Checkpoint memory cp = checkpoints[account][center];
+            if (cp.fromTimeStamp == timeStamp) return cp.votes;
+            else if (cp.fromTimeStamp < timeStamp) lower = center;
+            else upper = center - 1;
         }
+        votes = checkpoints[account][lower].votes;
     }
 
     /// @notice Returns array list of approved `guildTokens` in Baal for {ragequit}.
