@@ -2280,7 +2280,7 @@ describe('Baal contract', function () {
 
       await expect(
         submitAndProcessProposal(baal, mintSharesAction, 1)
-      ).to.emit(baal, 'ProcessProposal').withArgs(1)
+      ).to.emit(baal, 'ProcessProposal').withArgs(1, true, false)
 
       expect(await baal.balanceOf(applicant.address)).to.equal(minting)
     })
@@ -2294,7 +2294,7 @@ describe('Baal contract', function () {
 
       await expect(
         submitAndProcessProposal(baal, burnSharesAction, 1)
-      ).to.emit(baal, 'ProcessProposal').withArgs(1)
+      ).to.emit(baal, 'ProcessProposal').withArgs(1, true, false)
 
       expect(await baal.balanceOf(summoner.address)).to.equal(shares - burning)
     })
@@ -2308,7 +2308,7 @@ describe('Baal contract', function () {
 
       await expect(
         submitAndProcessProposal(baal, mintLootAction, 1)
-      ).to.emit(baal, 'ProcessProposal').withArgs(1)
+      ).to.emit(baal, 'ProcessProposal').withArgs(1, true, false)
 
       expect(await lootToken.balanceOf(applicant.address)).to.equal(minting)
     })
@@ -2322,7 +2322,7 @@ describe('Baal contract', function () {
 
       await expect(
         submitAndProcessProposal(baal, burnLootAction, 1)
-      ).to.emit(baal, 'ProcessProposal').withArgs(1)
+      ).to.emit(baal, 'ProcessProposal').withArgs(1, true, false)
 
       expect(await lootToken.balanceOf(summoner.address)).to.equal(loot - burning)
     })
