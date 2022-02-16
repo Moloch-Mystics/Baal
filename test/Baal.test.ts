@@ -30,9 +30,38 @@ const revertMessages = {
   submitProposalFlag: "!flag",
   submitVoteTimeEnded: "ended",
   proposalMisnumbered: "!exist",
+  callFailure: "call failure",
+  initializableAlreadyInitialized: "Initializable: contract is already initialized",
 };
 
 const zeroAddress = "0x0000000000000000000000000000000000000000";
+
+const deploymentConfig = {
+  GRACE_PERIOD_IN_SECONDS: 43200,
+  MIN_VOTING_PERIOD_IN_SECONDS: 172800,
+  MAX_VOTING_PERIOD_IN_SECONDS: 432000,
+  PROPOSAL_OFFERING: 0,
+  TOKEN_NAME: "wrapped ETH",
+  TOKEN_SYMBOL: "WETH",
+};
+
+const deploymentConfigVoteTimeError = {
+  GRACE_PERIOD_IN_SECONDS: 43200,
+  MIN_VOTING_PERIOD_IN_SECONDS: 432000,
+  MAX_VOTING_PERIOD_IN_SECONDS: 172800,
+  PROPOSAL_OFFERING: 0,
+  TOKEN_NAME: "wrapped ETH",
+  TOKEN_SYMBOL: "WETH",
+};
+
+const deploymentConfigGracePeriodError = {
+  GRACE_PERIOD_IN_SECONDS: 0,
+  MIN_VOTING_PERIOD_IN_SECONDS: 432000,
+  MAX_VOTING_PERIOD_IN_SECONDS: 172800,
+  PROPOSAL_OFFERING: 0,
+  TOKEN_NAME: "wrapped ETH",
+  TOKEN_SYMBOL: "WETH",
+};
 
 async function blockTime() {
   const block = await ethers.provider.getBlock("latest");
@@ -44,26 +73,124 @@ async function blockNumber() {
   return block.number;
 }
 
+async function snapshot () {
+  return ethers.provider.send('evm_snapshot', [])
+}
+
+async function restore (snapshotId: number) {
+  return ethers.provider.send('evm_revert', [snapshotId])
+}
+
+async function forceMine () {
+  return ethers.provider.send('evm_mine', [])
+}
+
+
 async function moveForwardPeriods(periods: number) {
   const goToTime = deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS * periods;
   await ethers.provider.send("evm_increaseTime", [goToTime]);
   return true;
 }
 
-const deploymentConfig = {
-  GRACE_PERIOD_IN_SECONDS: 43200,
-  MIN_VOTING_PERIOD_IN_SECONDS: 172800,
-  MAX_VOTING_PERIOD_IN_SECONDS: 432000,
-  PROPOSAL_OFFERING: 0,
-  TOKEN_NAME: "wrapped ETH",
-  TOKEN_SYMBOL: "WETH",
-};
+const createPeriods = function(
+    deploymentConfig: any,
+    lootPaused: boolean, 
+    sharesPaused: boolean)
+  {
+    let abiCoder = ethers.utils.defaultAbiCoder;
+
+    let periods = abiCoder.encode(
+      ["uint32", "uint32", "uint32", "uint256", "bool", "bool"],
+      [
+        deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS,
+        deploymentConfig.MAX_VOTING_PERIOD_IN_SECONDS,
+        deploymentConfig.GRACE_PERIOD_IN_SECONDS,
+        deploymentConfig.PROPOSAL_OFFERING,
+        lootPaused,
+        sharesPaused,
+      ]
+    );
+
+    return periods;
+  }
+
+const encodeBaalInitFunctions = function(
+    baal: Baal,
+    periods: any,
+    wethAddress: string,
+    shamanAddress: string,
+    summonerAddress: string,
+    shares: number,
+    loot: number)
+  {
+
+  let initFunctions = [];
+
+  initFunctions.push(baal.interface.encodeFunctionData(
+    "setPeriods",
+    [periods]
+  ));
+  initFunctions.push(baal.interface.encodeFunctionData(
+    "setGuildTokens",
+    [[wethAddress]]
+  ));
+  initFunctions.push(baal.interface.encodeFunctionData(
+    "setShamans",
+    [
+      [shamanAddress],
+      true,
+    ]
+    ));
+  initFunctions.push(baal.interface.encodeFunctionData(
+    "mintShares", [
+      [summonerAddress],
+      [shares],
+    ]
+    ));
+  
+  initFunctions.push(baal.interface.encodeFunctionData(
+    "mintLoot",
+    [
+      [summonerAddress],
+      [loot],
+    ]
+    ));
+
+  return initFunctions;
+}
+
+const completeInitializationParams = function (multisend: MultiSend, baal: Baal, encodedFunctionDataList: any) {
+  let abiCoder = ethers.utils.defaultAbiCoder;
+  
+  const initalizationActions = encodeMultiAction(
+    multisend,
+    encodedFunctionDataList,
+    Array(encodedFunctionDataList.length).fill(baal.address),
+    Array(encodedFunctionDataList.length).fill(BigNumber.from(0)),
+    Array(encodedFunctionDataList.length).fill(0)
+  );
+
+  let encodedInitParams = abiCoder.encode(
+    ["string", "string", "address", "bytes"],
+    [
+      deploymentConfig.TOKEN_NAME,
+      deploymentConfig.TOKEN_SYMBOL,
+      multisend.address,
+      initalizationActions,
+    ]
+  );
+
+  return encodedInitParams;
+}
 
 describe("Baal contract", function () {
   let baal: Baal;
   let weth: TestErc20;
   let shaman: RageQuitBank;
   let multisend: MultiSend;
+  let encodedInitParams: any;
+  let badEncodedInitParams: any;
+  let snapshotId: number;
 
   let applicant: SignerWithAddress;
   let summoner: SignerWithAddress;
@@ -79,9 +206,12 @@ describe("Baal contract", function () {
   const no = false;
 
   beforeEach(async function () {
+    snapshotId = await snapshot();
+    
     const BaalContract = await ethers.getContractFactory("Baal");
     const ShamanContract = await ethers.getContractFactory("RageQuitBank");
     const MultisendContract = await ethers.getContractFactory("MultiSend");
+
     [summoner, applicant] = await ethers.getSigners();
 
     const ERC20 = await ethers.getContractFactory("TestERC20");
@@ -95,64 +225,23 @@ describe("Baal contract", function () {
 
     const abiCoder = ethers.utils.defaultAbiCoder;
 
-    const periods = abiCoder.encode(
-      ["uint32", "uint32", "uint32", "uint256", "bool", "bool"],
-      [
-        deploymentConfig.MIN_VOTING_PERIOD_IN_SECONDS,
-        deploymentConfig.MAX_VOTING_PERIOD_IN_SECONDS,
-        deploymentConfig.GRACE_PERIOD_IN_SECONDS,
-        deploymentConfig.PROPOSAL_OFFERING,
-        lootPaused,
-        sharesPaused,
-      ]
-    );
+    const periods = createPeriods(deploymentConfig, lootPaused, sharesPaused);
 
-    const setPeriods = await baal.interface.encodeFunctionData("setPeriods", [
+
+    const encodedFunctionDataList = encodeBaalInitFunctions(
+      baal,
       periods,
-    ]);
-    const setGuildTokens = await baal.interface.encodeFunctionData(
-      "setGuildTokens",
-      [[weth.address]]
+      weth.address,
+      shaman.address,
+      summoner.address,
+      shares,
+      loot
     );
-    const setShaman = await baal.interface.encodeFunctionData("setShamans", [
-      [shaman.address],
-      true,
-    ]);
-    const mintShares = await baal.interface.encodeFunctionData("mintShares", [
-      [summoner.address],
-      [shares],
-    ]);
-    const mintLoot = await baal.interface.encodeFunctionData("mintLoot", [
-      [summoner.address],
-      [loot],
-    ]);
+
+    encodedInitParams = completeInitializationParams(multisend, baal, encodedFunctionDataList);
+    
     // const delegateSummoners = await baal.interface.encodeFunctionData('delegateSummoners', [[summoner.address], [summoner.address]])
-
-    const initalizationActions = encodeMultiAction(
-      multisend,
-      [setPeriods, setGuildTokens, setShaman, mintShares, mintLoot],
-      [baal.address, baal.address, baal.address, baal.address, baal.address],
-      [
-        BigNumber.from(0),
-        BigNumber.from(0),
-        BigNumber.from(0),
-        BigNumber.from(0),
-        BigNumber.from(0),
-      ],
-      [0, 0, 0, 0, 0]
-    );
-
-    const encodedInitParams = abiCoder.encode(
-      ["string", "string", "address", "bytes"],
-      [
-        deploymentConfig.TOKEN_NAME,
-        deploymentConfig.TOKEN_SYMBOL,
-        multisend.address,
-        initalizationActions,
-      ]
-    );
-
-    await baal.setUp(encodedInitParams);
+    
 
     await shaman.init(baal.address);
 
@@ -175,9 +264,15 @@ describe("Baal contract", function () {
     };
   });
 
+  afterEach(async function () {
+    await restore(snapshotId);
+  })
+
   describe("constructor", function () {
     it("verify deployment parameters", async function () {
       const now = await blockTime();
+
+      await baal.setUp(encodedInitParams);
 
       const decimals = await baal.decimals();
       expect(decimals).to.equal(18);
@@ -225,6 +320,45 @@ describe("Baal contract", function () {
       const totalLoot = await baal.totalLoot();
       expect(totalLoot).to.equal(500);
     });
+
+    it("require fail - second initialization should fail", async function (){
+      await baal.setUp(encodedInitParams);
+      expect(baal.setUp(encodedInitParams)).to.be.revertedWith(revertMessages.initializableAlreadyInitialized);
+    });
+
+    it("require fail - if min and max voting times are switched", async function (){
+      let periods = createPeriods(deploymentConfigVoteTimeError, lootPaused, sharesPaused);
+
+      let encodedFunctionDataList = encodeBaalInitFunctions(
+        baal,
+        periods,
+        weth.address,
+        shaman.address,
+        summoner.address,
+        shares,
+        loot
+      );
+
+      encodedInitParams = completeInitializationParams(multisend, baal, encodedFunctionDataList);
+      expect(baal.setUp(encodedInitParams)).to.be.revertedWith(revertMessages.initializableAlreadyInitialized);
+    });
+
+    it("require fail - grace period negative", async function (){
+      let periods = createPeriods(deploymentConfigGracePeriodError, lootPaused, sharesPaused);
+
+      let encodedFunctionDataList = encodeBaalInitFunctions(
+        baal,
+        periods,
+        weth.address,
+        shaman.address,
+        summoner.address,
+        shares,
+        loot
+      );
+
+      encodedInitParams = completeInitializationParams(multisend, baal, encodedFunctionDataList);
+      expect(baal.setUp(encodedInitParams)).to.be.revertedWith(revertMessages.initializableAlreadyInitialized);
+    });
   });
 
   // describe('memberAction', function () {
@@ -242,6 +376,9 @@ describe("Baal contract", function () {
   // })
 
   describe("submitProposal", function () {
+    beforeEach(async function () {
+      await baal.setUp(encodedInitParams);
+    });
     it("happy case", async function () {
       const countBefore = await baal.proposalCount();
 
@@ -281,6 +418,7 @@ describe("Baal contract", function () {
 
   describe("submitVote", function () {
     beforeEach(async function () {
+      await baal.setUp(encodedInitParams);
       await baal.submitProposal(
         proposal.votingPeriod,
         proposal.data,
@@ -322,6 +460,10 @@ describe("Baal contract", function () {
   });
 
   describe("processProposal", function () {
+    beforeEach(async function () {
+      await baal.setUp(encodedInitParams);
+    });
+
     it("happy case yes wins", async function () {
       const beforeProcessed = await baal.proposals(1);
       await baal.submitProposal(
@@ -413,6 +555,7 @@ describe("Baal contract", function () {
 
   describe("ragequit", function () {
     beforeEach(async function () {
+      await baal.setUp(encodedInitParams);
       await baal.submitProposal(
         proposal.votingPeriod,
         proposal.data,
@@ -447,6 +590,10 @@ describe("Baal contract", function () {
   });
 
   describe("getCurrentVotes", function () {
+    beforeEach(async function () {
+      await baal.setUp(encodedInitParams);
+    });
+
     it("happy case - account with votes", async function () {
       const currentVotes = await baal.getCurrentVotes(summoner.address);
       const nCheckpoints = await baal.numCheckpoints(summoner.address);
@@ -466,6 +613,7 @@ describe("Baal contract", function () {
 
   describe("getPriorVotes", function () {
     beforeEach(async function () {
+      await baal.setUp(encodedInitParams);
       await baal.submitProposal(
         proposal.votingPeriod,
         proposal.data,
