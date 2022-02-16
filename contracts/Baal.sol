@@ -1292,7 +1292,7 @@ contract Baal is Executor, Initializable, CloneFactory {
 }
 
 contract BaalFactory is CloneFactory {
-    address payable immutable public template; // fixed template for minion using eip-1167 proxy pattern
+    address payable immutable public template; // fixed template for baal using eip-1167 proxy pattern
     
     event SummonBaal(address indexed baal, address indexed loot);
     
