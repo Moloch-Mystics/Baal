@@ -31,20 +31,23 @@ contract Loot is ERC20, Initializable {
         );
 
     // Baal Config
-    IBaal baal;
+    IBaal public baal;
 
     modifier baalOnly() {
         require(msg.sender == address(baal), "!auth");
         _;
     }
 
-    constructor() ERC20("Template", "T") {} /*Configure template to be unusable*/
+    constructor() ERC20("Template", "T") initializer {} /*Configure template to be unusable*/
 
     /// @notice Configure loot - called by Baal on summon
     /// @dev initializer should prevent this from being called again
     /// @param name_ Name for ERC20 token trackers
     /// @param symbol_ Symbol for ERC20 token trackers
-    function setUp(string memory name_, string memory symbol_) public initializer {
+    function setUp(string memory name_, string memory symbol_)
+        public
+        initializer
+    {
         baal = IBaal(msg.sender); /*Configure Baal to setup sender*/
         _name = name_;
         _symbol = symbol_;
@@ -79,7 +82,6 @@ contract Loot is ERC20, Initializable {
 
         return true;
     }
-
 
     /// @notice Baal-only function to mint loot.
     /// @param recipient Address to receive loot
@@ -143,6 +145,7 @@ contract Loot is ERC20, Initializable {
     }
 
     /// @notice Internal hook to restrict token transfers unless allowed by baal
+    /// @dev Allows transfers if msg.sender is Baal which enables minting and burning
     /// @param from The address of the source account.
     /// @param to The address of the destination account.
     /// @param amount The number of `loot` tokens to transfer.
@@ -153,7 +156,9 @@ contract Loot is ERC20, Initializable {
     ) internal override(ERC20) {
         super._beforeTokenTransfer(from, to, amount);
         require(
-            from == address(0) || to == address(0) || !baal.lootPaused(),
+            from == address(0) || /*Minting allowed*/
+                (msg.sender == address(baal) && to == address(0)) || /*Burning by Baal allowed*/
+                !baal.lootPaused(),
             "!transferable"
         );
     }
