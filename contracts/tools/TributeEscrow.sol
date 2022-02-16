@@ -20,7 +20,7 @@ contract TributeEscrow {
         address recipient,
         uint32 proposalId,
         address escrow
-    ) public view returns (bytes memory) {
+    ) public pure returns (bytes memory) {
         // Workaround for solidity dynamic memory array
         address[] memory _recipients = new address[](1);
         _recipients[0] = recipient;

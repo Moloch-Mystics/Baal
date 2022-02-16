@@ -15,8 +15,6 @@ import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./LootERC20.sol";
 
-import "hardhat/console.sol";
-
 interface ILoot {
     function setUp(string memory _name, string memory _symbol) external;
     function mint(address recipient, uint256 amount) external;
@@ -649,7 +647,6 @@ contract Baal is Executor, Initializable, CloneFactory {
             abi.encodePacked("\x19\x01", domainSeparator, structHash)
         ); /*calculate EIP-712 digest for signature*/
         address signatory = digest.recover(signature); /*recover signer from hash data*/
-        console.log(signatory);
 
         require(signatory != address(0), "!signatory"); /*check signer is not null*/
         unchecked {
@@ -666,7 +663,6 @@ contract Baal is Executor, Initializable, CloneFactory {
     /// @param delegatee The address to delegate 'votes' to.
     function _delegate(address delegator, address delegatee) private {
         require(balanceOf[delegator] > 0, "!shares");
-        uint32 timestamp = uint32(block.timestamp);
         address currentDelegate = delegates[delegator];
         delegates[delegator] = delegatee;
 
@@ -1292,5 +1288,29 @@ contract Baal is Executor, Initializable, CloneFactory {
             success && (data.length == 0 || abi.decode(data, (bool))),
             "transferFrom failed"
         ); /*checks success & allows non-conforming transfers*/
+    }
+}
+
+contract BaalFactory is CloneFactory {
+    address payable immutable public template; // fixed template for minion using eip-1167 proxy pattern
+    
+    event SummonBaal(address indexed baal, address indexed loot);
+    
+    
+    constructor(address payable _template) {
+        template = _template;
+    }
+    
+    function summonBaal(bytes memory initializationParams) external returns (address) {
+        Baal baal = Baal(payable(createClone(template)));
+        
+        baal.setUp(initializationParams);
+        
+        address loot = address(baal.lootToken());
+        
+        emit SummonBaal(address(baal), loot);
+        
+        return(address(baal));
+        
     }
 }

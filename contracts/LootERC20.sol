@@ -151,6 +151,7 @@ contract Loot is ERC20, Initializable {
         address to,
         uint256 amount
     ) internal override(ERC20) {
+        super._beforeTokenTransfer(from, to, amount);
         require(
             from == address(0) || to == address(0) || !baal.lootPaused(),
             "!transferable"
