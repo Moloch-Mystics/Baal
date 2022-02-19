@@ -5,6 +5,7 @@ import "hardhat-gas-reporter"
 import "@nomiclabs/hardhat-etherscan";
 import "solidity-coverage";
 import "hardhat-typechain";
+import "hardhat-contract-sizer";
 
 /**
  * @type import('hardhat/config').HardhatUserConfig
@@ -15,7 +16,7 @@ const config: HardhatUserConfig = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 283
+        runs: 5
       }
     }
   },

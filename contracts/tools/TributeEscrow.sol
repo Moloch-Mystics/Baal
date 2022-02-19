@@ -4,12 +4,17 @@ import "../Baal.sol";
 
 import "hardhat/console.sol";
 
+interface IERC20 {
+    function transferFrom(address from, address to, uint256 value) external returns (bool);
+}
+
 contract TributeEscrow {
     struct Escrow {
         address token;
         address applicant;
         uint256 amount;
         bool released;
+        address safe;
     }
     mapping(address => mapping(uint256 => Escrow)) escrows;
 
@@ -109,24 +114,29 @@ contract TributeEscrow {
             token,
             recipient,
             amount,
-            false
+            false,
+            baal.target()
         );
         baal.submitProposal(encodedProposal, expiration, details);
     }
 
     function releaseEscrow(uint32 proposalId) external {
-        Baal baal = Baal(payable(msg.sender));
+        console.log("releasing");
+        Baal baal = Baal(msg.sender);
         Escrow storage escrow = escrows[address(baal)][proposalId];
         require(!escrow.released, "Already released");
+        console.log("releasing1b");
 
         bool[4] memory status = baal.getProposalStatus(proposalId);
+        console.log("releasing1c");
         require(status[2], "Not passed");
         escrow.released = true;
 
         IERC20 token = IERC20(escrow.token);
+        console.log("releasing2");
 
         require(
-            token.transferFrom(escrow.applicant, address(baal), escrow.amount),
+            token.transferFrom(escrow.applicant, escrow.safe, escrow.amount),
             "Transfer failed"
         );
     }

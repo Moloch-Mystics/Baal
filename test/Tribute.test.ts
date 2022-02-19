@@ -11,9 +11,12 @@ import { decodeMultiAction, encodeMultiAction } from '../src/util'
 import { BigNumber } from '@ethersproject/bignumber'
 import { buildContractCall } from '@gnosis.pm/safe-contracts'
 import { MultiSend } from '../src/types/MultiSend'
-import { ContractFactory } from 'ethers'
+import { CompatibilityFallbackHandler } from '../src/types/CompatibilityFallbackHandler'
+import { ContractFactory, ContractTransaction } from 'ethers'
 import { ConfigExtender } from 'hardhat/types'
 import { Test } from 'mocha'
+import { BaalSummoner } from '../src/types/BaalSummoner'
+import { GnosisSafe } from '../src/types/GnosisSafe'
 
 use(solidity)
 
@@ -64,6 +67,15 @@ async function moveForwardPeriods(periods: number, extra?: number) {
   const goToTime = (await blockTime()) + (deploymentConfig.VOTING_PERIOD_IN_SECONDS * periods) + (extra ? extra : 0)
   await ethers.provider.send("evm_mine", [goToTime])
   return true
+}
+const getNewBaalAddresses = async (tx: ContractTransaction): Promise<{ baal: string; loot: string; safe: string }> => {
+  const receipt = await ethers.provider.getTransactionReceipt(tx.hash)
+  // console.log({logs: receipt.logs})
+  let baalSummonAbi = ['event SummonBaal(address indexed baal, address indexed loot, address indexed safe)']
+  let iface = new ethers.utils.Interface(baalSummonAbi)
+  let log = iface.parseLog(receipt.logs[receipt.logs.length - 1])
+  const { baal, loot, safe } = log.args
+  return { baal, loot, safe }
 }
 
 const deploymentConfig = {
@@ -120,19 +132,24 @@ const getBaalParams = async function (
   const mintShares = await baal.interface.encodeFunctionData('mintShares', shares)
   const mintLoot = await baal.interface.encodeFunctionData('mintLoot', loots)
 
-  const initalizationActions = encodeMultiAction(
-    multisend,
-    [setAdminConfig, setGovernanceConfig, setGuildTokens, setShaman, mintShares, mintLoot],
-    [baal.address, baal.address, baal.address, baal.address, baal.address, baal.address],
-    [BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0)],
-    [0, 0, 0, 0, 0, 0]
-  )
+  const initalizationActions = [setAdminConfig, setGovernanceConfig, setGuildTokens, setShaman, mintShares, mintLoot]
 
-  return abiCoder.encode(
-    ['string', 'string', 'address', 'address', 'bytes'],
-    [config.TOKEN_NAME, config.TOKEN_SYMBOL, lootSingleton.address, multisend.address, initalizationActions]
-  )
+  // const initalizationActionsMulti = encodeMultiAction(
+  //   multisend,
+  //   [setAdminConfig, setGovernanceConfig, setGuildTokens, setShaman, mintShares, mintLoot],
+  //   [baal.address, baal.address, baal.address, baal.address, baal.address, baal.address],
+  //   [BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0)],
+  //   [0, 0, 0, 0, 0, 0]
+  // )
+  return {
+    initParams: abiCoder.encode(
+      ['string', 'string', 'address', 'address'],
+      [config.TOKEN_NAME, config.TOKEN_SYMBOL, lootSingleton.address, multisend.address]
+    ),
+    initalizationActions,
+  }
 }
+
 
 describe('Tribute proposal type', function () {
   let baal: Baal
@@ -146,6 +163,12 @@ describe('Tribute proposal type', function () {
   let weth: TestErc20
   let applicantWeth: TestErc20
   let multisend: MultiSend
+
+  let BaalFactory: ContractFactory
+  let baalSingleton: Baal
+  let baalSummoner: BaalSummoner
+  let gnosisSafeSingleton: GnosisSafe
+  let gnosisSafe: GnosisSafe
 
   // shaman baals, to test permissions
   let s1Baal: Baal
@@ -180,9 +203,14 @@ describe('Tribute proposal type', function () {
   this.beforeAll(async function () {
     LootFactory = await ethers.getContractFactory('Loot')
     lootSingleton = (await LootFactory.deploy()) as Loot
+    BaalFactory = await ethers.getContractFactory('Baal')
+    baalSingleton = (await BaalFactory.deploy()) as Baal
   })
 
   beforeEach(async function () {
+    const GnosisSafe = await ethers.getContractFactory('GnosisSafe')
+    const BaalSummoner = await ethers.getContractFactory('BaalSummoner')
+    const CompatibilityFallbackHandler = await ethers.getContractFactory('CompatibilityFallbackHandler')
     const BaalContract = await ethers.getContractFactory('Baal')
     const MultisendContract = await ethers.getContractFactory('MultiSend')
     ;[summoner, applicant, shaman, s1, s2, s3, s4, s5, s6] = await ethers.getSigners()
@@ -194,19 +222,12 @@ describe('Tribute proposal type', function () {
     await weth.transfer(applicant.address, 1000)
 
     multisend = (await MultisendContract.deploy()) as MultiSend
-
-    baal = (await BaalContract.deploy()) as Baal
-    shamanBaal = baal.connect(shaman) // needed to send txns to baal as the shaman
-    applicantBaal = baal.connect(applicant) // needed to send txns to baal as the shaman
-    s1Baal = baal.connect(s1)
-    s2Baal = baal.connect(s2)
-    s3Baal = baal.connect(s3)
-    s4Baal = baal.connect(s4)
-    s5Baal = baal.connect(s5)
-    s6Baal = baal.connect(s6)
+    gnosisSafeSingleton = (await GnosisSafe.deploy()) as GnosisSafe
+    const handler = (await CompatibilityFallbackHandler.deploy()) as CompatibilityFallbackHandler
+    baalSummoner = (await BaalSummoner.deploy(baalSingleton.address, gnosisSafeSingleton.address, handler.address, multisend.address)) as BaalSummoner
 
     encodedInitParams = await getBaalParams(
-      baal,
+      baalSingleton,
       multisend,
       lootSingleton,
       deploymentConfig,
@@ -216,8 +237,20 @@ describe('Tribute proposal type', function () {
       [[summoner.address], [shares]],
       [[summoner.address], [loot]]
     )
+    const tx = await baalSummoner.summonBaalAndSafe(encodedInitParams.initParams, encodedInitParams.initalizationActions, 101)
+    const addresses = await getNewBaalAddresses(tx)
 
-    await baal.setUp(encodedInitParams)
+    baal = BaalFactory.attach(addresses.baal) as Baal
+    gnosisSafe = BaalFactory.attach(addresses.safe) as GnosisSafe
+    shamanBaal = baal.connect(shaman) // needed to send txns to baal as the shaman
+    applicantBaal = baal.connect(applicant) // needed to send txns to baal as the shaman
+    s1Baal = baal.connect(s1)
+    s2Baal = baal.connect(s2)
+    s3Baal = baal.connect(s3)
+    s4Baal = baal.connect(s4)
+    s5Baal = baal.connect(s5)
+    s6Baal = baal.connect(s6)
+
 
     const lootTokenAddress = await baal.lootToken()
 
@@ -237,12 +270,12 @@ describe('Tribute proposal type', function () {
 
   describe('Dangerous proposal tribute', function () {
     it('Allows applicant to tribute tokens in exchagne for shares', async function () {
-      expect(await weth.balanceOf(baal.address)).to.equal(0)
+      expect(await weth.balanceOf(gnosisSafe.address)).to.equal(0)
 
-      await applicantWeth.approve(baal.address, 100)
+      await applicantWeth.approve(gnosisSafe.address, 100)
 
       const mintShares = await baal.interface.encodeFunctionData('mintShares', [[applicant.address], [100]])
-      const sendTribute = await applicantWeth.interface.encodeFunctionData('transferFrom', [applicant.address, baal.address, 100])
+      const sendTribute = await applicantWeth.interface.encodeFunctionData('transferFrom', [applicant.address, gnosisSafe.address, 100])
 
       const encodedProposal = encodeMultiAction(
         multisend,
@@ -257,7 +290,7 @@ describe('Tribute proposal type', function () {
       await baal.submitVote(1, yes)
       await moveForwardPeriods(2)
       await baal.processProposal(1, encodedProposal)
-      expect(await weth.balanceOf(baal.address)).to.equal(100)
+      expect(await weth.balanceOf(gnosisSafe.address)).to.equal(100)
       expect(await baal.balanceOf(applicant.address)).to.equal(100)
     })
 
@@ -292,12 +325,12 @@ describe('Tribute proposal type', function () {
       // // await baal.processProposal(2, maliciousProposal)
       // expect(await weth.balanceOf(baal.address)).to.equal(100)
       // expect(await baal.balanceOf(applicant.address)).to.equal(0)
-      expect(await weth.balanceOf(baal.address)).to.equal(0)
+      expect(await weth.balanceOf(gnosisSafe.address)).to.equal(0)
 
-      await applicantWeth.approve(baal.address, 100)
+      await applicantWeth.approve(gnosisSafe.address, 100)
 
       const mintShares = await baal.interface.encodeFunctionData('mintShares', [[applicant.address], [100]])
-      const sendTribute = await applicantWeth.interface.encodeFunctionData('transferFrom', [applicant.address, baal.address, 100])
+      const sendTribute = await applicantWeth.interface.encodeFunctionData('transferFrom', [applicant.address, gnosisSafe.address, 100])
 
       const encodedProposal = encodeMultiAction(
         multisend,
@@ -316,10 +349,7 @@ describe('Tribute proposal type', function () {
       await moveForwardPeriods(2)
       // await baal.processProposal(1, encodedProposal)
       await baal.processProposal(2, maliciousProposal)
-      const afterProcessed = await baal.proposals(1);
-      const afterStatus = await baal.getProposalStatus(1)
-      console.log({afterProcessed, afterStatus})
-      expect(await weth.balanceOf(baal.address)).to.equal(100)
+      expect(await weth.balanceOf(gnosisSafe.address)).to.equal(100)
       expect(await baal.balanceOf(applicant.address)).to.equal(0)
     })
   })
@@ -343,7 +373,10 @@ describe('Tribute proposal type', function () {
       const decoded = decodeMultiAction(multisend, encodedProposal)
 
       await baal.processProposal(1, encodedProposal)
-      expect(await weth.balanceOf(baal.address)).to.equal(100)
+      const state = await baal.state(1)
+      const propStatus = await baal.getProposalStatus(1)
+      console.log({state, propStatus})
+      expect(await weth.balanceOf(gnosisSafe.address)).to.equal(100)
       expect(await baal.balanceOf(applicant.address)).to.equal(100)
     })
   })

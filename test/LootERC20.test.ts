@@ -36,7 +36,7 @@ async function blockNumber() {
   return block.number
 }
 
-describe.only('Loot ERC20 contract', async function () {
+describe('Loot ERC20 contract', async function () {
   let lootSingleton: Loot
   let LootFactory: ContractFactory
   let MockBaalFactory: ContractFactory
