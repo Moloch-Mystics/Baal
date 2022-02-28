@@ -622,6 +622,17 @@ contract Baal is CloneFactory, Module {
         emit CancelProposal(id);
     }
 
+    /// @dev Function to Execute arbitrary code as baal - useful if funds are accidentally sent here
+    /// @notice Can only be called by the avatar which means this can only be called if passed by another
+    ///     proposal or by a delegated signer on the Safe
+    /// @param _to address to call
+    /// @param _value value to include in wei
+    /// @param _data arbitrary transaction data
+    function executeAsBaal(address _to, uint256 _value, bytes calldata _data) external baalOnly {
+        (bool success,) = _to.call{value: _value}(_data);
+        require(success, "call failure");
+    }
+
     // ****************
     // MEMBER FUNCTIONS
     // ****************
@@ -1516,5 +1527,3 @@ contract BaalSummoner is ModuleProxyFactory {
 }
 
 // Exec as Baal helper
-// Wrap RQ with exec
-// fwd proposal offering
