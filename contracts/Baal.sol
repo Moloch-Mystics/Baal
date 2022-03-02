@@ -1416,17 +1416,6 @@ contract BaalSummoner is ModuleProxyFactory {
     // Contract to emit and index metadata
     address public immutable poster;
 
-    struct Dao {
-        address summoner;
-        address baal;
-        address loot;
-        address avatar;
-        bool newSafe;
-    }
-
-    mapping(uint256 => Dao) public baals;
-    uint256 public daoIdx = 0;
-
     event SummonBaal(
         address indexed baal,
         address indexed loot,
@@ -1480,15 +1469,6 @@ contract BaalSummoner is ModuleProxyFactory {
         _poster.post(_details, "daohaus.metadata.summoner");
 
         address loot = address(_baal.lootToken());
-
-        daoIdx = daoIdx + 1;
-        baals[daoIdx] = Dao(
-            msg.sender,
-            address(_baal),
-            address(loot),
-            _safe,
-            false
-        );
 
         emit SummonBaal(address(_baal), loot, address(_safe));
 
@@ -1577,15 +1557,6 @@ contract BaalSummoner is ModuleProxyFactory {
         _baal.setUp(_initializer);
 
         address loot = address(_baal.lootToken());
-
-        daoIdx = daoIdx + 1;
-        baals[daoIdx] = Dao(
-            msg.sender,
-            address(_baal),
-            address(loot),
-            address(_safe),
-            false
-        );
 
         _poster.post(_details, "daohaus.metadata.summoner");
 
