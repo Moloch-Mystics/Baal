@@ -19,6 +19,12 @@ import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
 
 import "hardhat/console.sol";
 
+interface IPoster {
+    event NewPost(address indexed user, string content);
+
+    function post(string memory content) external;
+}
+
 interface ILoot {
     function setUp(string memory _name, string memory _symbol) external;
 
@@ -1444,8 +1450,12 @@ contract BaalSummoner is ModuleProxyFactory {
     function summonBaalAndSafe(
         bytes calldata initializationParams,
         bytes[] calldata initializationActions,
-        uint256 _saltNonce
+        uint256 _saltNonce,
+        address _poster,
+        string calldata _details
     ) external returns (address) {
+        IPoster poster = IPoster(_poster);
+
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
             string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
@@ -1519,6 +1529,8 @@ contract BaalSummoner is ModuleProxyFactory {
         _baal.setUp(_initializer);
 
         address loot = address(_baal.lootToken());
+
+        poster.post(_details);
 
         emit SummonBaal(address(_baal), loot, address(_safe));
 
