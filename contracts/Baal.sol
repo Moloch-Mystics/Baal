@@ -1436,6 +1436,11 @@ contract BaalSummoner is ModuleProxyFactory {
         poster = _poster;
     }
 
+    function postMetadata(string calldata _details) public {
+        IPoster _poster = IPoster(poster);
+        _poster.post(_details, "daohaus.metadata.summoner");
+    }
+
     function encodeMultisend(bytes[] memory _calls, address _target)
         public
         pure
@@ -1458,22 +1463,21 @@ contract BaalSummoner is ModuleProxyFactory {
         );
     }
 
-    function summonBaal(
-        address _safe,
-        string calldata _details
-    ) external returns (address) {
-        IPoster _poster = IPoster(poster);
-
+    function summonBaal(address _safe, string calldata _details)
+        external
+        returns (address)
+    {
         Baal _baal = Baal(_safe);
 
-        _poster.post(_details, "daohaus.metadata.summoner");
+        postMetadata(_details);
 
-        address loot = address(_baal.lootToken());
-
-        emit SummonBaal(address(_baal), loot, address(_safe));
+        emit SummonBaal(
+            address(_baal),
+            address(_baal.lootToken()),
+            address(_safe)
+        );
 
         return (address(_baal));
-
     }
 
     function summonBaalAndSafe(
@@ -1482,8 +1486,6 @@ contract BaalSummoner is ModuleProxyFactory {
         uint256 _saltNonce,
         string calldata _details
     ) external returns (address) {
-        IPoster _poster = IPoster(poster);
-
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
             string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
@@ -1556,11 +1558,13 @@ contract BaalSummoner is ModuleProxyFactory {
 
         _baal.setUp(_initializer);
 
-        address loot = address(_baal.lootToken());
+        postMetadata(_details);
 
-        _poster.post(_details, "daohaus.metadata.summoner");
-
-        emit SummonBaal(address(_baal), loot, address(_safe));
+        emit SummonBaal(
+            address(_baal),
+            address(_baal.lootToken()),
+            address(_safe)
+        );
 
         return (address(_baal));
     }
