@@ -1477,7 +1477,7 @@ contract BaalSummoner is ModuleProxyFactory {
 
         Baal _baal = Baal(_safe);
 
-        _poster.post(_details, "daohaus.summon.metadata");
+        _poster.post(_details, "daohaus.metadata.summoner");
 
         address loot = address(_baal.lootToken());
 
@@ -1587,7 +1587,7 @@ contract BaalSummoner is ModuleProxyFactory {
             false
         );
 
-        _poster.post(_details, "daohaus.summon.metadata");
+        _poster.post(_details, "daohaus.metadata.summoner");
 
         emit SummonBaal(address(_baal), loot, address(_safe));
 
