@@ -634,8 +634,12 @@ contract Baal is CloneFactory, Module {
     /// @param _to address to call
     /// @param _value value to include in wei
     /// @param _data arbitrary transaction data
-    function executeAsBaal(address _to, uint256 _value, bytes calldata _data) external baalOnly {
-        (bool success,) = _to.call{value: _value}(_data);
+    function executeAsBaal(
+        address _to,
+        uint256 _value,
+        bytes calldata _data
+    ) external baalOnly {
+        (bool success, ) = _to.call{value: _value}(_data);
         require(success, "call failure");
     }
 
@@ -698,7 +702,7 @@ contract Baal is CloneFactory, Module {
             /*gas optimization*/
             _burnShares(msg.sender, sharesToBurn); /*subtract `shares` from user account & Baal totals with erc20 accounting*/
         }
-        
+
         for (uint256 i; i < tokens.length; i++) {
             (, bytes memory balanceData) = tokens[i].staticcall(
                 abi.encodeWithSelector(0x70a08231, address(target))
@@ -711,7 +715,6 @@ contract Baal is CloneFactory, Module {
             if (amountToRagequit != 0) {
                 /*gas optimization to allow higher maximum token limit*/
                 _safeTransfer(tokens[i], to, amountToRagequit); /*execute 'safe' token transfer*/
-
             }
         }
 
@@ -1399,7 +1402,6 @@ contract Baal is CloneFactory, Module {
 }
 
 contract BaalSummoner is ModuleProxyFactory {
-
     address payable public immutable template; // fixed template for baal using eip-1167 proxy pattern
 
     // Template contract to use for new Gnosis safe proxies
@@ -1411,18 +1413,38 @@ contract BaalSummoner is ModuleProxyFactory {
     // Library to use for all safe transaction executions
     address public immutable gnosisMultisendLibrary;
 
-    event SummonBaal(address indexed baal, address indexed loot, address indexed safe);
+    // Contract to emit and index metadata
+    address public immutable poster;
+
+    struct Dao {
+        address summoner;
+        address baal;
+        address loot;
+        address avatar;
+        bool newSafe;
+    }
+
+    mapping(uint256 => Dao) public baals;
+    uint256 public daoIdx = 0;
+
+    event SummonBaal(
+        address indexed baal,
+        address indexed loot,
+        address indexed safe
+    );
 
     constructor(
         address payable _template,
         address _gnosisSingleton,
         address _gnosisFallbackLibrary,
-        address _gnosisMultisendLibrary
+        address _gnosisMultisendLibrary,
+        address _poster
     ) {
         template = _template;
         gnosisSingleton = _gnosisSingleton;
         gnosisFallbackLibrary = _gnosisFallbackLibrary;
         gnosisMultisendLibrary = _gnosisMultisendLibrary;
+        poster = _poster;
     }
 
     function encodeMultisend(bytes[] memory _calls, address _target)
@@ -1447,14 +1469,40 @@ contract BaalSummoner is ModuleProxyFactory {
         );
     }
 
+    function summonBaal(
+        address _safe,
+        string calldata _details
+    ) external returns (address) {
+        IPoster _poster = IPoster(poster);
+
+        Baal _baal = Baal(_safe);
+
+        _poster.post(_details, "daohaus.summon.metadata");
+
+        address loot = address(_baal.lootToken());
+
+        daoIdx = daoIdx + 1;
+        baals[daoIdx] = Dao(
+            msg.sender,
+            address(_baal),
+            address(loot),
+            _safe,
+            false
+        );
+
+        emit SummonBaal(address(_baal), loot, address(_safe));
+
+        return (address(_baal));
+
+    }
+
     function summonBaalAndSafe(
         bytes calldata initializationParams,
         bytes[] calldata initializationActions,
         uint256 _saltNonce,
-        address _poster,
         string calldata _details
     ) external returns (address) {
-        IPoster poster = IPoster(_poster);
+        IPoster _poster = IPoster(poster);
 
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
@@ -1483,7 +1531,7 @@ contract BaalSummoner is ModuleProxyFactory {
             initializationActions,
             address(_baal)
         );
-        
+
         // Generate delegate calls so the safe calls enableModule on itself during setup
         bytes memory _enableBaal = abi.encodeWithSignature(
             "enableModule(address)",
@@ -1530,7 +1578,16 @@ contract BaalSummoner is ModuleProxyFactory {
 
         address loot = address(_baal.lootToken());
 
-        poster.post(_details, "daohaus.summon.metadata");
+        daoIdx = daoIdx + 1;
+        baals[daoIdx] = Dao(
+            msg.sender,
+            address(_baal),
+            address(loot),
+            address(_safe),
+            false
+        );
+
+        _poster.post(_details, "daohaus.summon.metadata");
 
         emit SummonBaal(address(_baal), loot, address(_safe));
 
