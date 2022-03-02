@@ -20,9 +20,9 @@ import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
 import "hardhat/console.sol";
 
 interface IPoster {
-    event NewPost(address indexed user, string content);
+    event NewPost(address indexed user, string content, string tag);
 
-    function post(string memory content) external;
+    function post(string memory content, string memory tag) external;
 }
 
 interface ILoot {
@@ -1530,7 +1530,7 @@ contract BaalSummoner is ModuleProxyFactory {
 
         address loot = address(_baal.lootToken());
 
-        poster.post(_details);
+        poster.post(_details, "daohaus.summon.metadata");
 
         emit SummonBaal(address(_baal), loot, address(_safe));
 
