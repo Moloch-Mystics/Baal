@@ -76,8 +76,6 @@ contract Baal is CloneFactory, Module {
     bool public sharesPaused; /*tracks transferability of erc20 `shares` - amendable through 'period'[2] proposal*/
 
     // MANAGER PARAMS
-    address[] guildTokens; /*array of default erc20 tokens to withdraw on ragequit */
-    mapping(address => bool) public guildTokensEnabled; /*maps guild token addresses -> enabled status (prevents duplicates in guildTokens[]) */
 
     // GOVERNANCE PARAMS
     uint32 public votingPeriod; /* voting period in seconds - amendable through 'period'[2] proposal*/
@@ -216,7 +214,6 @@ contract Baal is CloneFactory, Module {
         uint256 minRetentionPercent,
         string name,
         string symbol,
-        address[] guildTokens,
         uint256 totalShares,
         uint256 totalLoot
     ); /*emits after Baal summoning*/
@@ -277,7 +274,6 @@ contract Baal is CloneFactory, Module {
         uint256 newBalance
     ); /*emits when a delegate account's voting balance changes*/
     event ShamanSet(address indexed shaman, uint256 permission); /*emits when a shaman permission changes*/
-    event GuildTokenSet(address indexed token, bool enabled); /*emits when a guild token changes*/
     event GovernanceConfigSet(
         uint32 voting,
         uint32 grace,
@@ -354,7 +350,6 @@ contract Baal is CloneFactory, Module {
             minRetentionPercent,
             name,
             symbol,
-            guildTokens,
             totalSupply,
             totalLoot()
         );
@@ -646,80 +641,8 @@ contract Baal is CloneFactory, Module {
     // ****************
     // MEMBER FUNCTIONS
     // ****************
-    /// @notice Process member burn of `shares` and/or `loot` to claim 'fair share' of `guildTokens`.
-    /// @param to Account that receives 'fair share'.
-    /// @param lootToBurn Baal pure economic weight to burn.
-    /// @param sharesToBurn Baal voting weight to burn.
-    function ragequit(
-        address to,
-        uint256 sharesToBurn,
-        uint256 lootToBurn
-    ) external nonReentrant {
-        _ragequit(to, sharesToBurn, lootToBurn, guildTokens);
-    }
-
-    /// @notice Process member burn of `shares` and/or `loot` to claim 'fair share' of specified `tokens`
-    /// @dev Useful to omit malicious treasury tokens, or include tokens the DAO has not voted into guild tokens
-    /// @param to Account that receives 'fair share'.
-    /// @param lootToBurn Baal pure economic weight to burn.
-    /// @param sharesToBurn Baal voting weight to burn.
-    /// @param tokens Array of tokens to include in rage quit calculation
-    function advancedRagequit(
-        address to,
-        uint256 sharesToBurn,
-        uint256 lootToBurn,
-        address[] calldata tokens
-    ) external nonReentrant {
-        for (uint256 i; i < tokens.length; i++) {
-            if (i > 0) {
-                require(tokens[i] > tokens[i - 1], "!order");
-            }
-        }
-
-        _ragequit(to, sharesToBurn, lootToBurn, tokens);
-    }
-
-    /// @notice Internal execution of rage quite
-    /// @param to Account that receives 'fair share'.
-    /// @param lootToBurn Baal pure economic weight to burn.
-    /// @param sharesToBurn Baal voting weight to burn.
-    /// @param tokens Array of tokens to include in rage quit calculation
-    function _ragequit(
-        address to,
-        uint256 sharesToBurn,
-        uint256 lootToBurn,
-        address[] memory tokens
-    ) internal {
-        uint256 totalShares = totalSupply;
-        uint256 _totalLoot = totalLoot();
-
-        if (lootToBurn != 0) {
-            /*gas optimization*/
-            _burnLoot(msg.sender, lootToBurn); /*subtract `loot` from user account & Baal totals*/
-        }
-
-        if (sharesToBurn != 0) {
-            /*gas optimization*/
-            _burnShares(msg.sender, sharesToBurn); /*subtract `shares` from user account & Baal totals with erc20 accounting*/
-        }
-
-        for (uint256 i; i < tokens.length; i++) {
-            (, bytes memory balanceData) = tokens[i].staticcall(
-                abi.encodeWithSelector(0x70a08231, address(target))
-            ); /*get Baal token balances - 'balanceOf(address)'*/
-            uint256 balance = abi.decode(balanceData, (uint256)); /*decode Baal token balances for calculation*/
-
-            uint256 amountToRagequit = ((lootToBurn + sharesToBurn) * balance) /
-                (totalShares + _totalLoot); /*calculate 'fair shair' claims*/
-
-            if (amountToRagequit != 0) {
-                /*gas optimization to allow higher maximum token limit*/
-                _safeTransfer(tokens[i], to, amountToRagequit); /*execute 'safe' token transfer*/
-            }
-        }
-
-        emit Ragequit(msg.sender, to, lootToBurn, sharesToBurn, tokens); /*event reflects claims made against Baal*/
-    }
+    
+    // TODO: loot to shares?
 
     /// @notice Delegate votes from user to `delegatee`.
     /// @param delegatee The address to delegate votes to.
@@ -1023,39 +946,6 @@ contract Baal is CloneFactory, Module {
         emit TransferLoot(from, address(0), loot); /*emit event reflecting burn of `loot`*/
     }
 
-    /// @notice Baal-only function to whitelist guildToken.
-    /// @param _tokens Tokens to configure as guild tokens to include in regular Rage Quit calculations
-    function setGuildTokens(address[] calldata _tokens)
-        external
-        baalOrManagerOnly
-    {
-        for (uint256 i; i < _tokens.length; i++) {
-            address token = _tokens[i];
-            if (guildTokensEnabled[token]) {
-                continue; // prevent duplicate tokens
-            }
-
-            guildTokens.push(token); /*push account to `guildTokens` array*/
-            guildTokensEnabled[token] = true;
-            emit GuildTokenSet(token, true);
-        }
-    }
-
-    /// @notice Baal-only function to remove guildToken
-    /// @param _tokenIndexes Token indexes to remove from guild tokens
-    function unsetGuildTokens(uint256[] calldata _tokenIndexes)
-        external
-        baalOrManagerOnly
-    {
-        for (uint256 i; i < _tokenIndexes.length; i++) {
-            address token = guildTokens[_tokenIndexes[i]];
-            guildTokensEnabled[token] = false; // disable the token
-            guildTokens[_tokenIndexes[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
-            guildTokens.pop(); /*pop account from `guildTokens` array*/
-            emit GuildTokenSet(token, false);
-        }
-    }
-
     /// @notice Baal-or-governance-only function to change periods.
     /// @param _governanceConfig Encoded configuration parameters voting, grace period, tribute, quorum, sponsor threshold, retention bound
     function setGovernanceConfig(bytes memory _governanceConfig)
@@ -1312,12 +1202,6 @@ contract Baal is CloneFactory, Module {
         }
     }
 
-    /// @notice Returns array list of approved `guildTokens` in Baal for {ragequit}.
-    /// @return tokens ERC-20s approved for {ragequit}.
-    function getGuildTokens() public view returns (address[] memory tokens) {
-        tokens = guildTokens;
-    }
-
     /// @notice Helper to check if shaman permission contains admin capabilities
     /// @param shaman Address attempting to execute admin permissioned functions
     function isAdmin(address shaman) public view returns (bool) {
@@ -1513,6 +1397,8 @@ contract BaalSummoner is ModuleProxyFactory {
             initializationActions,
             address(_baal)
         );
+
+        // TODO: deploy exit module
 
         // Generate delegate calls so the safe calls enableModule on itself during setup
         bytes memory _enableBaal = abi.encodeWithSignature(
