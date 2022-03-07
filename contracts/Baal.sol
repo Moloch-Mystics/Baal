@@ -19,6 +19,12 @@ import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
 
 import "hardhat/console.sol";
 
+interface IPoster {
+    event NewPost(address indexed user, string content, string tag);
+
+    function post(string memory content, string memory tag) external;
+}
+
 interface ILoot {
     function setUp(string memory _name, string memory _symbol) external;
 
@@ -70,8 +76,6 @@ contract Baal is CloneFactory, Module {
     bool public sharesPaused; /*tracks transferability of erc20 `shares` - amendable through 'period'[2] proposal*/
 
     // MANAGER PARAMS
-    address[] guildTokens; /*array of default erc20 tokens to withdraw on ragequit */
-    mapping(address => bool) public guildTokensEnabled; /*maps guild token addresses -> enabled status (prevents duplicates in guildTokens[]) */
 
     // GOVERNANCE PARAMS
     uint32 public votingPeriod; /* voting period in seconds - amendable through 'period'[2] proposal*/
@@ -210,7 +214,6 @@ contract Baal is CloneFactory, Module {
         uint256 minRetentionPercent,
         string name,
         string symbol,
-        address[] guildTokens,
         uint256 totalShares,
         uint256 totalLoot
     ); /*emits after Baal summoning*/
@@ -271,7 +274,6 @@ contract Baal is CloneFactory, Module {
         uint256 newBalance
     ); /*emits when a delegate account's voting balance changes*/
     event ShamanSet(address indexed shaman, uint256 permission); /*emits when a shaman permission changes*/
-    event GuildTokenSet(address indexed token, bool enabled); /*emits when a guild token changes*/
     event GovernanceConfigSet(
         uint32 voting,
         uint32 grace,
@@ -348,7 +350,6 @@ contract Baal is CloneFactory, Module {
             minRetentionPercent,
             name,
             symbol,
-            guildTokens,
             totalSupply,
             totalLoot()
         );
@@ -628,33 +629,26 @@ contract Baal is CloneFactory, Module {
     /// @param _to address to call
     /// @param _value value to include in wei
     /// @param _data arbitrary transaction data
-    function executeAsBaal(address _to, uint256 _value, bytes calldata _data) external baalOnly {
-        (bool success,) = _to.call{value: _value}(_data);
+    function executeAsBaal(
+        address _to,
+        uint256 _value,
+        bytes calldata _data
+    ) external baalOnly {
+        (bool success, ) = _to.call{value: _value}(_data);
         require(success, "call failure");
     }
 
     // ****************
     // MEMBER FUNCTIONS
     // ****************
-    /// @notice Process member burn of `shares` and/or `loot` to claim 'fair share' of `guildTokens`.
-    /// @param to Account that receives 'fair share'.
-    /// @param lootToBurn Baal pure economic weight to burn.
-    /// @param sharesToBurn Baal voting weight to burn.
-    function ragequit(
-        address to,
-        uint256 sharesToBurn,
-        uint256 lootToBurn
-    ) external nonReentrant {
-        _ragequit(to, sharesToBurn, lootToBurn, guildTokens);
-    }
-
+    
     /// @notice Process member burn of `shares` and/or `loot` to claim 'fair share' of specified `tokens`
     /// @dev Useful to omit malicious treasury tokens, or include tokens the DAO has not voted into guild tokens
     /// @param to Account that receives 'fair share'.
     /// @param lootToBurn Baal pure economic weight to burn.
     /// @param sharesToBurn Baal voting weight to burn.
     /// @param tokens Array of tokens to include in rage quit calculation
-    function advancedRagequit(
+    function ragequit(
         address to,
         uint256 sharesToBurn,
         uint256 lootToBurn,
@@ -692,7 +686,7 @@ contract Baal is CloneFactory, Module {
             /*gas optimization*/
             _burnShares(msg.sender, sharesToBurn); /*subtract `shares` from user account & Baal totals with erc20 accounting*/
         }
-        
+
         for (uint256 i; i < tokens.length; i++) {
             (, bytes memory balanceData) = tokens[i].staticcall(
                 abi.encodeWithSelector(0x70a08231, address(target))
@@ -705,7 +699,6 @@ contract Baal is CloneFactory, Module {
             if (amountToRagequit != 0) {
                 /*gas optimization to allow higher maximum token limit*/
                 _safeTransfer(tokens[i], to, amountToRagequit); /*execute 'safe' token transfer*/
-
             }
         }
 
@@ -1014,39 +1007,6 @@ contract Baal is CloneFactory, Module {
         emit TransferLoot(from, address(0), loot); /*emit event reflecting burn of `loot`*/
     }
 
-    /// @notice Baal-only function to whitelist guildToken.
-    /// @param _tokens Tokens to configure as guild tokens to include in regular Rage Quit calculations
-    function setGuildTokens(address[] calldata _tokens)
-        external
-        baalOrManagerOnly
-    {
-        for (uint256 i; i < _tokens.length; i++) {
-            address token = _tokens[i];
-            if (guildTokensEnabled[token]) {
-                continue; // prevent duplicate tokens
-            }
-
-            guildTokens.push(token); /*push account to `guildTokens` array*/
-            guildTokensEnabled[token] = true;
-            emit GuildTokenSet(token, true);
-        }
-    }
-
-    /// @notice Baal-only function to remove guildToken
-    /// @param _tokenIndexes Token indexes to remove from guild tokens
-    function unsetGuildTokens(uint256[] calldata _tokenIndexes)
-        external
-        baalOrManagerOnly
-    {
-        for (uint256 i; i < _tokenIndexes.length; i++) {
-            address token = guildTokens[_tokenIndexes[i]];
-            guildTokensEnabled[token] = false; // disable the token
-            guildTokens[_tokenIndexes[i]] = guildTokens[guildTokens.length - 1]; /*swap-to-delete index with last value*/
-            guildTokens.pop(); /*pop account from `guildTokens` array*/
-            emit GuildTokenSet(token, false);
-        }
-    }
-
     /// @notice Baal-or-governance-only function to change periods.
     /// @param _governanceConfig Encoded configuration parameters voting, grace period, tribute, quorum, sponsor threshold, retention bound
     function setGovernanceConfig(bytes memory _governanceConfig)
@@ -1303,12 +1263,6 @@ contract Baal is CloneFactory, Module {
         }
     }
 
-    /// @notice Returns array list of approved `guildTokens` in Baal for {ragequit}.
-    /// @return tokens ERC-20s approved for {ragequit}.
-    function getGuildTokens() public view returns (address[] memory tokens) {
-        tokens = guildTokens;
-    }
-
     /// @notice Helper to check if shaman permission contains admin capabilities
     /// @param shaman Address attempting to execute admin permissioned functions
     function isAdmin(address shaman) public view returns (bool) {
@@ -1393,7 +1347,6 @@ contract Baal is CloneFactory, Module {
 }
 
 contract BaalSummoner is ModuleProxyFactory {
-
     address payable public immutable template; // fixed template for baal using eip-1167 proxy pattern
 
     // Template contract to use for new Gnosis safe proxies
@@ -1405,18 +1358,32 @@ contract BaalSummoner is ModuleProxyFactory {
     // Library to use for all safe transaction executions
     address public immutable gnosisMultisendLibrary;
 
-    event SummonBaal(address indexed baal, address indexed loot, address indexed safe);
+    // Contract to emit and index metadata
+    address public immutable poster;
+
+    event SummonBaal(
+        address indexed baal,
+        address indexed loot,
+        address indexed safe
+    );
 
     constructor(
         address payable _template,
         address _gnosisSingleton,
         address _gnosisFallbackLibrary,
-        address _gnosisMultisendLibrary
+        address _gnosisMultisendLibrary,
+        address _poster
     ) {
         template = _template;
         gnosisSingleton = _gnosisSingleton;
         gnosisFallbackLibrary = _gnosisFallbackLibrary;
         gnosisMultisendLibrary = _gnosisMultisendLibrary;
+        poster = _poster;
+    }
+
+    function postMetadata(string calldata _details) public {
+        IPoster _poster = IPoster(poster);
+        _poster.post(_details, "daohaus.metadata.summoner");
     }
 
     function encodeMultisend(bytes[] memory _calls, address _target)
@@ -1441,10 +1408,28 @@ contract BaalSummoner is ModuleProxyFactory {
         );
     }
 
+    function summonBaal(address _safe, string calldata _details)
+        external
+        returns (address)
+    {
+        Baal _baal = Baal(_safe);
+
+        postMetadata(_details);
+
+        emit SummonBaal(
+            address(_baal),
+            address(_baal.lootToken()),
+            address(_safe)
+        );
+
+        return (address(_baal));
+    }
+
     function summonBaalAndSafe(
         bytes calldata initializationParams,
         bytes[] calldata initializationActions,
-        uint256 _saltNonce
+        uint256 _saltNonce,
+        string calldata _details
     ) external returns (address) {
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
@@ -1473,7 +1458,7 @@ contract BaalSummoner is ModuleProxyFactory {
             initializationActions,
             address(_baal)
         );
-        
+
         // Generate delegate calls so the safe calls enableModule on itself during setup
         bytes memory _enableBaal = abi.encodeWithSignature(
             "enableModule(address)",
@@ -1518,9 +1503,13 @@ contract BaalSummoner is ModuleProxyFactory {
 
         _baal.setUp(_initializer);
 
-        address loot = address(_baal.lootToken());
+        postMetadata(_details);
 
-        emit SummonBaal(address(_baal), loot, address(_safe));
+        emit SummonBaal(
+            address(_baal),
+            address(_baal.lootToken()),
+            address(_safe)
+        );
 
         return (address(_baal));
     }

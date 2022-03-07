@@ -108,7 +108,6 @@ const getBaalParams = async function (
     TOKEN_SYMBOL: any
   },
   adminConfig: [boolean, boolean],
-  tokens: [string[]],
   shamans: [string[], number[]],
   shares: [string[], number[]],
   loots: [string[], number[]]
@@ -127,12 +126,11 @@ const getBaalParams = async function (
 
   const setAdminConfig = await baal.interface.encodeFunctionData('setAdminConfig', adminConfig)
   const setGovernanceConfig = await baal.interface.encodeFunctionData('setGovernanceConfig', [governanceConfig])
-  const setGuildTokens = await baal.interface.encodeFunctionData('setGuildTokens', tokens)
   const setShaman = await baal.interface.encodeFunctionData('setShamans', shamans)
   const mintShares = await baal.interface.encodeFunctionData('mintShares', shares)
   const mintLoot = await baal.interface.encodeFunctionData('mintLoot', loots)
 
-  const initalizationActions = [setAdminConfig, setGovernanceConfig, setGuildTokens, setShaman, mintShares, mintLoot]
+  const initalizationActions = [setAdminConfig, setGovernanceConfig, setShaman, mintShares, mintLoot]
 
   // const initalizationActionsMulti = encodeMultiAction(
   //   multisend,
@@ -232,12 +230,11 @@ describe('Tribute proposal type', function () {
       lootSingleton,
       deploymentConfig,
       [sharesPaused, lootPaused],
-      [[weth.address]],
       [[shaman.address], [7]],
       [[summoner.address], [shares]],
       [[summoner.address], [loot]]
     )
-    const tx = await baalSummoner.summonBaalAndSafe(encodedInitParams.initParams, encodedInitParams.initalizationActions, 101)
+    const tx = await baalSummoner.summonBaalAndSafe(encodedInitParams.initParams, encodedInitParams.initalizationActions, 101, summoner.address)
     const addresses = await getNewBaalAddresses(tx)
 
     baal = BaalFactory.attach(addresses.baal) as Baal
