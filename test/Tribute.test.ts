@@ -17,6 +17,7 @@ import { ConfigExtender } from 'hardhat/types'
 import { Test } from 'mocha'
 import { BaalSummoner } from '../src/types/BaalSummoner'
 import { GnosisSafe } from '../src/types/GnosisSafe'
+import { Poster } from '../src/types/Poster'
 
 use(solidity)
 
@@ -90,12 +91,18 @@ const deploymentConfig = {
   TOKEN_SYMBOL: 'WETH',
 }
 
+const metadataConfig = {
+  CONTENT: '{"name":"test"}',
+  TAG: 'daohaus.summon.metadata'
+}
+
 const abiCoder = ethers.utils.defaultAbiCoder
 
 const getBaalParams = async function (
   baal: Baal,
   multisend: MultiSend,
   lootSingleton: Loot,
+  poster: Poster,
   config: {
     PROPOSAL_OFFERING: any
     GRACE_PERIOD_IN_SECONDS: any
@@ -124,13 +131,17 @@ const getBaalParams = async function (
     ]
   )
 
+
   const setAdminConfig = await baal.interface.encodeFunctionData('setAdminConfig', adminConfig)
   const setGovernanceConfig = await baal.interface.encodeFunctionData('setGovernanceConfig', [governanceConfig])
   const setShaman = await baal.interface.encodeFunctionData('setShamans', shamans)
   const mintShares = await baal.interface.encodeFunctionData('mintShares', shares)
   const mintLoot = await baal.interface.encodeFunctionData('mintLoot', loots)
+  const postMetaData = await poster.interface.encodeFunctionData('post', [metadataConfig.CONTENT, metadataConfig.TAG])
+  const posterFromBaal = await baal.interface.encodeFunctionData('executeAsBaal', [poster.address, 0, postMetaData])
 
-  const initalizationActions = [setAdminConfig, setGovernanceConfig, setShaman, mintShares, mintLoot]
+
+  const initalizationActions = [setAdminConfig, setGovernanceConfig, setShaman, mintShares, mintLoot, posterFromBaal]
 
   // const initalizationActionsMulti = encodeMultiAction(
   //   multisend,
@@ -161,12 +172,15 @@ describe('Tribute proposal type', function () {
   let weth: TestErc20
   let applicantWeth: TestErc20
   let multisend: MultiSend
+  let poster: Poster
 
   let BaalFactory: ContractFactory
   let baalSingleton: Baal
   let baalSummoner: BaalSummoner
   let gnosisSafeSingleton: GnosisSafe
   let gnosisSafe: GnosisSafe
+
+  let Poster: ContractFactory
 
   // shaman baals, to test permissions
   let s1Baal: Baal
@@ -203,6 +217,8 @@ describe('Tribute proposal type', function () {
     lootSingleton = (await LootFactory.deploy()) as Loot
     BaalFactory = await ethers.getContractFactory('Baal')
     baalSingleton = (await BaalFactory.deploy()) as Baal
+    Poster = await ethers.getContractFactory('Poster')
+    poster = (await Poster.deploy()) as Poster
   })
 
   beforeEach(async function () {
@@ -212,6 +228,7 @@ describe('Tribute proposal type', function () {
     const BaalContract = await ethers.getContractFactory('Baal')
     const MultisendContract = await ethers.getContractFactory('MultiSend')
     ;[summoner, applicant, shaman, s1, s2, s3, s4, s5, s6] = await ethers.getSigners()
+
 
     ERC20 = await ethers.getContractFactory('TestERC20')
     weth = (await ERC20.deploy('WETH', 'WETH', 10000000)) as TestErc20
@@ -224,17 +241,19 @@ describe('Tribute proposal type', function () {
     const handler = (await CompatibilityFallbackHandler.deploy()) as CompatibilityFallbackHandler
     baalSummoner = (await BaalSummoner.deploy(baalSingleton.address, gnosisSafeSingleton.address, handler.address, multisend.address)) as BaalSummoner
 
+
     encodedInitParams = await getBaalParams(
       baalSingleton,
       multisend,
       lootSingleton,
+      poster,
       deploymentConfig,
       [sharesPaused, lootPaused],
       [[shaman.address], [7]],
       [[summoner.address], [shares]],
       [[summoner.address], [loot]]
     )
-    const tx = await baalSummoner.summonBaalAndSafe(encodedInitParams.initParams, encodedInitParams.initalizationActions, 101, summoner.address)
+    const tx = await baalSummoner.summonBaalAndSafe(encodedInitParams.initParams, encodedInitParams.initalizationActions, 101)
     const addresses = await getNewBaalAddresses(tx)
 
     baal = BaalFactory.attach(addresses.baal) as Baal

@@ -70,8 +70,7 @@ async function main() {
 		baalSingleton.address, 
 		_addresses.gnosisSingleton, 
 		_addresses.gnosisFallbackLibrary, 
-		_addresses.gnosisMultisendLibrary, 
-		_addresses.poster))
+		_addresses.gnosisMultisendLibrary))
     
 	await baalSummoner.deployed();
 

@@ -17,14 +17,6 @@ import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
 
-import "hardhat/console.sol";
-
-interface IPoster {
-    event NewPost(address indexed user, string content, string tag);
-
-    function post(string memory content, string memory tag) external;
-}
-
 interface ILoot {
     function setUp(string memory _name, string memory _symbol) external;
 
@@ -641,7 +633,7 @@ contract Baal is CloneFactory, Module {
     // ****************
     // MEMBER FUNCTIONS
     // ****************
-    
+
     /// @notice Process member burn of `shares` and/or `loot` to claim 'fair share' of specified `tokens`
     /// @dev Useful to omit malicious treasury tokens, or include tokens the DAO has not voted into guild tokens
     /// @param to Account that receives 'fair share'.
@@ -1209,7 +1201,6 @@ contract Baal is CloneFactory, Module {
     /// @param id Number of proposal in proposals
     /// @return [cancelled, processed, passed, actionFailed]
     function getProposalStatus(uint32 id) public view returns (bool[4] memory) {
-        console.log("status");
         return proposals[id].status;
     }
 
@@ -1358,9 +1349,6 @@ contract BaalSummoner is ModuleProxyFactory {
     // Library to use for all safe transaction executions
     address public immutable gnosisMultisendLibrary;
 
-    // Contract to emit and index metadata
-    address public immutable poster;
-
     event SummonBaal(
         address indexed baal,
         address indexed loot,
@@ -1371,19 +1359,12 @@ contract BaalSummoner is ModuleProxyFactory {
         address payable _template,
         address _gnosisSingleton,
         address _gnosisFallbackLibrary,
-        address _gnosisMultisendLibrary,
-        address _poster
+        address _gnosisMultisendLibrary
     ) {
         template = _template;
         gnosisSingleton = _gnosisSingleton;
         gnosisFallbackLibrary = _gnosisFallbackLibrary;
         gnosisMultisendLibrary = _gnosisMultisendLibrary;
-        poster = _poster;
-    }
-
-    function postMetadata(string calldata _details) public {
-        IPoster _poster = IPoster(poster);
-        _poster.post(_details, "daohaus.metadata.summoner");
     }
 
     function encodeMultisend(bytes[] memory _calls, address _target)
@@ -1408,13 +1389,11 @@ contract BaalSummoner is ModuleProxyFactory {
         );
     }
 
-    function summonBaal(address _safe, string calldata _details)
+    function summonBaal(address _safe)
         external
         returns (address)
     {
         Baal _baal = Baal(_safe);
-
-        postMetadata(_details);
 
         emit SummonBaal(
             address(_baal),
@@ -1428,8 +1407,7 @@ contract BaalSummoner is ModuleProxyFactory {
     function summonBaalAndSafe(
         bytes calldata initializationParams,
         bytes[] calldata initializationActions,
-        uint256 _saltNonce,
-        string calldata _details
+        uint256 _saltNonce
     ) external returns (address) {
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
@@ -1502,8 +1480,6 @@ contract BaalSummoner is ModuleProxyFactory {
         );
 
         _baal.setUp(_initializer);
-
-        postMetadata(_details);
 
         emit SummonBaal(
             address(_baal),
