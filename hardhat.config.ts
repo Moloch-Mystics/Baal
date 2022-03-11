@@ -183,19 +183,20 @@ task("accounts", "Prints the list of accounts", async (_, { ethers }) => {
 
 
 task("summon", "Prints the list of accounts")
-.addParam("factory", "The account's address")
-.addParam("loottemplate", "moar params")
-.addParam("shares", "moar params")
-.addParam("loot", "moar params")
-.addParam("sharespaused", "moar params")
-.addParam("lootpaused", "moar params")
-.addParam("shaman", "moar params")
-.addParam("summoner", "moar params")
-.addParam("name", "moar params")
+.addParam("factory", "Dao factory address")
+.addParam("loottemplate", "loot template")
+.addParam("shares", "numnber of initial shares for summoner")
+.addParam("loot", "numnber of initial loot for summoner")
+.addParam("sharespaused", "are shares transferable")
+.addParam("lootpaused", "is loot transferable")
+.addParam("shaman", "any initial shamans")
+.addParam("summoner", "the summoner address")
+.addParam("name", "share token symbol")
+.addOptionalParam("meta", "updated meta data")
 .setAction(async (taskArgs, hre) => {
 
   const metadataConfig = {
-    CONTENT: '{"name":"test"}',
+    CONTENT: taskArgs.meta || '{"name":"test"}',
     TAG: 'daohaus.summon.metadata'
   }
 
