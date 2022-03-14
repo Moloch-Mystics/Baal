@@ -9,16 +9,12 @@ import "hardhat-contract-sizer";
 
 import * as fs from 'fs'
 import "hardhat-typechain";
+import { BaalSummoner } from "./src/types/BaalSummoner";
+import { Baal } from "./src/types/Baal";
+import { MultiSend } from "./src/types/MultiSend";
+import { Loot } from "./src/types/Loot";
+import { Poster } from "./src/types/Poster";
 
-// This is a sample Hardhat task. To learn how to create your own go to
-// https://hardhat.org/guides/create-task.html
-task("accounts", "Prints the list of accounts", async (args, hre) => {
-  const accounts = await hre.ethers.getSigners();
-
-  for (const account of accounts) {
-    console.log(await account.address);
-  }
-});
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
@@ -182,4 +178,161 @@ task("generate", "Create a mnemonic for builder deploys", async (_, { ethers }) 
 task("accounts", "Prints the list of accounts", async (_, { ethers }) => {
   const accounts = await ethers.provider.listAccounts();
   accounts.forEach((account) => console.log(account));
+});
+
+
+
+task("summon", "Prints the list of accounts")
+.addParam("factory", "Dao factory address")
+.addParam("loottemplate", "loot template")
+.addParam("shares", "numnber of initial shares for summoner")
+.addParam("loot", "numnber of initial loot for summoner")
+.addParam("sharespaused", "are shares transferable")
+.addParam("lootpaused", "is loot transferable")
+.addParam("shaman", "any initial shamans")
+.addParam("summoner", "the summoner address")
+.addParam("name", "share token symbol")
+.addOptionalParam("meta", "updated meta data")
+.setAction(async (taskArgs, hre) => {
+
+  const metadataConfig = {
+    CONTENT: taskArgs.meta || '{"name":"test"}',
+    TAG: 'daohaus.summon.metadata'
+  }
+
+  const abiCoder = hre.ethers.utils.defaultAbiCoder
+
+const getBaalParams = async function (
+  baal: Baal,
+  multisend: MultiSend,
+  lootSingleton: Loot,
+  poster: Poster,
+  config: {
+    PROPOSAL_OFFERING: any
+    GRACE_PERIOD_IN_SECONDS: any
+    VOTING_PERIOD_IN_SECONDS: any
+    QUORUM_PERCENT: any
+    SPONSOR_THRESHOLD: any
+    MIN_RETENTION_PERCENT: any
+    MIN_STAKING_PERCENT: any
+    TOKEN_NAME: any
+    TOKEN_SYMBOL: any,
+  },
+  metadata: [string,string],
+  adminConfig: [boolean, boolean],
+  shamans: [string[], number[]],
+  shares: [string[], number[]],
+  loots: [string[], number[]]
+) {
+  const governanceConfig = abiCoder.encode(
+    ['uint32', 'uint32', 'uint256', 'uint256', 'uint256', 'uint256'],
+    [
+      config.VOTING_PERIOD_IN_SECONDS,
+      config.GRACE_PERIOD_IN_SECONDS,
+      config.PROPOSAL_OFFERING,
+      config.QUORUM_PERCENT,
+      config.SPONSOR_THRESHOLD,
+      config.MIN_RETENTION_PERCENT,
+    ]
+  )
+
+  const setAdminConfig = await baal.interface.encodeFunctionData('setAdminConfig', adminConfig)
+  const setGovernanceConfig = await baal.interface.encodeFunctionData('setGovernanceConfig', [governanceConfig])
+  const setShaman = await baal.interface.encodeFunctionData('setShamans', shamans)
+  const mintShares = await baal.interface.encodeFunctionData('mintShares', shares)
+  const mintLoot = await baal.interface.encodeFunctionData('mintLoot', loots)
+  const postMetaData = await poster.interface.encodeFunctionData('post', [metadataConfig.CONTENT, metadataConfig.TAG])
+  const posterFromBaal = await baal.interface.encodeFunctionData('executeAsBaal', [poster.address, 0, postMetaData])
+  
+  const initalizationActions = [setAdminConfig, setGovernanceConfig, setShaman, mintShares, mintLoot, posterFromBaal]
+
+  // const initalizationActionsMulti = encodeMultiAction(
+  //   multisend,
+  //   [setAdminConfig, setGovernanceConfig, setGuildTokens, setShaman, mintShares, mintLoot],
+  //   [baal.address, baal.address, baal.address, baal.address, baal.address, baal.address],
+  //   [BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0)],
+  //   [0, 0, 0, 0, 0, 0]
+  // )
+  return {
+    initParams: abiCoder.encode(
+      ['string', 'string', 'address', 'address'],
+      [config.TOKEN_NAME, config.TOKEN_SYMBOL, lootSingleton.address, multisend.address]
+    ),
+    initalizationActions,
+  }
+}
+
+  let encodedInitParams: {
+    initParams: string
+    initalizationActions: string[]
+  }
+
+  const deploymentConfig = {
+    GRACE_PERIOD_IN_SECONDS: 43200,
+    VOTING_PERIOD_IN_SECONDS: 432000,
+    PROPOSAL_OFFERING: 0,
+    SPONSOR_THRESHOLD: 1,
+    MIN_RETENTION_PERCENT: 0,
+    MIN_STAKING_PERCENT: 0,
+    QUORUM_PERCENT: 0,
+    TOKEN_NAME: 'Baal Shares',
+    TOKEN_SYMBOL: taskArgs.name
+  }
+
+  const _addresses = {
+    gnosisSingleton: "0xd9db270c1b5e3bd161e8c8503c55ceabee709552",
+    gnosisFallbackLibrary: "0xf48f2b2d2a534e402487b3ee7c18c33aec0fe5e4",
+    gnosisMultisendLibrary: "0xa238cbeb142c10ef7ad8442c6d1f9e89e07e7761",
+    poster: "0x000000000000cd17345801aa8147b8D3950260FF"
+    }
+
+  const baalSummoner = await hre.ethers.getContractFactory('BaalSummoner')
+  const contract = await baalSummoner.attach(
+    taskArgs.factory
+  );
+
+  const baalTemplateAddr = await contract.template();
+  console.log('baalTemplateAddr', baalTemplateAddr);
+  
+
+  const posterFactory = await hre.ethers.getContractFactory('Poster')
+  const poster = (await posterFactory.attach(_addresses.poster)) as Poster
+  console.log('**********************');
+  
+  const LootFactory = await hre.ethers.getContractFactory('Loot')
+  const lootSingleton = (await LootFactory.attach(taskArgs.loottemplate)) as Loot
+  const Baal = await hre.ethers.getContractFactory('Baal')
+  const baalSingleton = (await Baal.attach(baalTemplateAddr)) as Baal
+  const MultisendContract = await hre.ethers.getContractFactory('MultiSend')
+  const multisend = (await MultisendContract.attach(_addresses.gnosisMultisendLibrary)) as MultiSend
+
+
+
+  encodedInitParams = await getBaalParams(
+    baalSingleton,
+    multisend,
+    lootSingleton,
+    poster,
+    deploymentConfig,
+    [metadataConfig.CONTENT, metadataConfig.TAG],
+    [taskArgs.sharesPaused, taskArgs.lootPaused],
+    [[taskArgs.shaman], [7]],
+    [[taskArgs.summoner], [taskArgs.shares]],
+    [[taskArgs.summoner], [taskArgs.loot]]
+  )
+
+
+  const randomSeed = Math.floor(Math.random() * 10000000);
+
+  const tx = await contract.summonBaalAndSafe(encodedInitParams.initParams, encodedInitParams.initalizationActions, randomSeed)
+
+
+  console.log(taskArgs);
+  console.log('tx:', tx.hash);
+  const deployers = await hre.ethers.getSigners();
+  const address = await deployers[0].getAddress();
+  const balance = await deployers[0].getBalance();
+  console.log('Account address:', address);
+  console.log('Account balance:', hre.ethers.utils.formatEther(balance));
+
 });
