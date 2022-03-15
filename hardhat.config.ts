@@ -14,12 +14,26 @@ import { Baal } from "./src/types/Baal";
 import { MultiSend } from "./src/types/MultiSend";
 import { Loot } from "./src/types/Loot";
 import { Poster } from "./src/types/Poster";
+// import { decodeMultiAction, encodeMultiAction, hashOperation } from './src/util'
+import { encodeMultiSend, MetaTransaction } from '@gnosis.pm/safe-contracts'
+
+
+import { BigNumber, BigNumberish } from '@ethersproject/bignumber'
+
+
 
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
 
 const defaultNetwork = "localhost";
+
+const _addresses = {
+  gnosisSingleton: "0xd9db270c1b5e3bd161e8c8503c55ceabee709552",
+  gnosisFallbackLibrary: "0xf48f2b2d2a534e402487b3ee7c18c33aec0fe5e4",
+  gnosisMultisendLibrary: "0xa238cbeb142c10ef7ad8442c6d1f9e89e07e7761",
+  poster: "0x000000000000cd17345801aa8147b8D3950260FF"
+  }
 
 function mnemonic() {
   try {
@@ -43,6 +57,8 @@ const config: HardhatUserConfig = {
     },
     rinkeby: {
       url: "https://rinkeby.infura.io/v3/460f40a260564ac4a4f4b3fffb032dad", //<---- YOUR INFURA ID! (or it won't work)
+      gas: 2100000,
+      gasPrice: 8000000000,
       accounts: {
         mnemonic: mnemonic(),
       },
@@ -180,9 +196,52 @@ task("accounts", "Prints the list of accounts", async (_, { ethers }) => {
   accounts.forEach((account) => console.log(account));
 });
 
+task("memberprop", "Submits a new memberprop")
+.addParam("dao", "Dao address")
+.addParam("applicant", "applicant address")
+.addParam("shares", "number shares")
+.addParam("loot", "number loot")
+.setAction(async (taskArgs, hre) => {
+  console.log(taskArgs);
+
+  const encodeMultiAction2 = (multisend: MultiSend, actions: string[], tos: string[], values: BigNumber[], operations: number[]) => {
+    let metatransactions: MetaTransaction[] = []
+    for (let index = 0; index < actions.length; index++) {
+      metatransactions.push({
+        to: tos[index],
+        value: values[index],
+        data: actions[index],
+        operation: operations[index],
+      })
+    }
+    const encodedMetatransactions = encodeMultiSend(metatransactions)
+    const multi_action = multisend.interface.encodeFunctionData('multiSend', [encodedMetatransactions])
+    return multi_action
+  }
+  
+
+  const MultisendContract = await hre.ethers.getContractFactory('MultiSend')
+  const multisend = (await MultisendContract.attach(_addresses.gnosisMultisendLibrary)) as MultiSend
+
+  const block = await hre.ethers.provider.getBlock('latest')
+
+  const Baal = await hre.ethers.getContractFactory('Baal')
+  const baal = (await Baal.attach(taskArgs.dao)) as Baal
+  const countBefore = await baal.proposalCount()
+  console.log('countBefore', countBefore);
+  
+
+  const mintLootAction = await baal.interface.encodeFunctionData('mintLoot', [[taskArgs.applicant], [taskArgs.loot]])
+  const mintSharesAction = await baal.interface.encodeFunctionData('mintShares', [[taskArgs.applicant], [taskArgs.shares]])
+
+  const now = await block.timestamp
+  const encodedAction = encodeMultiAction2(multisend, [mintLootAction, mintSharesAction], [baal.address, baal.address], [BigNumber.from(0), BigNumber.from(0)], [0, 0])
+  await baal.submitProposal(encodedAction, 0, hre.ethers.utils.id('all hail baal'))
 
 
-task("summon", "Prints the list of accounts")
+})
+
+task("summon", "Summons a new DAO")
 .addParam("factory", "Dao factory address")
 .addParam("loottemplate", "loot template")
 .addParam("shares", "numnber of initial shares for summoner")
@@ -278,13 +337,6 @@ const getBaalParams = async function (
     TOKEN_NAME: 'Baal Shares',
     TOKEN_SYMBOL: taskArgs.name
   }
-
-  const _addresses = {
-    gnosisSingleton: "0xd9db270c1b5e3bd161e8c8503c55ceabee709552",
-    gnosisFallbackLibrary: "0xf48f2b2d2a534e402487b3ee7c18c33aec0fe5e4",
-    gnosisMultisendLibrary: "0xa238cbeb142c10ef7ad8442c6d1f9e89e07e7761",
-    poster: "0x000000000000cd17345801aa8147b8D3950260FF"
-    }
 
   const baalSummoner = await hre.ethers.getContractFactory('BaalSummoner')
   const contract = await baalSummoner.attach(
