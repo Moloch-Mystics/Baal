@@ -1789,7 +1789,7 @@ describe.only('Baal contract', function () {
       expect(baal.processProposal(2, proposal.data)).to.be.revertedWith(revertMessages.processProposalNotReady)
     })
 
-    it('require fail - prev proposal not processed', async function () {
+    it.only('require fail - prev proposal not processed', async function () {
       await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
       await baal.submitVote(1, yes)
       await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))

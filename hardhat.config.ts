@@ -265,6 +265,7 @@ task("memberprop", "Submits a new member proposal")
   .addParam("applicant", "applicant address")
   .addParam("shares", "number shares")
   .addParam("loot", "number loot")
+  .addParam("expiration", "seconds after grace that proposal expires, 0 for none")
   .setAction(async (taskArgs, hre) => {
 
     const encodeMultiAction2 = (
@@ -325,7 +326,7 @@ task("memberprop", "Submits a new member proposal")
     
     await baal.submitProposal(
       encodedAction,
-      0,
+      taskArgs.expiration,
       hre.ethers.utils.id("all hail baal")
     );
   });
