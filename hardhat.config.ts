@@ -201,10 +201,32 @@ task(
 
 /* DAO tasks */
 
-// task("listprops", "list proposals")
-// task("sponsorprop", "Sponsors a proposal")
-// task("voteprop", "Vote on a proposal")
-// task("processprop", "Process a proposal")
+
+task("processprop", "Process a proposal")
+  .addParam("dao", "Dao address")
+  .addParam("id", "Proposal ID")
+  .addParam("data", "the data, need to get this from the submit events")
+  .setAction(async (taskArgs, hre) => {
+    const Baal = await hre.ethers.getContractFactory("Baal");
+    const baal = (await Baal.attach(taskArgs.dao)) as Baal;
+    // TODO: pull event data from etherscan
+    const processProposal = await baal.processProposal(taskArgs.id, taskArgs.data);
+    console.log("Proposal processed txhash:", processProposal.hash);
+
+  })
+
+
+task("voteprop", "Vote on a proposal")
+  .addParam("dao", "Dao address")
+  .addParam("id", "Proposal ID")
+  .addParam("approve", "true is yes and false is no")
+  .setAction(async (taskArgs, hre) => {
+    const Baal = await hre.ethers.getContractFactory("Baal");
+    const baal = (await Baal.attach(taskArgs.dao)) as Baal;
+    const submitVote = await baal.submitVote(taskArgs.id, (taskArgs.approve === 'true'));
+    console.log("Proposal voted on txhash:", submitVote.hash);
+
+  })
 
 task("sponsorprop", "Status of a proposal")
   .addParam("dao", "Dao address")
@@ -243,6 +265,7 @@ task("memberprop", "Submits a new member proposal")
   .addParam("applicant", "applicant address")
   .addParam("shares", "number shares")
   .addParam("loot", "number loot")
+  .addParam("expiration", "seconds after grace that proposal expires, 0 for none")
   .setAction(async (taskArgs, hre) => {
 
     const encodeMultiAction2 = (
@@ -297,9 +320,13 @@ task("memberprop", "Submits a new member proposal")
       [BigNumber.from(0), BigNumber.from(0)],
       [0, 0]
     );
+    console.log("********encoded data*********");
+    console.log(encodedAction);
+    console.log("*****************************");
+    
     await baal.submitProposal(
       encodedAction,
-      0,
+      taskArgs.expiration,
       hre.ethers.utils.id("all hail baal")
     );
   });
@@ -438,8 +465,8 @@ task("summon", "Summons a new DAO")
     };
 
     const deploymentConfig = {
-      GRACE_PERIOD_IN_SECONDS: 43200,
-      VOTING_PERIOD_IN_SECONDS: 432000,
+      GRACE_PERIOD_IN_SECONDS: 300,
+      VOTING_PERIOD_IN_SECONDS: 200,
       PROPOSAL_OFFERING: 0,
       SPONSOR_THRESHOLD: 1,
       MIN_RETENTION_PERCENT: 0,
