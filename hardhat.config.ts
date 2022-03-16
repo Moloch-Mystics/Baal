@@ -55,8 +55,8 @@ const config: HardhatUserConfig = {
     },
     rinkeby: {
       url: "https://rinkeby.infura.io/v3/460f40a260564ac4a4f4b3fffb032dad", //<---- YOUR INFURA ID! (or it won't work)
-      gas: 2100000,
       gasPrice: 8000000000,
+      gasMultiplier: 2,
       accounts: {
         mnemonic: mnemonic(),
       },
@@ -201,13 +201,49 @@ task(
 
 /* DAO tasks */
 
-task("memberprop", "Submits a new memberprop")
+// task("listprops", "list proposals")
+// task("sponsorprop", "Sponsors a proposal")
+// task("voteprop", "Vote on a proposal")
+// task("processprop", "Process a proposal")
+
+task("sponsorprop", "Status of a proposal")
+  .addParam("dao", "Dao address")
+  .addParam("id", "Proposal ID")
+  .setAction(async (taskArgs, hre) => {
+    const Baal = await hre.ethers.getContractFactory("Baal");
+    const baal = (await Baal.attach(taskArgs.dao)) as Baal;
+    const proposal = await baal.sponsorProposal(taskArgs.id);
+    console.log("Proposal sponsored txhash:", proposal.hash);
+
+  })
+
+task("statusprop", "Status of a proposal")
+  .addParam("dao", "Dao address")
+  .addParam("id", "Proposal ID")
+  .setAction(async (taskArgs, hre) => {
+    const Baal = await hre.ethers.getContractFactory("Baal");
+    const baal = (await Baal.attach(taskArgs.dao)) as Baal;
+    const proposal = await baal.proposals(taskArgs.id);
+    console.log("Proposal status:", proposal);
+
+  })
+task("infoprops", "Current Proposal info")
+  .addParam("dao", "Dao address")
+  .setAction(async (taskArgs, hre) => {
+    const Baal = await hre.ethers.getContractFactory("Baal");
+    const baal = (await Baal.attach(taskArgs.dao)) as Baal;
+    const count = await baal.proposalCount();
+    const lastSponsored = await baal.latestSponsoredProposalId();
+    console.log("the current proposal count is:", count);
+    console.log("the last proposal sponsored is:", lastSponsored);
+  })
+
+task("memberprop", "Submits a new member proposal")
   .addParam("dao", "Dao address")
   .addParam("applicant", "applicant address")
   .addParam("shares", "number shares")
   .addParam("loot", "number loot")
   .setAction(async (taskArgs, hre) => {
-    console.log(taskArgs);
 
     const encodeMultiAction2 = (
       multisend: MultiSend,
