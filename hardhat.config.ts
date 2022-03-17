@@ -55,8 +55,9 @@ const config: HardhatUserConfig = {
     },
     rinkeby: {
       url: "https://rinkeby.infura.io/v3/460f40a260564ac4a4f4b3fffb032dad", //<---- YOUR INFURA ID! (or it won't work)
+      gas: 5000000,
       gasPrice: 8000000000,
-      gasMultiplier: 4,
+      gasMultiplier: 2,
       accounts: {
         mnemonic: mnemonic(),
       },
@@ -334,15 +335,17 @@ task("memberprop", "Submits a new member proposal")
       [BigNumber.from(0), BigNumber.from(0)],
       [0, 0]
     );
+    
     console.log("********encoded data*********");
     console.log(encodedAction);
     console.log("*****************************");
     
-    await baal.submitProposal(
+    const submit = await baal.submitProposal(
       encodedAction,
       now + voting + grace + parseInt(taskArgs.expiration),
       hre.ethers.utils.id("all hail baal")
     );
+    console.log("tx:", submit.hash)
   });
 
 task("summon", "Summons a new DAO")
