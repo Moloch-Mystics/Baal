@@ -278,6 +278,7 @@ task("memberprop", "Submits a new member proposal")
   .addParam("shares", "number shares")
   .addParam("loot", "number loot")
   .addParam("expiration", "seconds after grace that proposal expires, 0 for none")
+  .addOptionalParam("meta", "updated meta data")
   .setAction(async (taskArgs, hre) => {
 
     const encodeMultiAction2 = (
@@ -323,6 +324,20 @@ task("memberprop", "Submits a new member proposal")
       "mintShares",
       [[taskArgs.applicant], [taskArgs.shares]]
     );
+    const metadataConfig = {
+      CONTENT: taskArgs.meta || '{"name":"test proposal"}',
+      TAG: "daohaus.proposal.metadata",
+    };
+    // const posterFactory = await hre.ethers.getContractFactory("Poster");
+    // const poster = (await posterFactory.attach(_addresses.poster)) as Poster;
+    // const postMetaData = await poster.interface.encodeFunctionData("post", [
+    //   metadataConfig.CONTENT,
+    //   metadataConfig.TAG,
+    // ]);
+    // const posterFromBaal = await baal.interface.encodeFunctionData(
+    //   "executeAsBaal",
+    //   [poster.address, 0, postMetaData]
+    // );
 
     const now = await block.timestamp;
     const voting = await baal.votingPeriod();
@@ -333,17 +348,17 @@ task("memberprop", "Submits a new member proposal")
       [mintLootAction, mintSharesAction],
       [baal.address, baal.address],
       [BigNumber.from(0), BigNumber.from(0)],
-      [0, 0]
+      [0, 0, 0]
     );
     
     console.log("********encoded data*********");
     console.log(encodedAction);
     console.log("*****************************");
-    
+    // TODO: poster should happen here probably, if in encodeAction it will run after processing
     const submit = await baal.submitProposal(
       encodedAction,
       now + voting + grace + parseInt(taskArgs.expiration),
-      hre.ethers.utils.id("all hail baal")
+      metadataConfig.CONTENT // hre.ethers.utils.id("all hail baal")
     );
     console.log("tx:", submit.hash)
   });
