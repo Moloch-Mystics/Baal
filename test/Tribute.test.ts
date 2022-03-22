@@ -338,7 +338,7 @@ describe('Tribute proposal type', function () {
     it('allows external tribute escrow to submit share proposal in exchange for tokens', async function () {
       await applicantWeth.approve(tributeEscrow.address, 100)
 
-      await tributeEscrow.submitTributeProposal(baal.address, applicantWeth.address, 100, 100, 0, applicant.address, proposal.expiration, 'tribute')
+      await tributeEscrow.submitTributeProposal(baal.address, applicantWeth.address, 100, 100, 0, proposal.expiration, 'tribute')
       await baal.sponsorProposal(1)
       await baal.submitVote(1, yes)
       await moveForwardPeriods(2)

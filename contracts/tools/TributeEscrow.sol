@@ -98,7 +98,6 @@ contract TributeEscrow {
         uint256 amount,
         uint256 shares,
         uint256 loot,
-        address recipient,
         uint32 expiration,
         string memory details
     ) public {
@@ -107,19 +106,19 @@ contract TributeEscrow {
             address(baal),
             shares,
             loot,
-            recipient,
+            msg.sender,
             proposalId,
             address(this)
         );
         escrows[address(baal)][proposalId] = Escrow(
             token,
-            recipient,
+            msg.sender,
             amount,
             false,
             baal.target()
         );
         baal.submitProposal(encodedProposal, expiration, details);
-        emit TributeProposal(address(baal), token, amount, recipient, proposalId);
+        emit TributeProposal(address(baal), token, amount, msg.sender, proposalId);
     }
 
     function releaseEscrow(uint32 proposalId) external {
