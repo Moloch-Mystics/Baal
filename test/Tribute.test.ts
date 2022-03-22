@@ -21,10 +21,6 @@ import { Poster } from '../src/types/Poster'
 
 use(solidity)
 
-// chai
-//   .use(require('chai-as-promised'))
-//   .should();
-
 const revertMessages = {
   molochAlreadyInitialized: 'Initializable: contract is already initialized',
   molochConstructorSharesCannotBe0: 'shares cannot be 0',
@@ -131,7 +127,6 @@ const getBaalParams = async function (
     ]
   )
 
-
   const setAdminConfig = await baal.interface.encodeFunctionData('setAdminConfig', adminConfig)
   const setGovernanceConfig = await baal.interface.encodeFunctionData('setGovernanceConfig', [governanceConfig])
   const setShaman = await baal.interface.encodeFunctionData('setShamans', shamans)
@@ -143,13 +138,6 @@ const getBaalParams = async function (
 
   const initalizationActions = [setAdminConfig, setGovernanceConfig, setShaman, mintShares, mintLoot, posterFromBaal]
 
-  // const initalizationActionsMulti = encodeMultiAction(
-  //   multisend,
-  //   [setAdminConfig, setGovernanceConfig, setGuildTokens, setShaman, mintShares, mintLoot],
-  //   [baal.address, baal.address, baal.address, baal.address, baal.address, baal.address],
-  //   [BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0)],
-  //   [0, 0, 0, 0, 0, 0]
-  // )
   return {
     initParams: abiCoder.encode(
       ['string', 'string', 'address', 'address'],
@@ -311,36 +299,7 @@ describe('Tribute proposal type', function () {
     })
 
     it('EXPLOIT - Allows another proposal to spend tokens intended for tribute', async function () {
-      // expect(await weth.balanceOf(baal.address)).to.equal(0)
-
-      // await applicantWeth.approve(baal.address, 100)
-
-      // const mintShares = await baal.interface.encodeFunctionData('mintShares', [[applicant.address], [100]])
-      // const sendTribute = await applicantWeth.interface.encodeFunctionData('transferFrom', [applicant.address, baal.address, 100])
-
-      // const encodedProposal = encodeMultiAction(
-      //   multisend,
-      //   [mintShares, sendTribute],
-      //   [baal.address, weth.address],
-      //   [BigNumber.from(0), BigNumber.from(0)],
-      //   [0, 0]
-      // )
-
-      // const decoded = decodeMultiAction(multisend, encodedProposal)
-
-      // // malicious proposal sends tokens but skips issuing shares
-      // const maliciousProposal = encodeMultiAction(multisend, [sendTribute], [weth.address], [BigNumber.from(0)], [0])
-      // // const encodedProposal = encodeMultiAction(multisend, [mintShares], [baal.address], [BigNumber.from(0)], [0])
-
-      // await baal.submitProposal(encodedProposal, proposal.expiration, ethers.utils.id(proposal.details))
-      // await baal.submitProposal(maliciousProposal, proposal.expiration, ethers.utils.id(proposal.details))
-      // await baal.submitVote(1, no)
-      // await baal.submitVote(2, yes)
-      // await moveForwardPeriods(2)
-      // await baal.processProposal(1, encodedProposal)
-      // // await baal.processProposal(2, maliciousProposal)
-      // expect(await weth.balanceOf(baal.address)).to.equal(100)
-      // expect(await baal.balanceOf(applicant.address)).to.equal(0)
+      
       expect(await weth.balanceOf(gnosisSafe.address)).to.equal(0)
 
       await applicantWeth.approve(gnosisSafe.address, 100)
@@ -379,7 +338,7 @@ describe('Tribute proposal type', function () {
     it('allows external tribute escrow to submit share proposal in exchange for tokens', async function () {
       await applicantWeth.approve(tributeEscrow.address, 100)
 
-      await tributeEscrow.submitTributeProposal(baal.address, applicantWeth.address, 100, 100, 0, applicant.address, proposal.expiration, 'tribute')
+      await tributeEscrow.submitTributeProposal(baal.address, applicantWeth.address, 100, 100, 0, proposal.expiration, 'tribute')
       await baal.sponsorProposal(1)
       await baal.submitVote(1, yes)
       await moveForwardPeriods(2)
