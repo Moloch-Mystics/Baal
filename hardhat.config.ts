@@ -18,6 +18,8 @@ import { Poster } from "./src/types/Poster";
 import { encodeMultiSend, MetaTransaction } from "@gnosis.pm/safe-contracts";
 
 import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
+import { TestErc20 } from "./src/types/TestErc20";
+import { TributeEscrow } from "./src/types/TributeEscrow";
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
@@ -29,6 +31,7 @@ const _addresses = {
   gnosisFallbackLibrary: "0xf48f2b2d2a534e402487b3ee7c18c33aec0fe5e4",
   gnosisMultisendLibrary: "0xa238cbeb142c10ef7ad8442c6d1f9e89e07e7761",
   poster: "0x000000000000cd17345801aa8147b8D3950260FF",
+  posterKovan: "0x37A2080f275E26fFEfB6E68F3005826368156C5C"
 };
 
 function mnemonic() {
@@ -48,9 +51,7 @@ function etherscan() {
     return fs.readFileSync("./etherscan.txt").toString().trim();
   } catch (e) {
     if (defaultNetwork !== "localhost") {
-      console.log(
-        "☢️ WARNING: No etherscan file"
-      );
+      console.log("☢️ WARNING: No etherscan file");
     }
   }
   return "";
@@ -214,6 +215,77 @@ task(
 
 /* DAO tasks */
 
+task("delegate", "Delegate shares")
+  .addParam("dao", "Dao address")
+  .addParam("to", "RQ to")
+  .setAction(async (taskArgs, hre) => {
+    const Baal = await hre.ethers.getContractFactory("Baal");
+    const baal = (await Baal.attach(taskArgs.dao)) as Baal;
+    const delegateVotes = await baal.delegate(taskArgs._to);
+    console.log("Delegate votes txhash:", delegateVotes.hash);
+  });
+
+task("ragequit", "Cancel a proposal")
+  .addParam("dao", "Dao address")
+  .addParam("to", "RQ to")
+  .addParam("shares", "number of shares")
+  .addParam("loot", "number of loot")
+  .addParam(
+    "tokens",
+    'the token addresses (array) (escape quotes) (no spaces) ex [\\"0x123...\\"]'
+  )
+  .setAction(async (taskArgs, hre) => {
+    const Baal = await hre.ethers.getContractFactory("Baal");
+    const baal = (await Baal.attach(taskArgs.dao)) as Baal;
+    const cancelProposal = await baal.ragequit(taskArgs.to,taskArgs.shares,taskArgs.loot, taskArgs.tokens);
+    console.log("Ragequit txhash:", cancelProposal.hash);
+  });
+
+task("tributeprop", "Approve token and make a tribute proposal")
+  .addParam("dao", "Dao address")
+  .addParam("minion", "Tribute Minion address")
+  .addParam("token", "Tribute token address")
+  .addParam("amount", "Tribute token amount")
+  .addParam("shares", "Tribute shares requested")
+  .addParam("loot", "Tribute loot requested")
+  .addParam("expiration", "Tribute expiration date. 0 for none")
+  .setAction(async (taskArgs, hre) => {
+    const Baal = await hre.ethers.getContractFactory("Baal");
+    const baal = (await Baal.attach(taskArgs.dao)) as Baal;
+    const Token = await hre.ethers.getContractFactory("TestERC20");
+    const token = (await Token.attach(taskArgs.token)) as TestErc20;
+    const Minion = await hre.ethers.getContractFactory("TributeEscrow");
+    const minion = (await Minion.attach(taskArgs.minion)) as TributeEscrow;
+    const countBefore = await baal.proposalCount();
+    console.log("countBefore", countBefore);
+    const deployers = await hre.ethers.getSigners();
+    const address = await deployers[0].getAddress();
+    // approve
+    const approve = await token.approve(taskArgs.minion, taskArgs.amount);
+    const encoded = await minion.encodeTributeProposal(
+      taskArgs.dao,
+      taskArgs.shares,
+      taskArgs.loot,
+      address,
+      countBefore + 1,
+      taskArgs.minion
+    );
+    console.log("*****encoded proposal******");
+    console.log(encoded);
+    console.log("***************************");
+
+    const tributeProposal = await minion.submitTributeProposal(
+      taskArgs.dao,
+      taskArgs.token,
+      taskArgs.amount,
+      taskArgs.shares,
+      taskArgs.loot,
+      taskArgs.expiration,
+      "tribute from cli"
+    );
+    console.log("Proposal processed txhash:", tributeProposal.hash);
+  });
+
 task("cancelprop", "Cancel a proposal")
   .addParam("dao", "Dao address")
   .addParam("id", "Proposal ID")
@@ -223,8 +295,7 @@ task("cancelprop", "Cancel a proposal")
     // TODO: pull event data from etherscan
     const cancelProposal = await baal.cancelProposal(taskArgs.id);
     console.log("Proposal processed txhash:", cancelProposal.hash);
-
-  })
+  });
 
 task("processprop", "Process a proposal")
   .addParam("dao", "Dao address")
@@ -234,11 +305,12 @@ task("processprop", "Process a proposal")
     const Baal = await hre.ethers.getContractFactory("Baal");
     const baal = (await Baal.attach(taskArgs.dao)) as Baal;
     // TODO: pull event data from etherscan
-    const processProposal = await baal.processProposal(taskArgs.id, taskArgs.data);
+    const processProposal = await baal.processProposal(
+      taskArgs.id,
+      taskArgs.data
+    );
     console.log("Proposal processed txhash:", processProposal.hash);
-
-  })
-
+  });
 
 task("voteprop", "Vote on a proposal")
   .addParam("dao", "Dao address")
@@ -247,10 +319,12 @@ task("voteprop", "Vote on a proposal")
   .setAction(async (taskArgs, hre) => {
     const Baal = await hre.ethers.getContractFactory("Baal");
     const baal = (await Baal.attach(taskArgs.dao)) as Baal;
-    const submitVote = await baal.submitVote(taskArgs.id, (taskArgs.approve === 'true'));
+    const submitVote = await baal.submitVote(
+      taskArgs.id,
+      taskArgs.approve === "true"
+    );
     console.log("Proposal voted on txhash:", submitVote.hash);
-
-  })
+  });
 
 task("sponsorprop", "Status of a proposal")
   .addParam("dao", "Dao address")
@@ -260,8 +334,7 @@ task("sponsorprop", "Status of a proposal")
     const baal = (await Baal.attach(taskArgs.dao)) as Baal;
     const proposal = await baal.sponsorProposal(taskArgs.id);
     console.log("Proposal sponsored txhash:", proposal.hash);
-
-  })
+  });
 
 task("statusprop", "Status of a proposal")
   .addParam("dao", "Dao address")
@@ -271,8 +344,7 @@ task("statusprop", "Status of a proposal")
     const baal = (await Baal.attach(taskArgs.dao)) as Baal;
     const proposal = await baal.proposals(taskArgs.id);
     console.log("Proposal status:", proposal);
-
-  })
+  });
 task("infoprops", "Current Proposal info")
   .addParam("dao", "Dao address")
   .setAction(async (taskArgs, hre) => {
@@ -282,17 +354,19 @@ task("infoprops", "Current Proposal info")
     const lastSponsored = await baal.latestSponsoredProposalId();
     console.log("the current proposal count is:", count);
     console.log("the last proposal sponsored is:", lastSponsored);
-  })
+  });
 
 task("memberprop", "Submits a new member proposal")
   .addParam("dao", "Dao address")
   .addParam("applicant", "applicant address")
   .addParam("shares", "number shares")
   .addParam("loot", "number loot")
-  .addParam("expiration", "seconds after grace that proposal expires, 0 for none")
+  .addParam(
+    "expiration",
+    "seconds after grace that proposal expires, 0 for none"
+  )
   .addOptionalParam("meta", "updated meta data")
   .setAction(async (taskArgs, hre) => {
-
     const encodeMultiAction2 = (
       multisend: MultiSend,
       actions: string[],
@@ -362,7 +436,7 @@ task("memberprop", "Submits a new member proposal")
       [BigNumber.from(0), BigNumber.from(0)],
       [0, 0, 0]
     );
-    
+
     console.log("********encoded data*********");
     console.log(encodedAction);
     console.log("*****************************");
@@ -372,15 +446,18 @@ task("memberprop", "Submits a new member proposal")
       now + voting + grace + parseInt(taskArgs.expiration),
       metadataConfig.CONTENT // hre.ethers.utils.id("all hail baal")
     );
-    console.log("tx:", submit.hash)
+    console.log("tx:", submit.hash);
   });
 
 task("summon", "Summons a new DAO")
   .addParam("factory", "Dao factory address")
   .addParam("loottemplate", "loot template")
-  .addParam("summoners", 'the summoner addresses (array) (escape quotes) (no spaces) ex [\\"0x123...\\"]')
-  .addParam("shares", "numnber of initial shares for summoners (array)")
-  .addParam("loot", "numnber of initial loot for summoners (array)")
+  .addParam(
+    "summoners",
+    'the summoner addresses (array) (escape quotes) (no spaces) ex [\\"0x123...\\"]'
+  )
+  .addParam("shares", "numnber of initial shares for summoners (string array, escape quotes)")
+  .addParam("loot", "numnber of initial loot for summoners (string array, escape quotes)")
   .addParam("sharespaused", "are shares transferable")
   .addParam("lootpaused", "is loot transferable")
   .addParam("shaman", "any initial shamans")
@@ -391,24 +468,31 @@ task("summon", "Summons a new DAO")
       CONTENT: taskArgs.meta || '{"name":"test"}',
       TAG: "daohaus.summon.metadata",
     };
-    let summonerArr
-    let lootArr
-    let sharesArr
-    
-    try{
+    let summonerArr;
+    let lootArr;
+    let sharesArr;
+
+    try {
       summonerArr = JSON.parse(taskArgs.summoners);
       lootArr = JSON.parse(taskArgs.loot);
       sharesArr = JSON.parse(taskArgs.shares);
-    } catch(err) {
-      throw("loot shares and summoners should be arrays");
+    } catch (err) {
+      throw "loot shares and summoners should be arrays";
     }
-    if(!Array.isArray(summonerArr) || !Array.isArray(lootArr) || !Array.isArray(sharesArr)) {
-      throw("loot shares and summoners should be linked arrays")
+    if (
+      !Array.isArray(summonerArr) ||
+      !Array.isArray(lootArr) ||
+      !Array.isArray(sharesArr)
+    ) {
+      throw "loot shares and summoners should be linked arrays";
     }
-    if(summonerArr.length !== lootArr.length || lootArr.length !== sharesArr.length) {
-      throw("arrays must be of the same length")
+    if (
+      summonerArr.length !== lootArr.length ||
+      lootArr.length !== sharesArr.length
+    ) {
+      throw "arrays must be of the same length";
     }
-    
+
     const abiCoder = hre.ethers.utils.defaultAbiCoder;
     const getBaalParams = async function (
       baal: Baal,
@@ -527,7 +611,8 @@ task("summon", "Summons a new DAO")
     console.log("baalTemplateAddr", baalTemplateAddr);
 
     const posterFactory = await hre.ethers.getContractFactory("Poster");
-    const poster = (await posterFactory.attach(_addresses.poster)) as Poster;
+    const posterAddress = taskArgs.network == "kovan" ? _addresses.posterKovan : _addresses.poster;
+    const poster = (await posterFactory.attach(posterAddress)) as Poster;
     console.log("**********************");
 
     const LootFactory = await hre.ethers.getContractFactory("Loot");
