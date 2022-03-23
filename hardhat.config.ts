@@ -31,6 +31,7 @@ const _addresses = {
   gnosisFallbackLibrary: "0xf48f2b2d2a534e402487b3ee7c18c33aec0fe5e4",
   gnosisMultisendLibrary: "0xa238cbeb142c10ef7ad8442c6d1f9e89e07e7761",
   poster: "0x000000000000cd17345801aa8147b8D3950260FF",
+  posterKovan: "0x37A2080f275E26fFEfB6E68F3005826368156C5C"
 };
 
 function mnemonic() {
@@ -213,6 +214,16 @@ task(
 );
 
 /* DAO tasks */
+
+task("delegate", "Delegate shares")
+  .addParam("dao", "Dao address")
+  .addParam("to", "RQ to")
+  .setAction(async (taskArgs, hre) => {
+    const Baal = await hre.ethers.getContractFactory("Baal");
+    const baal = (await Baal.attach(taskArgs.dao)) as Baal;
+    const delegateVotes = await baal.delegate(taskArgs._to);
+    console.log("Delegate votes txhash:", delegateVotes.hash);
+  });
 
 task("ragequit", "Cancel a proposal")
   .addParam("dao", "Dao address")
@@ -600,7 +611,8 @@ task("summon", "Summons a new DAO")
     console.log("baalTemplateAddr", baalTemplateAddr);
 
     const posterFactory = await hre.ethers.getContractFactory("Poster");
-    const poster = (await posterFactory.attach(_addresses.poster)) as Poster;
+    const posterAddress = taskArgs.network == "kovan" ? _addresses.posterKovan : _addresses.poster;
+    const poster = (await posterFactory.attach(posterAddress)) as Poster;
     console.log("**********************");
 
     const LootFactory = await hre.ethers.getContractFactory("Loot");
