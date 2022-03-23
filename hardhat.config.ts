@@ -225,7 +225,7 @@ task("delegate", "Delegate shares")
     console.log("Delegate votes txhash:", delegateVotes.hash);
   });
 
-task("ragequit", "Ragequit some shares")
+task("ragequit", "Ragequit shares and/or loot")
   .addParam("dao", "Dao address")
   .addParam("to", "RQ to")
   .addParam("shares", "number of shares")
