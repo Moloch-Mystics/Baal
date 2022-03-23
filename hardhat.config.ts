@@ -217,15 +217,15 @@ task(
 
 task("delegate", "Delegate shares")
   .addParam("dao", "Dao address")
-  .addParam("to", "RQ to")
+  .addParam("to", "delegate to")
   .setAction(async (taskArgs, hre) => {
     const Baal = await hre.ethers.getContractFactory("Baal");
     const baal = (await Baal.attach(taskArgs.dao)) as Baal;
-    const delegateVotes = await baal.delegate(taskArgs._to);
+    const delegateVotes = await baal.delegate(taskArgs.to);
     console.log("Delegate votes txhash:", delegateVotes.hash);
   });
 
-task("ragequit", "Cancel a proposal")
+task("ragequit", "Ragequit some shares")
   .addParam("dao", "Dao address")
   .addParam("to", "RQ to")
   .addParam("shares", "number of shares")
