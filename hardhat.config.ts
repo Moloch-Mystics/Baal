@@ -214,6 +214,22 @@ task(
 
 /* DAO tasks */
 
+task("ragequit", "Cancel a proposal")
+  .addParam("dao", "Dao address")
+  .addParam("to", "RQ to")
+  .addParam("shares", "number of shares")
+  .addParam("loot", "number of loot")
+  .addParam(
+    "tokens",
+    'the token addresses (array) (escape quotes) (no spaces) ex [\\"0x123...\\"]'
+  )
+  .setAction(async (taskArgs, hre) => {
+    const Baal = await hre.ethers.getContractFactory("Baal");
+    const baal = (await Baal.attach(taskArgs.dao)) as Baal;
+    const cancelProposal = await baal.ragequit(taskArgs.to,taskArgs.shares,taskArgs.loot, taskArgs.tokens);
+    console.log("Ragequit txhash:", cancelProposal.hash);
+  });
+
 task("tributeprop", "Approve token and make a tribute proposal")
   .addParam("dao", "Dao address")
   .addParam("minion", "Tribute Minion address")
@@ -429,8 +445,8 @@ task("summon", "Summons a new DAO")
     "summoners",
     'the summoner addresses (array) (escape quotes) (no spaces) ex [\\"0x123...\\"]'
   )
-  .addParam("shares", "numnber of initial shares for summoners (array)")
-  .addParam("loot", "numnber of initial loot for summoners (array)")
+  .addParam("shares", "numnber of initial shares for summoners (string array, escape quotes)")
+  .addParam("loot", "numnber of initial loot for summoners (string array, escape quotes)")
   .addParam("sharespaused", "are shares transferable")
   .addParam("lootpaused", "is loot transferable")
   .addParam("shaman", "any initial shamans")
