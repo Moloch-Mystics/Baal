@@ -215,6 +215,7 @@ task(
 
 /* DAO tasks */
 
+
 task("delegate", "Delegate shares")
   .addParam("dao", "Dao address")
   .addParam("to", "delegate to")
@@ -464,9 +465,11 @@ task("summon", "Summons a new DAO")
   .addParam("name", "share token symbol")
   .addOptionalParam("meta", "updated meta data")
   .setAction(async (taskArgs, hre) => {
+    const network = await hre.ethers.provider.getNetwork()
+    const chainId = network.chainId
     const metadataConfig = {
       CONTENT: taskArgs.meta || '{"name":"test"}',
-      TAG: "daohaus.summon.metadata",
+      TAG: "daohaus.metadata.summoner",
     };
     let summonerArr;
     let lootArr;
@@ -611,7 +614,9 @@ task("summon", "Summons a new DAO")
     console.log("baalTemplateAddr", baalTemplateAddr);
 
     const posterFactory = await hre.ethers.getContractFactory("Poster");
-    const posterAddress = taskArgs.network == "kovan" ? _addresses.posterKovan : _addresses.poster;
+    const posterAddress = network.name == "kovan" ? _addresses.posterKovan : _addresses.poster;
+    console.log('posterAddress', posterAddress);
+    
     const poster = (await posterFactory.attach(posterAddress)) as Poster;
     console.log("**********************");
 
