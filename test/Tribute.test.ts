@@ -329,7 +329,7 @@ describe('Tribute proposal type', function () {
     })
   })
 
-  describe('safe tribute', function () {
+  describe.only('safe tribute', function () {
     let tributeEscrow: TributeEscrow
     this.beforeEach(async function () {
       const TributeEscrowContract = await ethers.getContractFactory('TributeEscrow')

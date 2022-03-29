@@ -214,6 +214,7 @@ task(
 );
 
 /* DAO tasks */
+/* TODO: DAO amin tasks */
 
 
 task("delegate", "Delegate shares")

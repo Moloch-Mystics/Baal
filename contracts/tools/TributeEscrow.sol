@@ -32,7 +32,8 @@ contract TributeEscrow {
         _recipients[0] = recipient;
 
         bytes memory _releaseEscrow = abi.encodeWithSignature(
-            "releaseEscrow(uint32)",
+            "releaseEscrow(address, uint32)",
+            baal,
             proposalId
         );
 
@@ -121,14 +122,15 @@ contract TributeEscrow {
         emit TributeProposal(address(baal), token, amount, msg.sender, proposalId);
     }
 
-    function releaseEscrow(uint32 proposalId) external {
+    function releaseEscrow(address _baal, uint32 _proposalId) external {
         // console.log("releasing");
-        Baal baal = Baal(msg.sender);
-        Escrow storage escrow = escrows[address(baal)][proposalId];
+        // msg.sender is safe
+        Baal baal = Baal(_baal);
+        Escrow storage escrow = escrows[address(baal)][_proposalId];
         require(!escrow.released, "Already released");
         // console.log("releasing1b");
 
-        bool[4] memory status = baal.getProposalStatus(proposalId);
+        bool[4] memory status = baal.getProposalStatus(_proposalId);
         // console.log("releasing1c");
         require(status[2], "Not passed");
         escrow.released = true;
