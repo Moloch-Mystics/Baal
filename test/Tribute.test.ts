@@ -238,8 +238,8 @@ describe('Tribute proposal type', function () {
       deploymentConfig,
       [sharesPaused, lootPaused],
       [[shaman.address], [7]],
-      [[summoner.address], [shares]],
-      [[summoner.address], [loot]]
+      [[summoner.address, applicant.address], [shares, shares]],
+      [[summoner.address, applicant.address], [loot, loot]]
     )
     const tx = await baalSummoner.summonBaalAndSafe(encodedInitParams.initParams, encodedInitParams.initalizationActions, 101)
     const addresses = await getNewBaalAddresses(tx)
@@ -265,7 +265,7 @@ describe('Tribute proposal type', function () {
 
     proposal = {
       flag: 0,
-      account: summoner.address,
+      account: applicant.address,
       data: selfTransferAction,
       details: 'all hail baal',
       expiration: 0,
@@ -295,7 +295,7 @@ describe('Tribute proposal type', function () {
       await moveForwardPeriods(2)
       await baal.processProposal(1, encodedProposal)
       expect(await weth.balanceOf(gnosisSafe.address)).to.equal(100)
-      expect(await baal.balanceOf(applicant.address)).to.equal(100)
+      expect(await baal.balanceOf(applicant.address)).to.equal(200) // current shares plus new shares
     })
 
     it('EXPLOIT - Allows another proposal to spend tokens intended for tribute', async function () {
@@ -325,7 +325,7 @@ describe('Tribute proposal type', function () {
       // await baal.processProposal(1, encodedProposal)
       await baal.processProposal(2, maliciousProposal)
       expect(await weth.balanceOf(gnosisSafe.address)).to.equal(100)
-      expect(await baal.balanceOf(applicant.address)).to.equal(0)
+      expect(await baal.balanceOf(applicant.address)).to.equal(100) // only current shares no new ones
     })
   })
 
@@ -336,23 +336,38 @@ describe('Tribute proposal type', function () {
       tributeEscrow = (await TributeEscrowContract.deploy()) as TributeEscrow
     })
     it('allows external tribute escrow to submit share proposal in exchange for tokens', async function () {
-      await applicantWeth.approve(tributeEscrow.address, 100)
 
-      await tributeEscrow.submitTributeProposal(baal.address, applicantWeth.address, 100, 100, 0, proposal.expiration, 'tribute')
+      const applicantTributeEscrow = tributeEscrow.connect(applicant)
+
+      
+      expect(await applicantWeth.balanceOf(gnosisSafe.address)).to.equal(0)
+      expect(await applicantWeth.balanceOf(applicant.address)).to.equal(1000)
+
+      const cuurentShares = await baal.balanceOf(applicant.address)
+      
+      await applicantWeth.approve(tributeEscrow.address, 10000)
+
+      await applicantTributeEscrow.submitTributeProposal(baal.address, applicantWeth.address, 100, 1234, 1007, proposal.expiration, 'tribute');
       await baal.sponsorProposal(1)
       await baal.submitVote(1, yes)
       await moveForwardPeriods(2)
 
-      const encodedProposal = await tributeEscrow.encodeTributeProposal(baal.address, 100, 0, applicant.address, 1, tributeEscrow.address)
+      const encodedProposal = await tributeEscrow.encodeTributeProposal(baal.address, 1234, 1007, applicant.address, 1, tributeEscrow.address)
 
       const decoded = decodeMultiAction(multisend, encodedProposal)
+      
+      // await tributeEscrow.releaseEscrow(baal.address,1)
 
       await baal.processProposal(1, encodedProposal)
+
       const state = await baal.state(1)
+      // const propData = await baal.proposals(1)
       const propStatus = await baal.getProposalStatus(1)
       console.log({state, propStatus})
-      expect(await weth.balanceOf(gnosisSafe.address)).to.equal(100)
-      expect(await baal.balanceOf(applicant.address)).to.equal(100)
+
+      expect(await baal.balanceOf(applicant.address)).to.equal(1234 + parseInt(cuurentShares.toString()))
+      expect(await applicantWeth.balanceOf(gnosisSafe.address)).to.equal(100)
     })
   })
+
 })

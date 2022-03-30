@@ -144,7 +144,7 @@ const config: HardhatUserConfig = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 100,
+            runs: 5,
           },
         },
       },
@@ -214,6 +214,7 @@ task(
 );
 
 /* DAO tasks */
+/* TODO: DAO amin tasks */
 
 
 task("delegate", "Delegate shares")
@@ -275,16 +276,16 @@ task("tributeprop", "Approve token and make a tribute proposal")
     console.log(encoded);
     console.log("***************************");
 
-    const tributeProposal = await minion.submitTributeProposal(
-      taskArgs.dao,
-      taskArgs.token,
-      taskArgs.amount,
-      taskArgs.shares,
-      taskArgs.loot,
-      taskArgs.expiration,
-      "tribute from cli"
-    );
-    console.log("Proposal processed txhash:", tributeProposal.hash);
+    // const tributeProposal = await minion.submitTributeProposal(
+    //   taskArgs.dao,
+    //   taskArgs.token,
+    //   taskArgs.amount,
+    //   taskArgs.shares,
+    //   taskArgs.loot,
+    //   taskArgs.expiration,
+    //   "tribute from cli"
+    // );
+    // console.log("Proposal processed txhash:", tributeProposal.hash);
   });
 
 task("cancelprop", "Cancel a proposal")
