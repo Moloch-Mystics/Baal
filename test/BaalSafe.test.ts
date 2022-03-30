@@ -216,7 +216,7 @@ const setShamanProposal = async function (baal: Baal, multisend: MultiSend, sham
   return proposalId
 }
 
-describe.only('Baal contract', function () {
+describe('Baal contract', function () {
   let baal: Baal
   let baalSingleton: Baal
   let baalAsShaman: Baal
@@ -1789,7 +1789,7 @@ describe.only('Baal contract', function () {
       expect(baal.processProposal(2, proposal.data)).to.be.revertedWith(revertMessages.processProposalNotReady)
     })
 
-    it.only('require fail - prev proposal not processed', async function () {
+    it('require fail - prev proposal not processed', async function () {
       await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
       await baal.submitVote(1, yes)
       await baal.submitProposal(proposal.data, proposal.expiration, ethers.utils.id(proposal.details))
@@ -2334,7 +2334,7 @@ describe.only('Baal contract', function () {
   })
 })
 
-describe.only('Baal contract - tribute required', function () {
+describe('Baal contract - tribute required', function () {
   let customConfig = { ...deploymentConfig, PROPOSAL_OFFERING: 69, SPONSOR_THRESHOLD: 1 }
 
   let baal: Baal
@@ -2477,7 +2477,7 @@ describe.only('Baal contract - tribute required', function () {
   })
 })
 
-describe.only('Baal contract - no shares minted - fails', function () {
+describe('Baal contract - no shares minted - fails', function () {
   let customConfig = { ...deploymentConfig, PROPOSAL_OFFERING: 69, SPONSOR_THRESHOLD: 1 }
 
   let baalSingleton: Baal

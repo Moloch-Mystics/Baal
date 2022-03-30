@@ -577,6 +577,8 @@ contract Baal is CloneFactory, Module {
             if (!success) {
                 prop.status[3] = true;
                 emit ProcessingFailed(id);
+                // should we revert here? setShamans tests fail
+                // revert("failed process");
             }
         }
 
