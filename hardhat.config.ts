@@ -77,6 +77,9 @@ const config: HardhatUserConfig = {
     },
     kovan: {
       url: "https://kovan.infura.io/v3/460f40a260564ac4a4f4b3fffb032dad", //<---- YOUR INFURA ID! (or it won't work)
+      gas: 5000000,
+      gasPrice: 8000000000,
+      gasMultiplier: 2,
       accounts: {
         mnemonic: mnemonic(),
       },
@@ -285,7 +288,7 @@ task("tributeprop", "Approve token and make a tribute proposal")
       taskArgs.expiration,
       "tribute from cli"
     );
-    console.log("Proposal processed txhash:", tributeProposal.hash);
+    console.log("Tribute proposal submitted txhash:", tributeProposal.hash);
   });
 
 task("cancelprop", "Cancel a proposal")
