@@ -148,7 +148,7 @@ const getBaalParams = async function (
 }
 
 
-describe('Tribute proposal type', function () {
+describe.only('Tribute proposal type', function () {
   let baal: Baal
   let lootSingleton: Loot
   let LootFactory: ContractFactory
