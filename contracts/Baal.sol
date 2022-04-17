@@ -57,6 +57,7 @@ contract Baal is Executor, Initializable, CloneFactory {
     uint256 public totalSupply; /*counter for total `members` voting `shares` with erc20 accounting*/
     string public name; /*'name' for erc20 `shares` accounting*/
     string public symbol; /*'symbol' for erc20 `shares` accounting*/
+    address private constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE; /*ETH reference for redemptions*/
     ILoot public lootToken; /*Sub ERC20 for loot mgmt*/
     mapping(address => mapping(address => uint256)) public allowance; /*maps approved pulls of `shares` with erc20 accounting*/
     mapping(address => uint256) public balanceOf; /*maps `members` accounts to `shares` with erc20 accounting*/
@@ -668,17 +669,18 @@ contract Baal is Executor, Initializable, CloneFactory {
         }
 
         for (uint256 i; i < tokens.length; i++) {
-            (, bytes memory balanceData) = tokens[i].staticcall(
-                abi.encodeWithSelector(0x70a08231, address(this))
-            ); /*get Baal token balances - 'balanceOf(address)'*/
-            uint256 balance = abi.decode(balanceData, (uint256)); /*decode Baal token balances for calculation*/
-
+            uint256 balance = assets[i] == ETH 
+                ? address(this).balance 
+                : ILoot(tokens[i]).balanceOf(address(this));
+            
             uint256 amountToRagequit = ((lootToBurn + sharesToBurn) * balance) /
                 (totalShares + _totalLoot); /*calculate 'fair shair' claims*/
 
             if (amountToRagequit != 0) {
                 /*gas optimization to allow higher maximum token limit*/
-                _safeTransfer(tokens[i], to, amountToRagequit); /*execute 'safe' token transfer*/
+                assets[i] == ETH
+                    ? _safeTransferETH(to, amountToRagequit) /*execute 'safe' ETH transfer*/
+                    : _safeTransfer(tokens[i], to, amountToRagequit); /*execute 'safe' token transfer*/
             }
         }
 
@@ -1370,6 +1372,18 @@ contract Baal is Executor, Initializable, CloneFactory {
         returns (bytes32 hash)
     {
         return keccak256(abi.encode(_transactions));
+    }
+    
+    /// @notice Provides 'safe' {transfer} for ETH.
+    function safeTransferETH(address to, uint256 amount) internal {
+        bool success;
+
+        assembly {
+            // Transfer the ETH and store if it succeeded or not.
+            success := call(gas(), to, amount, 0, 0, 0, 0)
+        }
+
+        require(success, "ETH_TRANSFER_FAILED");
     }
 
     /// @notice Provides 'safe' {transfer} for tokens that do not consistently return 'true/false'.
