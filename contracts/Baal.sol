@@ -669,7 +669,7 @@ contract Baal is Executor, Initializable, CloneFactory {
         }
 
         for (uint256 i; i < tokens.length; i++) {
-            uint256 balance = assets[i] == ETH 
+            uint256 balance = tokens[i] == ETH 
                 ? address(this).balance 
                 : ILoot(tokens[i]).balanceOf(address(this));
             
@@ -678,7 +678,7 @@ contract Baal is Executor, Initializable, CloneFactory {
 
             if (amountToRagequit != 0) {
                 /*gas optimization to allow higher maximum token limit*/
-                assets[i] == ETH
+                tokens[i] == ETH
                     ? _safeTransferETH(to, amountToRagequit) /*execute 'safe' ETH transfer*/
                     : _safeTransfer(tokens[i], to, amountToRagequit); /*execute 'safe' token transfer*/
             }
