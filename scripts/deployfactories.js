@@ -62,11 +62,14 @@ async function main() {
 
 	const LootFactory = await ethers.getContractFactory('Loot')
     const lootSingleton = (await LootFactory.deploy())
+	const SharesFactory = await ethers.getContractFactory('Shares')
+    const sharesSingleton = (await SharesFactory.deploy())
     const BaalFactory = await ethers.getContractFactory('Baal')
     const baalSingleton = (await BaalFactory.deploy())
 	const BaalSummoner = await ethers.getContractFactory('BaalSummoner')
 	
 	console.log('lootSingleton',lootSingleton.address)
+	console.log('sharesSingleton',sharesSingleton.address)
 	console.log('baalSingleton',baalSingleton.address)
 
     const baalSummoner = (await BaalSummoner.deploy(

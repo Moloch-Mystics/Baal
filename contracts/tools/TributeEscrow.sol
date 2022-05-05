@@ -118,7 +118,7 @@ contract TributeEscrow {
             false,
             baal.target()
         );
-        baal.submitProposal(encodedProposal, expiration, details);
+        baal.submitProposal(encodedProposal, expiration, 0, details);
         emit TributeProposal(address(baal), token, amount, msg.sender, proposalId);
     }
 

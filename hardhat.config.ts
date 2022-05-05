@@ -147,7 +147,7 @@ const config: HardhatUserConfig = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 5,
+            runs: 100,
           },
         },
       },
@@ -449,6 +449,7 @@ task("memberprop", "Submits a new member proposal")
     const submit = await baal.submitProposal(
       encodedAction,
       now + voting + grace + parseInt(taskArgs.expiration),
+      0,
       metadataConfig.CONTENT // hre.ethers.utils.id("all hail baal")
     );
     console.log("tx:", submit.hash);

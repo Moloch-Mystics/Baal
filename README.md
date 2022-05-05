@@ -1,5 +1,7 @@
 # Baal 👺
 
+[Docs Page here](https://baal-docs.vercel.app/)
+
 *This is the most recent collaborative repository for Moloch V3, codename Baal. (Jan 13, 2022).  This message will change when the repository is depricated.*
 
 Baal is a minimal yet composable DAO template continuing work from the [`Moloch`](https://github.com/MolochVentures/moloch), [`Minion`](https://github.com/raid-guild/moloch-minion) and [`Compound`](https://github.com/compound-finance/compound-protocol/tree/master/contracts/Governance) frameworks to make it easier for people to combine and command crypto assets with intuitive membership games.

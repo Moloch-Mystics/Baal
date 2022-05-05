@@ -18,6 +18,7 @@ import { Test } from 'mocha'
 import { BaalSummoner } from '../src/types/BaalSummoner'
 import { GnosisSafe } from '../src/types/GnosisSafe'
 import { Poster } from '../src/types/Poster'
+import { Shares } from '../src/types/Shares'
 
 use(solidity)
 
@@ -68,7 +69,7 @@ async function moveForwardPeriods(periods: number, extra?: number) {
 const getNewBaalAddresses = async (tx: ContractTransaction): Promise<{ baal: string; loot: string; safe: string }> => {
   const receipt = await ethers.provider.getTransactionReceipt(tx.hash)
   // console.log({logs: receipt.logs})
-  let baalSummonAbi = ['event SummonBaal(address indexed baal, address indexed loot, address indexed safe)']
+  let baalSummonAbi = ['event SummonBaal(address indexed baal, address indexed loot, address indexed shares, address safe)']
   let iface = new ethers.utils.Interface(baalSummonAbi)
   let log = iface.parseLog(receipt.logs[receipt.logs.length - 1])
   const { baal, loot, safe } = log.args
@@ -98,6 +99,7 @@ const getBaalParams = async function (
   baal: Baal,
   multisend: MultiSend,
   lootSingleton: Loot,
+  sharesSingleton: Shares,
   poster: Poster,
   config: {
     PROPOSAL_OFFERING: any
@@ -140,20 +142,23 @@ const getBaalParams = async function (
 
   return {
     initParams: abiCoder.encode(
-      ['string', 'string', 'address', 'address'],
-      [config.TOKEN_NAME, config.TOKEN_SYMBOL, lootSingleton.address, multisend.address]
+      ['string', 'string', 'address', 'address', 'address'],
+      [config.TOKEN_NAME, config.TOKEN_SYMBOL, lootSingleton.address, sharesSingleton.address, multisend.address]
     ),
     initalizationActions,
   }
 }
 
 
-describe.only('Tribute proposal type', function () {
+describe('Tribute proposal type', function () {
   let baal: Baal
   let lootSingleton: Loot
   let LootFactory: ContractFactory
+  let sharesSingleton: Shares
+  let SharesFactory: ContractFactory
   let ERC20: ContractFactory
   let lootToken: Loot
+  let sharesToken: Shares
   let shamanLootToken: Loot
   let shamanBaal: Baal
   let applicantBaal: Baal
@@ -203,6 +208,8 @@ describe.only('Tribute proposal type', function () {
   this.beforeAll(async function () {
     LootFactory = await ethers.getContractFactory('Loot')
     lootSingleton = (await LootFactory.deploy()) as Loot
+    SharesFactory = await ethers.getContractFactory('Shares')
+    sharesSingleton = (await SharesFactory.deploy()) as Shares
     BaalFactory = await ethers.getContractFactory('Baal')
     baalSingleton = (await BaalFactory.deploy()) as Baal
     Poster = await ethers.getContractFactory('Poster')
@@ -234,6 +241,7 @@ describe.only('Tribute proposal type', function () {
       baalSingleton,
       multisend,
       lootSingleton,
+      sharesSingleton,
       poster,
       deploymentConfig,
       [sharesPaused, lootPaused],
@@ -259,6 +267,11 @@ describe.only('Tribute proposal type', function () {
     const lootTokenAddress = await baal.lootToken()
 
     lootToken = LootFactory.attach(lootTokenAddress) as Loot
+    shamanLootToken = lootToken.connect(shaman)
+
+    const sharesTokenAddress = await baal.sharesToken()
+
+    sharesToken = SharesFactory.attach(sharesTokenAddress) as Shares
     shamanLootToken = lootToken.connect(shaman)
 
     const selfTransferAction = encodeMultiAction(multisend, ['0x'], [baal.address], [BigNumber.from(0)], [0])
@@ -290,12 +303,12 @@ describe.only('Tribute proposal type', function () {
       )
       // const encodedProposal = encodeMultiAction(multisend, [mintShares], [baal.address], [BigNumber.from(0)], [0])
 
-      await baal.submitProposal(encodedProposal, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitProposal(encodedProposal, proposal.expiration, 0, ethers.utils.id(proposal.details))
       await baal.submitVote(1, yes)
       await moveForwardPeriods(2)
       await baal.processProposal(1, encodedProposal)
       expect(await weth.balanceOf(gnosisSafe.address)).to.equal(100)
-      expect(await baal.balanceOf(applicant.address)).to.equal(200) // current shares plus new shares
+      expect(await sharesToken.balanceOf(applicant.address)).to.equal(200) // current shares plus new shares
     })
 
     it('EXPLOIT - Allows another proposal to spend tokens intended for tribute', async function () {
@@ -317,15 +330,15 @@ describe.only('Tribute proposal type', function () {
       const maliciousProposal = encodeMultiAction(multisend, [sendTribute], [weth.address], [BigNumber.from(0)], [0])
       // const encodedProposal = encodeMultiAction(multisend, [mintShares], [baal.address], [BigNumber.from(0)], [0])
 
-      await baal.submitProposal(encodedProposal, proposal.expiration, ethers.utils.id(proposal.details))
-      await baal.submitProposal(maliciousProposal, proposal.expiration, ethers.utils.id(proposal.details))
+      await baal.submitProposal(encodedProposal, proposal.expiration, 0, ethers.utils.id(proposal.details))
+      await baal.submitProposal(maliciousProposal, proposal.expiration, 0, ethers.utils.id(proposal.details))
       await baal.submitVote(1, no)
       await baal.submitVote(2, yes)
       await moveForwardPeriods(2)
       // await baal.processProposal(1, encodedProposal)
       await baal.processProposal(2, maliciousProposal)
       expect(await weth.balanceOf(gnosisSafe.address)).to.equal(100)
-      expect(await baal.balanceOf(applicant.address)).to.equal(100) // only current shares no new ones
+      expect(await sharesToken.balanceOf(applicant.address)).to.equal(100) // only current shares no new ones
     })
   })
 
@@ -343,7 +356,7 @@ describe.only('Tribute proposal type', function () {
       expect(await applicantWeth.balanceOf(gnosisSafe.address)).to.equal(0)
       expect(await applicantWeth.balanceOf(applicant.address)).to.equal(1000)
 
-      const cuurentShares = await baal.balanceOf(applicant.address)
+      const cuurentShares = await sharesToken.balanceOf(applicant.address)
       
       await applicantWeth.approve(tributeEscrow.address, 10000)
 
@@ -365,7 +378,7 @@ describe.only('Tribute proposal type', function () {
       const propStatus = await baal.getProposalStatus(1)
       console.log({state, propStatus})
 
-      expect(await baal.balanceOf(applicant.address)).to.equal(1234 + parseInt(cuurentShares.toString()))
+      expect(await sharesToken.balanceOf(applicant.address)).to.equal(1234 + parseInt(cuurentShares.toString()))
       expect(await applicantWeth.balanceOf(gnosisSafe.address)).to.equal(100)
     })
   })
