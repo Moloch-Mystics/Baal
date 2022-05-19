@@ -53,10 +53,11 @@ const revertMessages = {
   // unsetGuildTokensLastToken: 'reverted with panic code 0x32 (Array accessed at an out-of-bounds or negative index)',
   sharesTransferPaused: '!transferable',
   sharesInsufficientBalance: 'ERC20: transfer amount exceeds balance',
-  sharesInsufficientApproval: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)',
+  sharesInsufficientApproval: '', // Error: Transaction reverted without a reason string
   lootTransferPaused: '!transferable',
   lootInsufficientBalance: "reverted with reason string 'ERC20: transfer amount exceeds balance'",
-  lootInsufficientApproval: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)',
+  // lootInsufficientApproval: 'reverted with panic code 0x11 (Arithmetic operation underflowed or overflowed outside of an unchecked block)',
+  lootInsufficientApproval: '', // Error: Transaction reverted without a reason string
   mintSharesArrayParity: '!array parity',
   burnSharesArrayParity: '!array parity',
   burnSharesInsufficientShares: 'ERC20: burn amount exceeds balance',
@@ -1460,6 +1461,7 @@ describe('Baal contract', function () {
 
     it('require fails - insufficeint approval', async function () {
       await sharesToken.approve(shaman.address, 1)
+
       expect(sharesToken.transferFrom(summoner.address, shaman.address, 2)).to.be.revertedWith(revertMessages.sharesInsufficientApproval)
     })
   })
