@@ -22,6 +22,8 @@ import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
 
 interface IBaalToken {
 
+    function name() external view returns (string memory);
+
     function setUp(string memory _name, string memory _symbol) external;
 
     function mint(address recipient, uint256 amount) external;
@@ -71,10 +73,6 @@ contract Baal is CloneFactory, Module {
     using ECDSA for bytes32;
 
     // ERC20 SHARES + LOOT
-    // uint8 public constant decimals = 18; /*unit scaling factor in erc20 `shares` accounting - '18' is default to match ETH & common erc20s*/
-    // uint256 public totalSupply; /*counter for total `members` voting `shares` with erc20 accounting*/
-    string public name; /*'name' for erc20 `shares` accounting*/
-    string public symbol; /*'symbol' for erc20 `shares` accounting*/
     IBaalToken public lootToken; /*Sub ERC20 for loot mgmt*/
     IBaalToken public sharesToken; /*Sub ERC20 for loot mgmt*/
     mapping(address => mapping(address => uint256)) public allowance; /*maps approved pulls of `shares` with erc20 accounting*/
@@ -298,9 +296,6 @@ contract Baal is CloneFactory, Module {
         __Ownable_init();
         transferOwnership(_avatar);
 
-        name = _name; /*initialize Baal `name` with erc20 accounting*/
-        symbol = _symbol; /*initialize Baal `symbol` with erc20 accounting*/
-
         // Set the Gnosis safe address
         avatar = _avatar;
         target = _avatar; /*Set target to same address as avatar on setup - can be changed later via setTarget, though probably not a good idea*/
@@ -345,8 +340,8 @@ contract Baal is CloneFactory, Module {
             quorumPercent,
             sponsorThreshold,
             minRetentionPercent,
-            name,
-            symbol,
+            _name,
+            _symbol,
             totalShares(),
             totalLoot()
         );
@@ -408,8 +403,7 @@ contract Baal is CloneFactory, Module {
         }
 
         if (selfSponsor) {
-            latestSponsoredProposalId = proposalCount;
-            
+            latestSponsoredProposalId = proposalCount;          
         }
 
         emit SubmitProposal(
@@ -429,7 +423,7 @@ contract Baal is CloneFactory, Module {
 
     /// @notice Sponsor proposal to Baal `members` for approval within voting period.
     /// @param id Number of proposal in `proposals` mapping to sponsor.
-    function sponsorProposal(uint32 id) external nonReentrant {
+    function sponsorProposal(uint32 id) public nonReentrant {
         Proposal storage prop = proposals[id]; /*alias proposal storage pointers*/
 
         require(getCurrentVotes(msg.sender) >= sponsorThreshold, "!sponsor"); /*check 'votes > threshold - required to sponsor proposal*/
@@ -473,6 +467,7 @@ contract Baal is CloneFactory, Module {
         bool approved,
         bytes calldata signature
     ) external nonReentrant {
+        string memory name = sharesToken.name();
         bytes32 domainSeparator = keccak256(
             abi.encode(
                 DOMAIN_TYPEHASH,
