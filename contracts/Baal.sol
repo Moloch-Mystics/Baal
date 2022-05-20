@@ -423,7 +423,7 @@ contract Baal is CloneFactory, Module {
 
     /// @notice Sponsor proposal to Baal `members` for approval within voting period.
     /// @param id Number of proposal in `proposals` mapping to sponsor.
-    function sponsorProposal(uint32 id) public nonReentrant {
+    function sponsorProposal(uint32 id) external nonReentrant {
         Proposal storage prop = proposals[id]; /*alias proposal storage pointers*/
 
         require(getCurrentVotes(msg.sender) >= sponsorThreshold, "!sponsor"); /*check 'votes > threshold - required to sponsor proposal*/
