@@ -13,6 +13,7 @@ import { BaalSummoner } from "./src/types/BaalSummoner";
 import { Baal } from "./src/types/Baal";
 import { MultiSend } from "./src/types/MultiSend";
 import { Loot } from "./src/types/Loot";
+import { Shares } from "./src/types/Shares";
 import { Poster } from "./src/types/Poster";
 // import { decodeMultiAction, encodeMultiAction, hashOperation } from './src/util'
 import { encodeMultiSend, MetaTransaction } from "@gnosis.pm/safe-contracts";
@@ -458,6 +459,7 @@ task("memberprop", "Submits a new member proposal")
 task("summon", "Summons a new DAO")
   .addParam("factory", "Dao factory address")
   .addParam("loottemplate", "loot template")
+  .addParam("sharestemplate", "shares template")
   .addParam(
     "summoners",
     'the summoner addresses (array) (escape quotes) (no spaces) ex [\\"0x123...\\"]'
@@ -506,6 +508,7 @@ task("summon", "Summons a new DAO")
       baal: Baal,
       multisend: MultiSend,
       lootSingleton: Loot,
+      sharesSingleton: Shares,
       poster: Poster,
       config: {
         PROPOSAL_OFFERING: any;
@@ -583,11 +586,12 @@ task("summon", "Summons a new DAO")
       // )
       return {
         initParams: abiCoder.encode(
-          ["string", "string", "address", "address"],
+          ["string", "string", "address", "address", "address"],
           [
             config.TOKEN_NAME,
             config.TOKEN_SYMBOL,
             lootSingleton.address,
+            sharesSingleton.address,
             multisend.address,
           ]
         ),
@@ -629,6 +633,10 @@ task("summon", "Summons a new DAO")
     const lootSingleton = (await LootFactory.attach(
       taskArgs.loottemplate
     )) as Loot;
+    const SharesFactory = await hre.ethers.getContractFactory("Shares");
+    const sharesSingleton = (await SharesFactory.attach(
+      taskArgs.sharestemplate
+    )) as Shares;
     const Baal = await hre.ethers.getContractFactory("Baal");
     const baalSingleton = (await Baal.attach(baalTemplateAddr)) as Baal;
     const MultisendContract = await hre.ethers.getContractFactory("MultiSend");
@@ -640,6 +648,7 @@ task("summon", "Summons a new DAO")
       baalSingleton,
       multisend,
       lootSingleton,
+      sharesSingleton,
       poster,
       deploymentConfig,
       [metadataConfig.CONTENT, metadataConfig.TAG],
