@@ -4,11 +4,11 @@ import '../Baal.sol';
 
 contract ShamanMinter {
     Baal public baal;
-    ISharesLoot public sharesToken;
+    IBaalToken public sharesToken;
 
     function init(address payable _baal) external {
         baal =  Baal(_baal);
-        sharesToken = ISharesLoot(baal.sharesToken());
+        sharesToken = IBaalToken(baal.sharesToken());
     }
     
     function doubler(address[] calldata members) external payable {

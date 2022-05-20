@@ -5,14 +5,14 @@ import "../Baal.sol";
 
 contract MockBaal is CloneFactory {
     bool public lootPaused;
-    ISharesLoot public lootToken; /*Sub ERC20 for loot mgmt*/
+    IBaalToken public lootToken; /*Sub ERC20 for loot mgmt*/
 
     constructor(
         address payable _lootSingleton,
         string memory _name,
         string memory _symbol
     ) {
-        lootToken = ISharesLoot(createClone(_lootSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
+        lootToken = IBaalToken(createClone(_lootSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
         lootToken.setUp(
             string(abi.encodePacked(_name, " LOOT")),
             string(abi.encodePacked(_symbol, "-LOOT"))

@@ -397,11 +397,8 @@ describe('Baal contract', function () {
       const proposalOffering = await baal.proposalOffering()
       expect(proposalOffering).to.equal(deploymentConfig.PROPOSAL_OFFERING)
 
-      const name = await baal.name()
-      expect(name).to.equal(deploymentConfig.TOKEN_NAME)
-
-      const symbol = await baal.symbol()
-      expect(symbol).to.equal(deploymentConfig.TOKEN_SYMBOL)
+      // const symbol = await baal.symbol()
+      // expect(symbol).to.equal(deploymentConfig.TOKEN_SYMBOL)
 
       const lootPaused = await baal.lootPaused()
       expect(lootPaused).to.be.false
