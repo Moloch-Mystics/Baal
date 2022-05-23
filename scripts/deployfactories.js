@@ -31,6 +31,7 @@ const _symbol = "BAALTO";
 
 const networkName = {
 	4: 'Rinkeby',
+	5: 'Goerli',
 	1: 'mainnet',
 	137: 'matic',
 	42: 'kovan'
@@ -38,6 +39,7 @@ const networkName = {
 
 const networkCurrency = {
 	4: 'ETH',
+	5: 'ETH',
 	1: 'ETH',
 	137: 'matic',
 	42: 'ETH'

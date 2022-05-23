@@ -20,12 +20,9 @@ import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
 // import "hardhat/console.sol";
 
 
-interface ISharesLoot {
-    struct Checkpoint {
-        /*Baal checkpoint for marking number of delegated votes*/
-        uint32 fromTimeStamp; /*unix time for referencing voting balance*/
-        uint256 votes; /*votes at given unix time*/
-    }
+interface IBaalToken {
+
+    function name() external view returns (string memory);
 
     function setUp(string memory _name, string memory _symbol) external;
 
@@ -37,9 +34,17 @@ interface ISharesLoot {
 
     function totalSupply() external view returns (uint256);
 
+    // below is shares token specific
+    struct Checkpoint {
+        /*Baal checkpoint for marking number of delegated votes*/
+        uint32 fromTimeStamp; /*unix time for referencing voting balance*/
+        uint256 votes; /*votes at given unix time*/
+    }
+
     function numCheckpoints(address) external view returns (uint256);
 
     function getCheckpoint(address, uint256) external view returns (Checkpoint memory);
+    
 }
 
 contract CloneFactory {
@@ -68,12 +73,8 @@ contract Baal is CloneFactory, Module {
     using ECDSA for bytes32;
 
     // ERC20 SHARES + LOOT
-    // uint8 public constant decimals = 18; /*unit scaling factor in erc20 `shares` accounting - '18' is default to match ETH & common erc20s*/
-    // uint256 public totalSupply; /*counter for total `members` voting `shares` with erc20 accounting*/
-    string public name; /*'name' for erc20 `shares` accounting*/
-    string public symbol; /*'symbol' for erc20 `shares` accounting*/
-    ISharesLoot public lootToken; /*Sub ERC20 for loot mgmt*/
-    ISharesLoot public sharesToken; /*Sub ERC20 for loot mgmt*/
+    IBaalToken public lootToken; /*Sub ERC20 for loot mgmt*/
+    IBaalToken public sharesToken; /*Sub ERC20 for loot mgmt*/
     mapping(address => mapping(address => uint256)) public allowance; /*maps approved pulls of `shares` with erc20 accounting*/
 
     // ADMIN PARAMETERS
@@ -122,12 +123,6 @@ contract Baal is CloneFactory, Module {
         keccak256(
             "EIP712Domain(string name,uint256 chainId,address verifyingContract)"
         );
-    // bytes32 constant DELEGATION_TYPEHASH =
-    //     keccak256("Delegation(address delegatee,uint nonce,uint expiry)");
-    // bytes32 constant PERMIT_TYPEHASH =
-    //     keccak256(
-    //         "Permit(address owner,address spender,uint value,uint nonce,uint deadline)"
-    //     );
     bytes32 constant VOTE_TYPEHASH =
         keccak256("Vote(uint proposalId,bool support)");
 
@@ -254,7 +249,7 @@ contract Baal is CloneFactory, Module {
         address indexed spender,
         uint256 amount
     ); /*emits when Baal `shares` are approved for pulls with erc20 accounting*/
-    event Transfer(address indexed from, address indexed to, uint256 amount); /*emits when Baal `shares` are minted, burned or transferred with erc20 accounting*/
+
     event TransferLoot(
         address indexed from,
         address indexed to,
@@ -301,21 +296,17 @@ contract Baal is CloneFactory, Module {
         __Ownable_init();
         transferOwnership(_avatar);
 
-        // TODO: can remove to token
-        name = _name; /*initialize Baal `name` with erc20 accounting*/
-        symbol = _symbol; /*initialize Baal `symbol` with erc20 accounting*/
-
         // Set the Gnosis safe address
         avatar = _avatar;
         target = _avatar; /*Set target to same address as avatar on setup - can be changed later via setTarget, though probably not a good idea*/
 
-        lootToken = ISharesLoot(createClone(_lootSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
+        lootToken = IBaalToken(createClone(_lootSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
         lootToken.setUp(
             string(abi.encodePacked(_name, " LOOT")),
             string(abi.encodePacked(_symbol, "-LOOT"))
         ); /*TODO this naming feels too opinionated*/
 
-        sharesToken = ISharesLoot(createClone(_sharesSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
+        sharesToken = IBaalToken(createClone(_sharesSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
         sharesToken.setUp(
             _name,
             _symbol
@@ -349,8 +340,8 @@ contract Baal is CloneFactory, Module {
             quorumPercent,
             sponsorThreshold,
             minRetentionPercent,
-            name,
-            symbol,
+            _name,
+            _symbol,
             totalShares(),
             totalLoot()
         );
@@ -412,7 +403,7 @@ contract Baal is CloneFactory, Module {
         }
 
         if (selfSponsor) {
-            latestSponsoredProposalId = proposalCount;
+            latestSponsoredProposalId = proposalCount;          
         }
 
         emit SubmitProposal(
@@ -476,6 +467,7 @@ contract Baal is CloneFactory, Module {
         bool approved,
         bytes calldata signature
     ) external nonReentrant {
+        string memory name = sharesToken.name();
         bytes32 domainSeparator = keccak256(
             abi.encode(
                 DOMAIN_TYPEHASH,
@@ -994,7 +986,7 @@ contract Baal is CloneFactory, Module {
             while (upper > lower) {
                 /* Binary search to look for highest timestamp before desired timestamp*/
                 uint256 center = upper - (upper - lower) / 2;
-                ISharesLoot.Checkpoint memory cp = sharesToken.getCheckpoint(account, center);
+                IBaalToken.Checkpoint memory cp = sharesToken.getCheckpoint(account, center);
                 if (cp.fromTimeStamp == timeStamp) return cp.votes;
                 else if (cp.fromTimeStamp < timeStamp) lower = center;
                 else upper = center - 1;
