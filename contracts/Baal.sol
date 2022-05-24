@@ -236,7 +236,6 @@ contract Baal is CloneFactory, Module {
         bool passed,
         bool actionFailed
     ); /*emits when proposal is processed & executed*/
-    event ProcessingFailed(uint256 indexed proposal); /*emits when proposal is processed & executed*/
     event Ragequit(
         address indexed member,
         address to,
@@ -249,17 +248,6 @@ contract Baal is CloneFactory, Module {
         address indexed spender,
         uint256 amount
     ); /*emits when Baal `shares` are approved for pulls with erc20 accounting*/
-
-    event TransferLoot(
-        address indexed from,
-        address indexed to,
-        uint256 amount
-    ); /*emits when Baal `loot` is minted, burned or transferred*/
-    event TransferShares(
-        address indexed from,
-        address indexed to,
-        uint256 amount
-    ); /*emits when Baal `loot` is minted, burned or transferred*/
 
     event ShamanSet(address indexed shaman, uint256 permission); /*emits when a shaman permission changes*/
     event GovernanceConfigSet(
@@ -328,8 +316,6 @@ contract Baal is CloneFactory, Module {
             ),
             "call failure"
         );
-
-        // require(totalSupply > 0, "shares != 0"); /*TODO there might be use cases where supply 0 is desired*/
 
         emit SetupComplete(
             lootPaused,
@@ -581,7 +567,6 @@ contract Baal is CloneFactory, Module {
             bool success = processActionProposal(proposalData); /*execute 'action'*/
             if (!success) {
                 prop.status[3] = true;
-                emit ProcessingFailed(id);
                 // should we revert here? setShamans tests fail
                 // revert("failed process");
             }
