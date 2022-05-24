@@ -2,11 +2,11 @@ const { ethers } = require('hardhat');
 
 // Test Deploy Values 
 
-const _guildTokens = {
-    4: ['0x992e3005bb7a9efb9bff427f629bcb32fb61f706'],
-	1: ['0x6b175474e89094c44da98b954eedeac495271d0f'],
-	137: ['0xdd185af1bb417469461edbc95f22df9781a04624']
-}
+// const _guildTokens = {
+//     4: ['0x992e3005bb7a9efb9bff427f629bcb32fb61f706'],
+// 	1: ['0x6b175474e89094c44da98b954eedeac495271d0f'],
+// 	137: ['0xdd185af1bb417469461edbc95f22df9781a04624']
+// }
 
 const _shamans = {
     4: [''],
@@ -49,7 +49,7 @@ async function main() {
 	const factory = await ethers.getContractFactory('Baal');
 	const Baal = await factory.deploy(
         _shamans[chainId],
-        _guildTokens[chainId],
+        // _guildTokens[chainId],
         [_deployer],
         _loot,
         _shares,

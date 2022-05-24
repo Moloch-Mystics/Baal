@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "hardhat test --network hardhat",
-    "compile": "hardhat compile"
+    "compile": "TS_NODE_TRANSPILE_ONLY=1 hardhat typechain"
   },
   "repository": {
     "type": "git",
