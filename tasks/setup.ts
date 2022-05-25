@@ -87,8 +87,9 @@ task("ragequit", "Ragequit shares and/or loot")
   .setAction(async (taskArgs, hre) => {
     const Baal = await hre.ethers.getContractFactory("Baal");
     const baal = (await Baal.attach(taskArgs.dao)) as Baal;
-    const cancelProposal = await baal.ragequit(taskArgs.to,taskArgs.shares,taskArgs.loot, taskArgs.tokens);
-    console.log("Ragequit txhash:", cancelProposal.hash);
+    const tokens = JSON.parse(taskArgs.tokens);
+    const ragequitAction = await baal.ragequit(taskArgs.to,taskArgs.shares,taskArgs.loot, tokens);
+    console.log("Ragequit txhash:", ragequitAction.hash);
   });
 
 task("tributeprop", "Approve token and make a tribute proposal")
