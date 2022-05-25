@@ -117,20 +117,17 @@ contract Shares is ERC20, Initializable {
                 unchecked {
             if (totalSupply() + amount <= type(uint256).max / 2) {
                 /*If recipient is receiving their first shares, auto-self delegate*/
-                if (
-                    balanceOf(recipient) == 0 && numCheckpoints[recipient] == 0 && amount > 0
-                ) {
-                    delegates[recipient] = recipient;
-                }
+                // if (
+                //     balanceOf(recipient) == 0 && numCheckpoints[recipient] == 0 && amount > 0
+                // ) {
+                //     delegates[recipient] = recipient;
+                // }
 
-                // balanceOf[recipient] += amount; /*add `shares` for `to` account*/
-                // totalSupply += amount; /*add to total Baal `shares`*/
                 _mint(recipient, amount);
 
+                // in before transfer
+                //_moveDelegates(address(0), delegates[recipient], amount); /*update delegation*/
 
-                _moveDelegates(address(0), delegates[recipient], amount); /*update delegation*/
-
-                emit Transfer(address(0), recipient, amount); /*emit event reflecting mint of `shares` with erc20 accounting*/
             }
         }
         
@@ -140,16 +137,12 @@ contract Shares is ERC20, Initializable {
     /// @param account Address to lose loot
     /// @param amount Amount to burn
     function burn(address account, uint256 amount) public baalOnly {
-        // balanceOf[account] -= amount; /*subtract `shares` for `from` account*/
+
         _burn(account, amount);
 
-        // unchecked {
-        //     totalSupply -= amount; /*subtract from total Baal `shares`*/
-        // }
+        // in before transfer
+        // _moveDelegates(delegates[account], address(0), amount); /*update delegation*/
 
-        _moveDelegates(delegates[account], address(0), amount); /*update delegation*/
-
-        emit Transfer(account, address(0), amount); /*emit event reflecting burn of `shares` with erc20 accounting*/
     }
 
     /// @notice Triggers an approval from `owner` to `spender` with EIP-712 signature.
