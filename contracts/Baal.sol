@@ -651,8 +651,6 @@ contract Baal is CloneFactory, Module {
         uint256 lootToBurn,
         address[] memory tokens
     ) internal {
-        uint256 _totalShares = totalShares();
-        uint256 _totalLoot = totalLoot();
 
         if (lootToBurn != 0) {
             /*gas optimization*/
@@ -671,7 +669,7 @@ contract Baal is CloneFactory, Module {
             uint256 balance = abi.decode(balanceData, (uint256)); /*decode Baal token balances for calculation*/
 
             uint256 amountToRagequit = ((lootToBurn + sharesToBurn) * balance) /
-                (_totalShares + _totalLoot); /*calculate 'fair shair' claims*/
+                totalSupply(); /*calculate 'fair shair' claims*/
 
             if (amountToRagequit != 0) {
                 /*gas optimization to allow higher maximum token limit*/
