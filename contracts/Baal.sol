@@ -19,9 +19,7 @@ import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
 
 // import "hardhat/console.sol";
 
-
 interface IBaalToken {
-
     function name() external view returns (string memory);
 
     function setUp(string memory _name, string memory _symbol) external;
@@ -43,8 +41,10 @@ interface IBaalToken {
 
     function numCheckpoints(address) external view returns (uint256);
 
-    function getCheckpoint(address, uint256) external view returns (Checkpoint memory);
-    
+    function getCheckpoint(address, uint256)
+        external
+        view
+        returns (Checkpoint memory);
 }
 
 contract CloneFactory {
@@ -110,7 +110,6 @@ contract Baal is CloneFactory, Module {
     // PROPOSAL TRACKING
     mapping(address => mapping(uint32 => bool)) public memberVoted; /*maps members to their proposal votes (true = voted) */
     mapping(uint256 => Proposal) public proposals; /*maps `proposal id` to struct details*/
-
 
     // MISCELLANEOUS PARAMS
     uint256 status; /*internal reentrancy check tracking value*/
@@ -295,10 +294,7 @@ contract Baal is CloneFactory, Module {
         ); /*TODO this naming feels too opinionated*/
 
         sharesToken = IBaalToken(createClone(_sharesSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
-        sharesToken.setUp(
-            _name,
-            _symbol
-        ); 
+        sharesToken.setUp(_name, _symbol);
 
         multisendLibrary = _multisendLibrary; /*Set address of Gnosis multisend library to use for all execution*/
 
@@ -365,7 +361,7 @@ contract Baal is CloneFactory, Module {
         }
 
         bytes32 proposalDataHash = hashOperation(proposalData); /*Store only hash of proposal data*/
-        
+
         unchecked {
             proposalCount++; /*increment proposal counter*/
             proposals[proposalCount] = Proposal( /*push params into proposal struct - start voting period timer if member submission*/
@@ -389,7 +385,7 @@ contract Baal is CloneFactory, Module {
         }
 
         if (selfSponsor) {
-            latestSponsoredProposalId = proposalCount;          
+            latestSponsoredProposalId = proposalCount;
         }
 
         emit SubmitProposal(
@@ -494,12 +490,8 @@ contract Baal is CloneFactory, Module {
             if (approved) {
                 /*if `approved`, cast delegated balance `yesVotes` to proposal*/
                 prop.yesVotes += balance;
-                if (
-                    totalSupply() >
-                    prop.maxTotalSharesAndLootAtYesVote
-                ) {
-                    prop.maxTotalSharesAndLootAtYesVote =
-                        totalSupply();
+                if (totalSupply() > prop.maxTotalSharesAndLootAtYesVote) {
+                    prop.maxTotalSharesAndLootAtYesVote = totalSupply();
                 }
             } else {
                 /*otherwise, cast delegated balance `noVotes` to proposal*/
@@ -539,7 +531,10 @@ contract Baal is CloneFactory, Module {
             "incorrect calldata"
         );
 
-        require(prop.baalGas == 0 || gasleft() >= prop.baalGas, "not enough gas");
+        require(
+            prop.baalGas == 0 || gasleft() >= prop.baalGas,
+            "not enough gas"
+        );
 
         prop.status[1] = true; /*Set processed flag to true*/
         bool okToExecute = true; /*Initialize and invalidate if conditions are not met below*/
@@ -956,16 +951,21 @@ contract Baal is CloneFactory, Module {
 
         unchecked {
             if (
-                sharesToken.getCheckpoint(account, nCheckpoints - 1).fromTimeStamp <=
-                timeStamp
+                sharesToken
+                    .getCheckpoint(account, nCheckpoints - 1)
+                    .fromTimeStamp <= timeStamp
             ) return sharesToken.getCheckpoint(account, nCheckpoints - 1).votes; /* If most recent checkpoint is at or after desired timestamp, return*/
-            if (sharesToken.getCheckpoint(account, 0).fromTimeStamp > timeStamp) return 0;
+            if (sharesToken.getCheckpoint(account, 0).fromTimeStamp > timeStamp)
+                return 0;
             uint256 lower = 0;
             uint256 upper = nCheckpoints - 1;
             while (upper > lower) {
                 /* Binary search to look for highest timestamp before desired timestamp*/
                 uint256 center = upper - (upper - lower) / 2;
-                IBaalToken.Checkpoint memory cp = sharesToken.getCheckpoint(account, center);
+                IBaalToken.Checkpoint memory cp = sharesToken.getCheckpoint(
+                    account,
+                    center
+                );
                 if (cp.fromTimeStamp == timeStamp) return cp.votes;
                 else if (cp.fromTimeStamp < timeStamp) lower = center;
                 else upper = center - 1;
@@ -1120,10 +1120,7 @@ contract BaalSummoner is ModuleProxyFactory {
         );
     }
 
-    function summonBaal(address _safe)
-        external
-        returns (address)
-    {
+    function summonBaal(address _safe) external returns (address) {
         Baal _baal = Baal(_safe);
 
         emit SummonBaal(
@@ -1225,5 +1222,3 @@ contract BaalSummoner is ModuleProxyFactory {
         return (address(_baal));
     }
 }
-
-// Exec as Baal helper

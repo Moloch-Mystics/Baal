@@ -31,7 +31,7 @@ async function main() {
     // chainId = network.chainId
 	
 
-	const tributeFactory = await ethers.getContractFactory('TributeEscrow')
+	const tributeFactory = await ethers.getContractFactory('TributeMinion')
     const tributeSingleton = (await tributeFactory.deploy())
 
 	const txHash = tributeSingleton.deployTransaction.hash;

@@ -5,7 +5,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 
 import { Baal } from '../src/types/Baal'
 import { TestErc20 } from '../src/types/TestErc20'
-import { TributeEscrow } from '../src/types/TributeEscrow'
+import { TributeMinion } from '../src/types/TributeMinion'
 import { Loot } from '../src/types/Loot'
 import { decodeMultiAction, encodeMultiAction } from '../src/util'
 import { BigNumber } from '@ethersproject/bignumber'
@@ -343,14 +343,14 @@ describe('Tribute proposal type', function () {
   })
 
   describe('safe tribute', function () {
-    let tributeEscrow: TributeEscrow
+    let tributeMinion: TributeMinion
     this.beforeEach(async function () {
-      const TributeEscrowContract = await ethers.getContractFactory('TributeEscrow')
-      tributeEscrow = (await TributeEscrowContract.deploy()) as TributeEscrow
+      const TributeMinionContract = await ethers.getContractFactory('TributeMinion')
+      tributeMinion = (await TributeMinionContract.deploy()) as TributeMinion
     })
-    it('allows external tribute escrow to submit share proposal in exchange for tokens', async function () {
+    it('allows external tribute minion to submit share proposal in exchange for tokens', async function () {
 
-      const applicantTributeEscrow = tributeEscrow.connect(applicant)
+      const applicantTributeMinion = tributeMinion.connect(applicant)
 
       
       expect(await applicantWeth.balanceOf(gnosisSafe.address)).to.equal(0)
@@ -358,18 +358,19 @@ describe('Tribute proposal type', function () {
 
       const cuurentShares = await sharesToken.balanceOf(applicant.address)
       
-      await applicantWeth.approve(tributeEscrow.address, 10000)
+      await applicantWeth.approve(tributeMinion.address, 10000)
 
-      await applicantTributeEscrow.submitTributeProposal(baal.address, applicantWeth.address, 100, 1234, 1007, proposal.expiration, 'tribute');
+      await applicantTributeMinion.submitTributeProposal(baal.address, applicantWeth.address, 100, 1234, 1007, proposal.expiration, 'tribute');
       await baal.sponsorProposal(1)
       await baal.submitVote(1, yes)
       await moveForwardPeriods(2)
 
-      const encodedProposal = await tributeEscrow.encodeTributeProposal(baal.address, 1234, 1007, applicant.address, 1, tributeEscrow.address)
+      const encodedProposal = await tributeMinion.encodeTributeProposal(baal.address, 1234, 1007, applicant.address, 1, tributeMinion.address)
 
       const decoded = decodeMultiAction(multisend, encodedProposal)
       
-      // await tributeEscrow.releaseEscrow(baal.address,1)
+      // TODO: why is this commented out
+      // await tributeMinion.releaseEscrow(baal.address,1)
 
       await baal.processProposal(1, encodedProposal)
 
