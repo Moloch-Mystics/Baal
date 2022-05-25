@@ -14,7 +14,7 @@ import { encodeMultiSend, MetaTransaction } from "@gnosis.pm/safe-contracts";
 
 import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
 import { TestErc20 } from "../src/types/TestErc20";
-import { TributeEscrow } from "../src/types/TributeEscrow";
+import { TributeMinion } from "../src/types/TributeMinion";
 
 const _addresses = {
     gnosisSingleton: "0xd9db270c1b5e3bd161e8c8503c55ceabee709552",
@@ -104,8 +104,8 @@ task("tributeprop", "Approve token and make a tribute proposal")
     const baal = (await Baal.attach(taskArgs.dao)) as Baal;
     const Token = await hre.ethers.getContractFactory("TestERC20");
     const token = (await Token.attach(taskArgs.token)) as TestErc20;
-    const Minion = await hre.ethers.getContractFactory("TributeEscrow");
-    const minion = (await Minion.attach(taskArgs.minion)) as TributeEscrow;
+    const Minion = await hre.ethers.getContractFactory("TributeMinion");
+    const minion = (await Minion.attach(taskArgs.minion)) as TributeMinion;
     const countBefore = await baal.proposalCount();
     console.log("countBefore", countBefore);
     const deployers = await hre.ethers.getSigners();

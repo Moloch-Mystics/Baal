@@ -19,9 +19,7 @@ import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
 
 // import "hardhat/console.sol";
 
-
 interface IBaalToken {
-
     function name() external view returns (string memory);
 
     function setUp(string memory _name, string memory _symbol) external;
@@ -43,8 +41,10 @@ interface IBaalToken {
 
     function numCheckpoints(address) external view returns (uint256);
 
-    function getCheckpoint(address, uint256) external view returns (Checkpoint memory);
-    
+    function getCheckpoint(address, uint256)
+        external
+        view
+        returns (Checkpoint memory);
 }
 
 contract CloneFactory {
@@ -110,7 +110,6 @@ contract Baal is CloneFactory, Module {
     // PROPOSAL TRACKING
     mapping(address => mapping(uint32 => bool)) public memberVoted; /*maps members to their proposal votes (true = voted) */
     mapping(uint256 => Proposal) public proposals; /*maps `proposal id` to struct details*/
-
 
     // MISCELLANEOUS PARAMS
     uint256 status; /*internal reentrancy check tracking value*/
@@ -236,7 +235,6 @@ contract Baal is CloneFactory, Module {
         bool passed,
         bool actionFailed
     ); /*emits when proposal is processed & executed*/
-    event ProcessingFailed(uint256 indexed proposal); /*emits when proposal is processed & executed*/
     event Ragequit(
         address indexed member,
         address to,
@@ -249,17 +247,6 @@ contract Baal is CloneFactory, Module {
         address indexed spender,
         uint256 amount
     ); /*emits when Baal `shares` are approved for pulls with erc20 accounting*/
-
-    event TransferLoot(
-        address indexed from,
-        address indexed to,
-        uint256 amount
-    ); /*emits when Baal `loot` is minted, burned or transferred*/
-    event TransferShares(
-        address indexed from,
-        address indexed to,
-        uint256 amount
-    ); /*emits when Baal `loot` is minted, burned or transferred*/
 
     event ShamanSet(address indexed shaman, uint256 permission); /*emits when a shaman permission changes*/
     event GovernanceConfigSet(
@@ -307,10 +294,7 @@ contract Baal is CloneFactory, Module {
         ); /*TODO this naming feels too opinionated*/
 
         sharesToken = IBaalToken(createClone(_sharesSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
-        sharesToken.setUp(
-            _name,
-            _symbol
-        ); 
+        sharesToken.setUp(_name, _symbol);
 
         multisendLibrary = _multisendLibrary; /*Set address of Gnosis multisend library to use for all execution*/
 
@@ -328,8 +312,6 @@ contract Baal is CloneFactory, Module {
             ),
             "call failure"
         );
-
-        // require(totalSupply > 0, "shares != 0"); /*TODO there might be use cases where supply 0 is desired*/
 
         emit SetupComplete(
             lootPaused,
@@ -379,7 +361,7 @@ contract Baal is CloneFactory, Module {
         }
 
         bytes32 proposalDataHash = hashOperation(proposalData); /*Store only hash of proposal data*/
-        
+
         unchecked {
             proposalCount++; /*increment proposal counter*/
             proposals[proposalCount] = Proposal( /*push params into proposal struct - start voting period timer if member submission*/
@@ -403,7 +385,7 @@ contract Baal is CloneFactory, Module {
         }
 
         if (selfSponsor) {
-            latestSponsoredProposalId = proposalCount;          
+            latestSponsoredProposalId = proposalCount;
         }
 
         emit SubmitProposal(
@@ -508,12 +490,8 @@ contract Baal is CloneFactory, Module {
             if (approved) {
                 /*if `approved`, cast delegated balance `yesVotes` to proposal*/
                 prop.yesVotes += balance;
-                if (
-                    totalSupply() >
-                    prop.maxTotalSharesAndLootAtYesVote
-                ) {
-                    prop.maxTotalSharesAndLootAtYesVote =
-                        totalSupply();
+                if (totalSupply() > prop.maxTotalSharesAndLootAtYesVote) {
+                    prop.maxTotalSharesAndLootAtYesVote = totalSupply();
                 }
             } else {
                 /*otherwise, cast delegated balance `noVotes` to proposal*/
@@ -553,7 +531,10 @@ contract Baal is CloneFactory, Module {
             "incorrect calldata"
         );
 
-        require(prop.baalGas == 0 || gasleft() >= prop.baalGas, "not enough gas");
+        require(
+            prop.baalGas == 0 || gasleft() >= prop.baalGas,
+            "not enough gas"
+        );
 
         prop.status[1] = true; /*Set processed flag to true*/
         bool okToExecute = true; /*Initialize and invalidate if conditions are not met below*/
@@ -581,9 +562,6 @@ contract Baal is CloneFactory, Module {
             bool success = processActionProposal(proposalData); /*execute 'action'*/
             if (!success) {
                 prop.status[3] = true;
-                emit ProcessingFailed(id);
-                // should we revert here? setShamans tests fail
-                // revert("failed process");
             }
         }
 
@@ -642,7 +620,6 @@ contract Baal is CloneFactory, Module {
     // ****************
 
     /// @notice Process member burn of `shares` and/or `loot` to claim 'fair share' of specified `tokens`
-    /// @dev Useful to omit malicious treasury tokens, or include tokens the DAO has not voted into guild tokens
     /// @param to Account that receives 'fair share'.
     /// @param lootToBurn Baal pure economic weight to burn.
     /// @param sharesToBurn Baal voting weight to burn.
@@ -673,8 +650,8 @@ contract Baal is CloneFactory, Module {
         uint256 lootToBurn,
         address[] memory tokens
     ) internal {
-        uint256 _totalShares = totalShares();
-        uint256 _totalLoot = totalLoot();
+
+        uint256 _totalSupply = totalSupply();
 
         if (lootToBurn != 0) {
             /*gas optimization*/
@@ -693,7 +670,7 @@ contract Baal is CloneFactory, Module {
             uint256 balance = abi.decode(balanceData, (uint256)); /*decode Baal token balances for calculation*/
 
             uint256 amountToRagequit = ((lootToBurn + sharesToBurn) * balance) /
-                (_totalShares + _totalLoot); /*calculate 'fair shair' claims*/
+                _totalSupply; /*calculate 'fair shair' claims*/
 
             if (amountToRagequit != 0) {
                 /*gas optimization to allow higher maximum token limit*/
@@ -795,7 +772,6 @@ contract Baal is CloneFactory, Module {
     /// @param shares Amount to mint
     function _mintShares(address to, uint256 shares) private {
         sharesToken.mint(to, shares);
-        emit TransferShares(address(0), to, shares);
     }
 
     /// @notice Baal-or-manager-only function to burn shares.
@@ -816,7 +792,6 @@ contract Baal is CloneFactory, Module {
     /// @param shares Amount to burn
     function _burnShares(address from, uint256 shares) private {
         sharesToken.burn(from, shares);
-        emit TransferShares(from, address(0), shares);
     }
 
     /// @notice Baal-or-manager-only function to mint loot.
@@ -837,7 +812,6 @@ contract Baal is CloneFactory, Module {
     /// @param loot Amount to mint
     function _mintLoot(address to, uint256 loot) private {
         lootToken.mint(to, loot);
-        emit TransferLoot(address(0), to, loot); /*emit event reflecting mint of `loot`*/
     }
 
     /// @notice Baal-or-manager-only function to burn loot.
@@ -858,7 +832,6 @@ contract Baal is CloneFactory, Module {
     /// @param loot Amount to burn
     function _burnLoot(address from, uint256 loot) private {
         lootToken.burn(from, loot);
-        emit TransferLoot(from, address(0), loot); /*emit event reflecting burn of `loot`*/
     }
 
     /// @notice Baal-or-governance-only function to change periods.
@@ -977,16 +950,21 @@ contract Baal is CloneFactory, Module {
 
         unchecked {
             if (
-                sharesToken.getCheckpoint(account, nCheckpoints - 1).fromTimeStamp <=
-                timeStamp
+                sharesToken
+                    .getCheckpoint(account, nCheckpoints - 1)
+                    .fromTimeStamp <= timeStamp
             ) return sharesToken.getCheckpoint(account, nCheckpoints - 1).votes; /* If most recent checkpoint is at or after desired timestamp, return*/
-            if (sharesToken.getCheckpoint(account, 0).fromTimeStamp > timeStamp) return 0;
+            if (sharesToken.getCheckpoint(account, 0).fromTimeStamp > timeStamp)
+                return 0;
             uint256 lower = 0;
             uint256 upper = nCheckpoints - 1;
             while (upper > lower) {
                 /* Binary search to look for highest timestamp before desired timestamp*/
                 uint256 center = upper - (upper - lower) / 2;
-                IBaalToken.Checkpoint memory cp = sharesToken.getCheckpoint(account, center);
+                IBaalToken.Checkpoint memory cp = sharesToken.getCheckpoint(
+                    account,
+                    center
+                );
                 if (cp.fromTimeStamp == timeStamp) return cp.votes;
                 else if (cp.fromTimeStamp < timeStamp) lower = center;
                 else upper = center - 1;
@@ -1141,10 +1119,7 @@ contract BaalSummoner is ModuleProxyFactory {
         );
     }
 
-    function summonBaal(address _safe)
-        external
-        returns (address)
-    {
+    function summonBaal(address _safe) external returns (address) {
         Baal _baal = Baal(_safe);
 
         emit SummonBaal(
@@ -1246,5 +1221,3 @@ contract BaalSummoner is ModuleProxyFactory {
         return (address(_baal));
     }
 }
-
-// Exec as Baal helper

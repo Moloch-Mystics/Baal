@@ -8,7 +8,7 @@ interface IERC20 {
     function transferFrom(address from, address to, uint256 value) external returns (bool);
 }
 
-contract TributeEscrow {
+contract TributeMinion {
     event TributeProposal(address indexed baal, address token, uint256 amount, address recipient, uint256 proposalId);
     struct Escrow {
         address token;
