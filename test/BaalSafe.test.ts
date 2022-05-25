@@ -3063,31 +3063,66 @@ describe("Baal contract", function () {
       expect(applicantWethAfter).to.equal(100);
     });
 
-    it('happy case - full ragequit - two tokens', async function () {
+    it("happy case - full ragequit - two tokens", async function () {
       // expect: receive 50% of weth from DAO
+      // loot = 500;
+      // shares = 10  0;
 
-      const summonerWethBefore = await weth.balanceOf(summoner.address)
-      const summonerWeth2Before = await weth.balanceOf(summoner.address)
+      const summonerWethBefore = await weth.balanceOf(summoner.address);
+      const summonerWeth2Before = await weth2.balanceOf(summoner.address);
 
-      await weth.transfer(gnosisSafe.address, 100)
-      await weth2.transfer(gnosisSafe.address, 200)
+      console.log("summonerWethBefore", summonerWethBefore);
+      console.log("summonerWeth2Before", summonerWeth2Before);
 
-      await baal.ragequit(summoner.address, shares, loot - 300, [weth2.address, weth.address])
-      const sharesAfter = await sharesToken.balanceOf(summoner.address)
-      const lootAfter = await lootToken.balanceOf(summoner.address)
-      const summonerWethAfter = await weth.balanceOf(summoner.address)
-      const summonerWeth2After = await weth2.balanceOf(summoner.address)
-      const safeWethAfter = await weth.balanceOf(gnosisSafe.address)
-      const safeWeth2After = await weth2.balanceOf(gnosisSafe.address)
-      expect(lootAfter).to.equal(300) // rq 200
-      expect(sharesAfter).to.equal(0)
-      expect(summonerWethAfter).to.equal(summonerWethBefore.sub(50)) // minus 100, plus 50
-      expect(summonerWeth2After).to.equal(summonerWeth2Before.sub(100)) // minus 200, plus 100
-      expect(safeWethAfter).to.equal(50)
-      expect(safeWethAfter).to.equal(50)
-      expect(safeWeth2After).to.equal(100)
-    })
+      await weth.transfer(gnosisSafe.address, 100);
+      await weth2.transfer(gnosisSafe.address, 200);
 
+      const summonerWethAfterTrans = await weth.balanceOf(summoner.address);
+      console.log("summonerWethAfter transfer", summonerWethAfterTrans);
+
+      const safeBalance = await weth.balanceOf(gnosisSafe.address);
+      console.log("safeBalance before", safeBalance);
+
+      const sharesBefore = await sharesToken.balanceOf(summoner.address);
+      const lootBefore = await lootToken.balanceOf(summoner.address);
+      console.log("sharesBefore", sharesBefore);
+      console.log("lootBefore", lootBefore);
+
+      console.log("weth, weth2", weth.address, weth2.address);
+
+      var stringArray: string[] = [weth2.address, weth.address];
+
+      var orderedTokens: string[] = stringArray.sort((n1, n2) => {
+        if (n1 > n2) {
+          return 1;
+        }
+
+        if (n1 < n2) {
+          return -1;
+        }
+
+        return 0;
+      });
+      console.log(orderedTokens);
+
+      await baal.ragequit(summoner.address, shares, loot - 300, orderedTokens);
+      const sharesAfter = await sharesToken.balanceOf(summoner.address);
+      const lootAfter = await lootToken.balanceOf(summoner.address);
+      const summonerWethAfter = await weth.balanceOf(summoner.address);
+      const summonerWeth2After = await weth2.balanceOf(summoner.address);
+      const safeWethAfter = await weth.balanceOf(gnosisSafe.address);
+      console.log("summonerWethAfter", summonerWethAfter);
+      console.log("safeWethAfter", safeWethAfter);
+      console.log("summoner address", summoner.address);
+
+      const safeWeth2After = await weth2.balanceOf(gnosisSafe.address);
+      expect(lootAfter).to.equal(300); // rq 200
+      expect(sharesAfter).to.equal(0);
+      expect(summonerWethAfter).to.equal(summonerWethBefore.sub(50)); // minus 100, plus 50
+      expect(summonerWeth2After).to.equal(summonerWeth2Before.sub(100)); // minus 200, plus 100
+      expect(safeWethAfter).to.equal(50);
+      expect(safeWeth2After).to.equal(100);
+    });
   });
 
   describe("ragequit", function () {

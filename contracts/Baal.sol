@@ -17,7 +17,7 @@ import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
 
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 interface IBaalToken {
     function name() external view returns (string memory);
@@ -620,7 +620,6 @@ contract Baal is CloneFactory, Module {
     // ****************
 
     /// @notice Process member burn of `shares` and/or `loot` to claim 'fair share' of specified `tokens`
-    /// @dev Useful to omit malicious treasury tokens, or include tokens the DAO has not voted into guild tokens
     /// @param to Account that receives 'fair share'.
     /// @param lootToBurn Baal pure economic weight to burn.
     /// @param sharesToBurn Baal voting weight to burn.
@@ -652,6 +651,8 @@ contract Baal is CloneFactory, Module {
         address[] memory tokens
     ) internal {
 
+        uint256 _totalSupply = totalSupply();
+
         if (lootToBurn != 0) {
             /*gas optimization*/
             _burnLoot(msg.sender, lootToBurn); /*subtract `loot` from user account & Baal totals*/
@@ -669,7 +670,10 @@ contract Baal is CloneFactory, Module {
             uint256 balance = abi.decode(balanceData, (uint256)); /*decode Baal token balances for calculation*/
 
             uint256 amountToRagequit = ((lootToBurn + sharesToBurn) * balance) /
-                totalSupply(); /*calculate 'fair shair' claims*/
+                _totalSupply; /*calculate 'fair shair' claims*/
+
+            console.log('tokens amount to rq', amountToRagequit);
+            console.log('to', to);
 
             if (amountToRagequit != 0) {
                 /*gas optimization to allow higher maximum token limit*/
