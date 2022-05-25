@@ -17,7 +17,7 @@ import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
 
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 interface IBaalToken {
     function name() external view returns (string memory);
@@ -671,9 +671,6 @@ contract Baal is CloneFactory, Module {
 
             uint256 amountToRagequit = ((lootToBurn + sharesToBurn) * balance) /
                 _totalSupply; /*calculate 'fair shair' claims*/
-
-            console.log('tokens amount to rq', amountToRagequit);
-            console.log('to', to);
 
             if (amountToRagequit != 0) {
                 /*gas optimization to allow higher maximum token limit*/

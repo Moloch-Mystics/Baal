@@ -3064,31 +3064,20 @@ describe("Baal contract", function () {
     });
 
     it("happy case - full ragequit - two tokens", async function () {
-      // expect: receive 50% of weth from DAO
-      // loot = 500;
-      // shares = 10  0;
+      // expect: receive 50% of weth and weth2 from DAO
 
       const summonerWethBefore = await weth.balanceOf(summoner.address);
       const summonerWeth2Before = await weth2.balanceOf(summoner.address);
-
-      console.log("summonerWethBefore", summonerWethBefore);
-      console.log("summonerWeth2Before", summonerWeth2Before);
 
       await weth.transfer(gnosisSafe.address, 100);
       await weth2.transfer(gnosisSafe.address, 200);
 
       const summonerWethAfterTrans = await weth.balanceOf(summoner.address);
-      console.log("summonerWethAfter transfer", summonerWethAfterTrans);
 
       const safeBalance = await weth.balanceOf(gnosisSafe.address);
-      console.log("safeBalance before", safeBalance);
 
       const sharesBefore = await sharesToken.balanceOf(summoner.address);
       const lootBefore = await lootToken.balanceOf(summoner.address);
-      console.log("sharesBefore", sharesBefore);
-      console.log("lootBefore", lootBefore);
-
-      console.log("weth, weth2", weth.address, weth2.address);
 
       var stringArray: string[] = [weth2.address, weth.address];
 
@@ -3103,7 +3092,6 @@ describe("Baal contract", function () {
 
         return 0;
       });
-      console.log(orderedTokens);
 
       await baal.ragequit(summoner.address, shares, loot - 300, orderedTokens);
       const sharesAfter = await sharesToken.balanceOf(summoner.address);
@@ -3111,9 +3099,6 @@ describe("Baal contract", function () {
       const summonerWethAfter = await weth.balanceOf(summoner.address);
       const summonerWeth2After = await weth2.balanceOf(summoner.address);
       const safeWethAfter = await weth.balanceOf(gnosisSafe.address);
-      console.log("summonerWethAfter", summonerWethAfter);
-      console.log("safeWethAfter", safeWethAfter);
-      console.log("summoner address", summoner.address);
 
       const safeWeth2After = await weth2.balanceOf(gnosisSafe.address);
       expect(lootAfter).to.equal(300); // rq 200
