@@ -236,7 +236,6 @@ contract Baal is CloneFactory, Module {
         bool passed,
         bool actionFailed
     ); /*emits when proposal is processed & executed*/
-    event ProcessingFailed(uint256 indexed proposal); /*emits when proposal is processed & executed*/
     event Ragequit(
         address indexed member,
         address to,
@@ -249,17 +248,6 @@ contract Baal is CloneFactory, Module {
         address indexed spender,
         uint256 amount
     ); /*emits when Baal `shares` are approved for pulls with erc20 accounting*/
-
-    event TransferLoot(
-        address indexed from,
-        address indexed to,
-        uint256 amount
-    ); /*emits when Baal `loot` is minted, burned or transferred*/
-    event TransferShares(
-        address indexed from,
-        address indexed to,
-        uint256 amount
-    ); /*emits when Baal `loot` is minted, burned or transferred*/
 
     event ShamanSet(address indexed shaman, uint256 permission); /*emits when a shaman permission changes*/
     event GovernanceConfigSet(
@@ -328,8 +316,6 @@ contract Baal is CloneFactory, Module {
             ),
             "call failure"
         );
-
-        // require(totalSupply > 0, "shares != 0"); /*TODO there might be use cases where supply 0 is desired*/
 
         emit SetupComplete(
             lootPaused,
@@ -581,9 +567,6 @@ contract Baal is CloneFactory, Module {
             bool success = processActionProposal(proposalData); /*execute 'action'*/
             if (!success) {
                 prop.status[3] = true;
-                emit ProcessingFailed(id);
-                // should we revert here? setShamans tests fail
-                // revert("failed process");
             }
         }
 
@@ -795,7 +778,6 @@ contract Baal is CloneFactory, Module {
     /// @param shares Amount to mint
     function _mintShares(address to, uint256 shares) private {
         sharesToken.mint(to, shares);
-        emit TransferShares(address(0), to, shares);
     }
 
     /// @notice Baal-or-manager-only function to burn shares.
@@ -816,7 +798,6 @@ contract Baal is CloneFactory, Module {
     /// @param shares Amount to burn
     function _burnShares(address from, uint256 shares) private {
         sharesToken.burn(from, shares);
-        emit TransferShares(from, address(0), shares);
     }
 
     /// @notice Baal-or-manager-only function to mint loot.
@@ -837,7 +818,6 @@ contract Baal is CloneFactory, Module {
     /// @param loot Amount to mint
     function _mintLoot(address to, uint256 loot) private {
         lootToken.mint(to, loot);
-        emit TransferLoot(address(0), to, loot); /*emit event reflecting mint of `loot`*/
     }
 
     /// @notice Baal-or-manager-only function to burn loot.
@@ -858,7 +838,6 @@ contract Baal is CloneFactory, Module {
     /// @param loot Amount to burn
     function _burnLoot(address from, uint256 loot) private {
         lootToken.burn(from, loot);
-        emit TransferLoot(from, address(0), loot); /*emit event reflecting burn of `loot`*/
     }
 
     /// @notice Baal-or-governance-only function to change periods.
