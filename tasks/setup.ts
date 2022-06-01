@@ -294,7 +294,7 @@ task("memberprop", "Submits a new member proposal")
     // TODO: poster should happen here probably, if in encodeAction it will run after processing
     const submit = await baal.submitProposal(
       encodedAction,
-      now + voting + grace + parseInt(taskArgs.expiration),
+      parseInt(taskArgs.expiration) ? now + voting + grace + parseInt(taskArgs.expiration) : 0,
       0,
       metadataConfig.CONTENT // hre.ethers.utils.id("all hail baal")
     );
