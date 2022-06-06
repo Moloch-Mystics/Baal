@@ -29,6 +29,9 @@ import signDelegation from "../src/signDelegation";
 import signPermit from "../src/signPermit";
 import { string } from "hardhat/internal/core/params/argumentTypes";
 
+import { GnosisSafeProxyFactory } from '../src/types/GnosisSafeProxyFactory'
+import { ModuleProxyFactory } from '../src/types/ModuleProxyFactory'
+
 use(solidity);
 
 // chai
@@ -307,6 +310,12 @@ describe("Baal contract", function () {
   let gnosisSafeSingleton: GnosisSafe;
   let gnosisSafe: GnosisSafe;
 
+  let GnosisSafeProxyFactory: ContractFactory
+  let gnosisSafeProxyFactory: GnosisSafeProxyFactory
+
+  let ModuleProxyFactory: ContractFactory
+  let moduleProxyFactory: ModuleProxyFactory
+
   let signingShaman: SignerWithAddress;
   let chainId: number;
 
@@ -383,6 +392,10 @@ describe("Baal contract", function () {
     const BaalContract = await ethers.getContractFactory("Baal");
     const GnosisSafe = await ethers.getContractFactory("GnosisSafe");
     const BaalSummoner = await ethers.getContractFactory("BaalSummoner");
+
+    const GnosisSafeProxyFactory = await ethers.getContractFactory('GnosisSafeProxyFactory')
+    const ModuleProxyFactory = await ethers.getContractFactory('ModuleProxyFactory')
+
     const CompatibilityFallbackHandler = await ethers.getContractFactory(
       "CompatibilityFallbackHandler"
     );
@@ -400,11 +413,16 @@ describe("Baal contract", function () {
     const handler =
       (await CompatibilityFallbackHandler.deploy()) as CompatibilityFallbackHandler;
 
+    const proxy = await GnosisSafeProxyFactory.deploy()
+    moduleProxyFactory = (await ModuleProxyFactory.deploy()) as ModuleProxyFactory
+
     baalSummoner = (await BaalSummoner.deploy(
       baalSingleton.address,
       gnosisSafeSingleton.address,
       handler.address,
-      multisend.address
+      multisend.address,
+      proxy.address,
+      moduleProxyFactory.address
     )) as BaalSummoner;
 
     encodedInitParams = await getBaalParams(
@@ -3079,18 +3097,8 @@ describe("Baal contract", function () {
       const sharesBefore = await sharesToken.balanceOf(summoner.address);
       const lootBefore = await lootToken.balanceOf(summoner.address);
 
-      var stringArray: string[] = [weth2.address, weth.address];
-
-      var orderedTokens: string[] = stringArray.sort((n1, n2) => {
-        if (n1 > n2) {
-          return 1;
-        }
-
-        if (n1 < n2) {
-          return -1;
-        }
-
-        return 0;
+      const orderedTokens = [weth2.address, weth.address].sort((a, b) => {
+        return parseInt(a.slice(2), 16) - parseInt(b.slice(2), 16);
       });
 
       await baal.ragequit(summoner.address, shares, loot - 300, orderedTokens);
@@ -3252,6 +3260,8 @@ describe("Baal contract - offering required", function () {
   let summoner: SignerWithAddress;
   let shaman: SignerWithAddress;
 
+  let moduleProxyFactory: ModuleProxyFactory
+
   let proposal: { [key: string]: any };
 
   let encodedInitParams: any;
@@ -3276,6 +3286,8 @@ describe("Baal contract - offering required", function () {
     const MultisendContract = await ethers.getContractFactory("MultiSend");
     const GnosisSafe = await ethers.getContractFactory("GnosisSafe");
     const BaalSummoner = await ethers.getContractFactory("BaalSummoner");
+    const GnosisSafeProxyFactory = await ethers.getContractFactory('GnosisSafeProxyFactory')
+    const ModuleProxyFactory = await ethers.getContractFactory('ModuleProxyFactory')
     const CompatibilityFallbackHandler = await ethers.getContractFactory(
       "CompatibilityFallbackHandler"
     );
@@ -3290,11 +3302,16 @@ describe("Baal contract - offering required", function () {
     const handler =
       (await CompatibilityFallbackHandler.deploy()) as CompatibilityFallbackHandler;
 
+    const proxy = await GnosisSafeProxyFactory.deploy()
+    moduleProxyFactory = (await ModuleProxyFactory.deploy()) as ModuleProxyFactory
+
     baalSummoner = (await BaalSummoner.deploy(
       baalSingleton.address,
       gnosisSafeSingleton.address,
       handler.address,
-      multisend.address
+      multisend.address,
+      proxy.address,
+      moduleProxyFactory.address
     )) as BaalSummoner;
 
     const encodedInitParams = await getBaalParams(
