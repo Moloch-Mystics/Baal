@@ -222,6 +222,8 @@ describe('Tribute proposal type', function () {
     const CompatibilityFallbackHandler = await ethers.getContractFactory('CompatibilityFallbackHandler')
     const BaalContract = await ethers.getContractFactory('Baal')
     const MultisendContract = await ethers.getContractFactory('MultiSend')
+    const GnosisSafeProxyFactory = await ethers.getContractFactory('GnosisSafeProxyFactory')
+    const ModuleProxyFactory = await ethers.getContractFactory('ModuleProxyFactory')
     ;[summoner, applicant, shaman, s1, s2, s3, s4, s5, s6] = await ethers.getSigners()
 
 
@@ -234,7 +236,17 @@ describe('Tribute proposal type', function () {
     multisend = (await MultisendContract.deploy()) as MultiSend
     gnosisSafeSingleton = (await GnosisSafe.deploy()) as GnosisSafe
     const handler = (await CompatibilityFallbackHandler.deploy()) as CompatibilityFallbackHandler
-    baalSummoner = (await BaalSummoner.deploy(baalSingleton.address, gnosisSafeSingleton.address, handler.address, multisend.address)) as BaalSummoner
+    const proxy = await GnosisSafeProxyFactory.deploy()
+    const moduleProxyFactory = (await ModuleProxyFactory.deploy())
+    
+    baalSummoner = (await BaalSummoner.deploy(
+      baalSingleton.address, 
+      gnosisSafeSingleton.address, 
+      handler.address, 
+      multisend.address,
+      proxy.address,
+      moduleProxyFactory.address
+      )) as BaalSummoner
 
 
     encodedInitParams = await getBaalParams(

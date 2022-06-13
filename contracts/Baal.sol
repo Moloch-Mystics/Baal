@@ -16,6 +16,7 @@ import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
+import "@gnosis.pm/safe-contracts/contracts/proxies/GnosisSafeProxyFactory.sol";
 
 // import "hardhat/console.sol";
 
@@ -1078,6 +1079,11 @@ contract BaalSummoner is ModuleProxyFactory {
     // Library to use for all safe transaction executions
     address public immutable gnosisMultisendLibrary;
 
+    // Proxy summoners
+    //
+    GnosisSafeProxyFactory gnosisSafeProxyFactory;
+    ModuleProxyFactory moduleProxyFactory;
+
     event SummonBaal(
         address indexed baal,
         address indexed loot,
@@ -1089,12 +1095,16 @@ contract BaalSummoner is ModuleProxyFactory {
         address payable _template,
         address _gnosisSingleton,
         address _gnosisFallbackLibrary,
-        address _gnosisMultisendLibrary
+        address _gnosisMultisendLibrary,
+        address _gnosisSafeProxyFactory,
+        address _moduleProxyFactory
     ) {
         template = _template;
         gnosisSingleton = _gnosisSingleton;
         gnosisFallbackLibrary = _gnosisFallbackLibrary;
         gnosisMultisendLibrary = _gnosisMultisendLibrary;
+        gnosisSafeProxyFactory = GnosisSafeProxyFactory(_gnosisSafeProxyFactory);
+        moduleProxyFactory = ModuleProxyFactory(_moduleProxyFactory);
     }
 
     function encodeMultisend(bytes[] memory _calls, address _target)
@@ -1151,16 +1161,19 @@ contract BaalSummoner is ModuleProxyFactory {
         // Deploy new safe but do not set it up yet
         GnosisSafe _safe = GnosisSafe(
             payable(
-                createProxy(
+                gnosisSafeProxyFactory.createProxy(
                     gnosisSingleton,
-                    keccak256(abi.encodePacked(_saltNonce))
+                    abi.encodePacked(_saltNonce)
                 )
             )
         );
 
+
+        // TODO: use deployModule from moduleProxyFactory
         Baal _baal = Baal(
             createProxy(template, keccak256(abi.encodePacked(_saltNonce)))
         );
+        
         bytes memory _initializationMultisendData = encodeMultisend(
             initializationActions,
             address(_baal)
