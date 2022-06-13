@@ -1049,22 +1049,6 @@ contract Baal is CloneFactory, Module {
             "transfer failed"
         ); /*checks success & allows non-conforming transfers*/
     }
-
-    /// @notice Provides 'safe' {transferFrom} for tokens that do not consistently return 'true/false'.
-    function _safeTransferFrom(
-        address token,
-        address from,
-        address to,
-        uint256 amount
-    ) private {
-        (bool success, bytes memory data) = token.call(
-            abi.encodeWithSelector(0x23b872dd, from, to, amount)
-        ); /*'transferFrom(address,address,uint)'*/
-        require(
-            success && (data.length == 0 || abi.decode(data, (bool))),
-            "transferFrom failed"
-        ); /*checks success & allows non-conforming transfers*/
-    }
 }
 
 contract BaalSummoner is ModuleProxyFactory {
