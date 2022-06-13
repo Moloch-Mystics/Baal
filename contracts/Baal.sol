@@ -631,7 +631,7 @@ contract Baal is CloneFactory, Module {
         uint256 lootToBurn,
         address[] calldata tokens
     ) external nonReentrant {
-        for (uint256 i; i < tokens.length; i++) {
+        for (uint256 i = 0; i < tokens.length; i++) {
             if (i > 0) {
                 require(tokens[i] > tokens[i - 1], "!order");
             }
@@ -663,7 +663,7 @@ contract Baal is CloneFactory, Module {
             _burnShares(msg.sender, sharesToBurn); /*subtract `shares` from user account & Baal totals with erc20 accounting*/
         }
 
-        for (uint256 i; i < tokens.length; i++) {
+        for (uint256 i = 0; i < tokens.length; i++) {
             (, bytes memory balanceData) = tokens[i].staticcall(
                 abi.encodeWithSelector(0x70a08231, address(target))
             ); /*get Baal token balances - 'balanceOf(address)'*/
@@ -692,7 +692,7 @@ contract Baal is CloneFactory, Module {
         uint256[] calldata _permissions
     ) external baalOnly {
         require(_shamans.length == _permissions.length, "!array parity"); /*check array lengths match*/
-        for (uint256 i; i < _shamans.length; i++) {
+        for (uint256 i = 0; i < _shamans.length; i++) {
             uint256 permission = _permissions[i];
             if (adminLock)
                 require(
