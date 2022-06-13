@@ -11,7 +11,7 @@ contract RageQuitBank {
     }
     
     function memberAction(address, uint96 loot, uint96 shares) external payable returns (uint96 lootOut, uint96 sharesOut) {
-        require(msg.sender == baal,'!baal');
+        require(msg.sender == baal, "!baal");
         lootOut = loot * lootRate;
         sharesOut = shares * shareRate;
     }

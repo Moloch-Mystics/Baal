@@ -27,7 +27,7 @@ contract Loot is ERC20, Initializable {
         );
     bytes32 constant PERMIT_TYPEHASH =
         keccak256(
-            "Permit(address owner,address spender,uint value,uint nonce,uint deadline)"
+            "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
         );
 
     // Baal Config

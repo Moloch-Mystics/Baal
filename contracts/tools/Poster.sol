@@ -13,7 +13,6 @@ Made with ❤️ by Auryn.eth
 
 pragma solidity >=0.8.0;
 
-
 contract Poster {
     event NewPost(address indexed user, string content, string indexed tag);
 
