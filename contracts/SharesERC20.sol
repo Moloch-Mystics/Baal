@@ -5,13 +5,9 @@ import "@openzeppelin/contracts/access/Ownable.sol"; //https://github.com/OpenZe
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "./interfaces/IBaal.sol";
 
 import "hardhat/console.sol";
-
-
-interface IBaal {
-    function sharesPaused() external returns (bool);
-}
 
 /// @title Shares
 /// @notice Accounting for Baal non voting shares
