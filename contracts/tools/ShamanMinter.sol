@@ -12,7 +12,7 @@ contract ShamanMinter {
     }
     
     function doubler(address[] calldata members) external payable {
-        uint256[] memory amounts;
+        uint256[] memory amounts = new uint256[](members.length);
         for (uint256 i = 0; i < members.length; i++) {
             amounts[i] = ( uint256(sharesToken.balanceOf(members[i])));
         }
