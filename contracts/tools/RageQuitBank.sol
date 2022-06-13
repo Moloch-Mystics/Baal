@@ -7,6 +7,7 @@ contract RageQuitBank {
     uint96 shareRate = 2;
 
     function init(address _baal) external {
+        require(_baal != address(0), "transfer from the zero address");
         baal = _baal;
     }
     
