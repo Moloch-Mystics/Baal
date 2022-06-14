@@ -68,7 +68,7 @@ contract Shares is ERC20, Initializable {
     /// @param name_ Name for ERC20 token trackers
     /// @param symbol_ Symbol for ERC20 token trackers
     function setUp(string memory name_, string memory symbol_)
-        public
+        external
         initializer
     {
         baal = IBaal(msg.sender); /*Configure Baal to setup sender*/
@@ -109,7 +109,7 @@ contract Shares is ERC20, Initializable {
     /// @notice Baal-only function to mint loot.
     /// @param recipient Address to receive loot
     /// @param amount Amount to mint
-    function mint(address recipient, uint256 amount) public baalOnly {
+    function mint(address recipient, uint256 amount) external baalOnly {
         unchecked {
             if (totalSupply() + amount <= type(uint256).max / 2) {
                 /*If recipient is receiving their first shares, auto-self delegate*/
@@ -130,7 +130,7 @@ contract Shares is ERC20, Initializable {
     /// @notice Baal-only function to burn loot.
     /// @param account Address to lose loot
     /// @param amount Amount to burn
-    function burn(address account, uint256 amount) public baalOnly {
+    function burn(address account, uint256 amount) external baalOnly {
         _burn(account, amount);
 
         // in before transfer

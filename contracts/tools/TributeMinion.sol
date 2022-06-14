@@ -101,7 +101,7 @@ contract TributeMinion {
         uint256 loot,
         uint32 expiration,
         string memory details
-    ) public {
+    ) external {
         uint32 proposalId = baal.proposalCount() + 1;
         bytes memory encodedProposal = encodeTributeProposal(
             address(baal),

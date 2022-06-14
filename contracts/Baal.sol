@@ -913,7 +913,7 @@ contract Baal is CloneFactory, Module {
     /// @notice Helper to get recorded proposal flags
     /// @param id Number of proposal in proposals
     /// @return [cancelled, processed, passed, actionFailed]
-    function getProposalStatus(uint32 id) public view returns (bool[4] memory) {
+    function getProposalStatus(uint32 id) external view returns (bool[4] memory) {
         return proposals[id].status;
     }
 
