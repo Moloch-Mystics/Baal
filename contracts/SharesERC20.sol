@@ -32,14 +32,14 @@ contract Shares is ERC20, Initializable {
     // SIGNATURE HELPERS
     mapping(address => uint256) public nonces; /*maps record of states for signing & validating signatures*/
     bytes32 constant DELEGATION_TYPEHASH =
-         keccak256("Delegation(address delegatee,uint nonce,uint expiry)");
+        keccak256("Delegation(address delegatee,uint256 nonce,uint256 expiry)");
     bytes32 constant DOMAIN_TYPEHASH =
         keccak256(
             "EIP712Domain(string name,uint256 chainId,address verifyingContract)"
         );
     bytes32 constant PERMIT_TYPEHASH =
         keccak256(
-            "Permit(address owner,address spender,uint value,uint nonce,uint deadline)"
+            "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
         );
 
     event DelegateChanged(

@@ -124,7 +124,7 @@ contract Baal is CloneFactory, Module {
             "EIP712Domain(string name,uint256 chainId,address verifyingContract)"
         );
     bytes32 constant VOTE_TYPEHASH =
-        keccak256("Vote(uint proposalId,bool support)");
+        keccak256("Vote(uint32 proposalId,bool support)");
 
     // DATA STRUCTURES
     struct Proposal {
