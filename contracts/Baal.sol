@@ -145,7 +145,7 @@ contract Baal is CloneFactory, Module {
         string details; /*human-readable context for proposal*/
     }
 
-    /* Unborn -> Submitted -> Voting -> Grace -> Ready -> Processed 
+    /* Unborn -> Submitted -> Voting -> Grace -> Ready -> Processed
                               \-> Cancelled  \-> Defeated   */
     enum ProposalState {
         Unborn, /* 0 - can submit */
@@ -651,7 +651,6 @@ contract Baal is CloneFactory, Module {
         uint256 lootToBurn,
         address[] memory tokens
     ) internal {
-
         uint256 _totalSupply = totalSupply();
 
         if (lootToBurn != 0) {
@@ -1157,7 +1156,7 @@ contract BaalSummoner is ModuleProxyFactory {
         Baal _baal = Baal(
             createProxy(template, keccak256(abi.encodePacked(_saltNonce)))
         );
-        
+
         bytes memory _initializationMultisendData = encodeMultisend(
             initializationActions,
             address(_baal)
