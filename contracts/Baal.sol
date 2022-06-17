@@ -651,7 +651,6 @@ contract Baal is CloneFactory, Module {
         uint256 lootToBurn,
         address[] memory tokens
     ) internal {
-
         uint256 _totalSupply = totalSupply();
 
         if (lootToBurn != 0) {
@@ -1103,7 +1102,9 @@ contract BaalSummoner is ModuleProxyFactory {
         gnosisSingleton = _gnosisSingleton;
         gnosisFallbackLibrary = _gnosisFallbackLibrary;
         gnosisMultisendLibrary = _gnosisMultisendLibrary;
-        gnosisSafeProxyFactory = GnosisSafeProxyFactory(_gnosisSafeProxyFactory);
+        gnosisSafeProxyFactory = GnosisSafeProxyFactory(
+            _gnosisSafeProxyFactory
+        );
         moduleProxyFactory = ModuleProxyFactory(_moduleProxyFactory);
     }
 
@@ -1168,12 +1169,9 @@ contract BaalSummoner is ModuleProxyFactory {
             )
         );
 
+        bytes memory _anyCall = abi.encodeWithSignature("avatar()"); /*This call can be anything, it just needs to return successfully*/
+        Baal _baal = Baal(deployModule(template, _anyCall, _saltNonce));
 
-        // TODO: use deployModule from moduleProxyFactory
-        Baal _baal = Baal(
-            createProxy(template, keccak256(abi.encodePacked(_saltNonce)))
-        );
-        
         bytes memory _initializationMultisendData = encodeMultisend(
             initializationActions,
             address(_baal)
