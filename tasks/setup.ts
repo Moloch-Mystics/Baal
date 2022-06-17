@@ -2,7 +2,6 @@ import "@nomiclabs/hardhat-ethers";
 import { task, HardhatUserConfig } from "hardhat/config";
 import * as fs from "fs";
 
-
 import { BaalSummoner } from "../src/types/BaalSummoner";
 import { Baal } from "../src/types/Baal";
 import { MultiSend } from "../src/types/MultiSend";
@@ -17,12 +16,12 @@ import { TestErc20 } from "../src/types/TestErc20";
 import { TributeMinion } from "../src/types/TributeMinion";
 
 const _addresses = {
-    gnosisSingleton: "0xd9db270c1b5e3bd161e8c8503c55ceabee709552",
-    gnosisFallbackLibrary: "0xf48f2b2d2a534e402487b3ee7c18c33aec0fe5e4",
-    gnosisMultisendLibrary: "0xa238cbeb142c10ef7ad8442c6d1f9e89e07e7761",
-    poster: "0x000000000000cd17345801aa8147b8D3950260FF",
-    posterKovan: "0x37A2080f275E26fFEfB6E68F3005826368156C5C"
-  };
+  gnosisSingleton: "0xd9db270c1b5e3bd161e8c8503c55ceabee709552",
+  gnosisFallbackLibrary: "0xf48f2b2d2a534e402487b3ee7c18c33aec0fe5e4",
+  gnosisMultisendLibrary: "0xa238cbeb142c10ef7ad8442c6d1f9e89e07e7761",
+  poster: "0x000000000000cd17345801aa8147b8D3950260FF",
+  posterKovan: "0x37A2080f275E26fFEfB6E68F3005826368156C5C",
+};
 
 const DEBUG = false;
 
@@ -64,7 +63,6 @@ task(
 /* DAO tasks */
 /* TODO: DAO amin tasks */
 
-
 task("delegate", "Delegate shares")
   .addParam("dao", "Dao address")
   .addParam("to", "delegate to")
@@ -88,7 +86,12 @@ task("ragequit", "Ragequit shares and/or loot")
     const Baal = await hre.ethers.getContractFactory("Baal");
     const baal = (await Baal.attach(taskArgs.dao)) as Baal;
     const tokens = JSON.parse(taskArgs.tokens);
-    const ragequitAction = await baal.ragequit(taskArgs.to,taskArgs.shares,taskArgs.loot, tokens);
+    const ragequitAction = await baal.ragequit(
+      taskArgs.to,
+      taskArgs.shares,
+      taskArgs.loot,
+      tokens
+    );
     console.log("Ragequit txhash:", ragequitAction.hash);
   });
 
@@ -294,7 +297,9 @@ task("memberprop", "Submits a new member proposal")
     // TODO: poster should happen here probably, if in encodeAction it will run after processing
     const submit = await baal.submitProposal(
       encodedAction,
-      parseInt(taskArgs.expiration) ? now + voting + grace + parseInt(taskArgs.expiration) : 0,
+      parseInt(taskArgs.expiration)
+        ? now + voting + grace + parseInt(taskArgs.expiration)
+        : 0,
       0,
       metadataConfig.CONTENT // hre.ethers.utils.id("all hail baal")
     );
@@ -309,19 +314,25 @@ task("summon", "Summons a new DAO")
     "summoners",
     'the summoner addresses (array) (escape quotes) (no spaces) ex [\\"0x123...\\"]'
   )
-  .addParam("shares", "numnber of initial shares for summoners (string array, escape quotes)")
-  .addParam("loot", "numnber of initial loot for summoners (string array, escape quotes)")
+  .addParam(
+    "shares",
+    "numnber of initial shares for summoners (string array, escape quotes)"
+  )
+  .addParam(
+    "loot",
+    "numnber of initial loot for summoners (string array, escape quotes)"
+  )
   .addParam("sharespaused", "are shares transferable")
   .addParam("lootpaused", "is loot transferable")
   .addParam("shaman", "any initial shamans")
   .addParam("name", "share token symbol")
   .addOptionalParam("meta", "updated meta data")
   .setAction(async (taskArgs, hre) => {
-    const network = await hre.ethers.provider.getNetwork()
-    const chainId = network.chainId
+    const network = await hre.ethers.provider.getNetwork();
+    const chainId = network.chainId;
     const metadataConfig = {
       CONTENT: taskArgs.meta || '{"name":"test"}',
-      TAG: "daohaus.metadata.summoner",
+      TAG: "daohaus.summoner.daoProfile",
     };
     let summonerArr;
     let lootArr;
@@ -468,9 +479,10 @@ task("summon", "Summons a new DAO")
     console.log("baalTemplateAddr", baalTemplateAddr);
 
     const posterFactory = await hre.ethers.getContractFactory("Poster");
-    const posterAddress = network.name == "kovan" ? _addresses.posterKovan : _addresses.poster;
-    console.log('posterAddress', posterAddress);
-    
+    const posterAddress =
+      network.name == "kovan" ? _addresses.posterKovan : _addresses.poster;
+    console.log("posterAddress", posterAddress);
+
     const poster = (await posterFactory.attach(posterAddress)) as Poster;
     console.log("**********************");
 
