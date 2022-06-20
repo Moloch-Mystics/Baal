@@ -1086,7 +1086,9 @@ contract BaalSummoner is ModuleProxyFactory {
         gnosisSingleton = _gnosisSingleton;
         gnosisFallbackLibrary = _gnosisFallbackLibrary;
         gnosisMultisendLibrary = _gnosisMultisendLibrary;
-        gnosisSafeProxyFactory = GnosisSafeProxyFactory(_gnosisSafeProxyFactory);
+        gnosisSafeProxyFactory = GnosisSafeProxyFactory(
+            _gnosisSafeProxyFactory
+        );
         moduleProxyFactory = ModuleProxyFactory(_moduleProxyFactory);
     }
 
@@ -1151,11 +1153,8 @@ contract BaalSummoner is ModuleProxyFactory {
             )
         );
 
-
-        // TODO: use deployModule from moduleProxyFactory
-        Baal _baal = Baal(
-            createProxy(template, keccak256(abi.encodePacked(_saltNonce)))
-        );
+        bytes memory _anyCall = abi.encodeWithSignature("avatar()"); /*This call can be anything, it just needs to return successfully*/
+        Baal _baal = Baal(moduleProxyFactory.deployModule(template, _anyCall, _saltNonce));
 
         bytes memory _initializationMultisendData = encodeMultisend(
             initializationActions,
