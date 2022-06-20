@@ -13,11 +13,10 @@ Made with ❤️ by Auryn.eth
 
 pragma solidity >=0.8.0;
 
-
 contract Poster {
     event NewPost(address indexed user, string content, string indexed tag);
 
-    function post(string calldata content, string calldata tag) public {
+    function post(string calldata content, string calldata tag) external {
         emit NewPost(msg.sender, content, tag);
     }
 }

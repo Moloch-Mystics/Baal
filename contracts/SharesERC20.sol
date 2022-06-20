@@ -5,13 +5,9 @@ import "@openzeppelin/contracts/access/Ownable.sol"; //https://github.com/OpenZe
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "./interfaces/IBaal.sol";
 
 import "hardhat/console.sol";
-
-
-interface IBaal {
-    function sharesPaused() external returns (bool);
-}
 
 /// @title Shares
 /// @notice Accounting for Baal non voting shares
@@ -36,14 +32,14 @@ contract Shares is ERC20, Initializable {
     // SIGNATURE HELPERS
     mapping(address => uint256) public nonces; /*maps record of states for signing & validating signatures*/
     bytes32 constant DELEGATION_TYPEHASH =
-         keccak256("Delegation(address delegatee,uint nonce,uint expiry)");
+        keccak256("Delegation(address delegatee,uint256 nonce,uint256 expiry)");
     bytes32 constant DOMAIN_TYPEHASH =
         keccak256(
             "EIP712Domain(string name,uint256 chainId,address verifyingContract)"
         );
     bytes32 constant PERMIT_TYPEHASH =
         keccak256(
-            "Permit(address owner,address spender,uint value,uint nonce,uint deadline)"
+            "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
         );
 
     event DelegateChanged(
@@ -72,7 +68,7 @@ contract Shares is ERC20, Initializable {
     /// @param name_ Name for ERC20 token trackers
     /// @param symbol_ Symbol for ERC20 token trackers
     function setUp(string memory name_, string memory symbol_)
-        public
+        external
         initializer
     {
         baal = IBaal(msg.sender); /*Configure Baal to setup sender*/
@@ -113,8 +109,8 @@ contract Shares is ERC20, Initializable {
     /// @notice Baal-only function to mint loot.
     /// @param recipient Address to receive loot
     /// @param amount Amount to mint
-    function mint(address recipient, uint256 amount) public baalOnly {
-                unchecked {
+    function mint(address recipient, uint256 amount) external baalOnly {
+        unchecked {
             if (totalSupply() + amount <= type(uint256).max / 2) {
                 /*If recipient is receiving their first shares, auto-self delegate*/
                 // if (
@@ -127,22 +123,18 @@ contract Shares is ERC20, Initializable {
 
                 // in before transfer
                 //_moveDelegates(address(0), delegates[recipient], amount); /*update delegation*/
-
             }
         }
-        
     }
 
     /// @notice Baal-only function to burn loot.
     /// @param account Address to lose loot
     /// @param amount Amount to burn
-    function burn(address account, uint256 amount) public baalOnly {
-
+    function burn(address account, uint256 amount) external baalOnly {
         _burn(account, amount);
 
         // in before transfer
         // _moveDelegates(delegates[account], address(0), amount); /*update delegation*/
-
     }
 
     /// @notice Triggers an approval from `owner` to `spender` with EIP-712 signature.
@@ -215,7 +207,6 @@ contract Shares is ERC20, Initializable {
         }
 
         _moveDelegates(delegates[from], delegates[to], amount);
-
     }
 
     /// @notice Delegate votes from user to `delegatee`.
@@ -297,7 +288,7 @@ contract Shares is ERC20, Initializable {
                 if (srcRep != address(0)) {
                     uint256 srcRepNum = numCheckpoints[srcRep];
                     uint256 srcRepOld = srcRepNum != 0
-                        ? getCheckpoint(srcRep,srcRepNum - 1).votes
+                        ? getCheckpoint(srcRep, srcRepNum - 1).votes
                         : 0;
                     uint256 srcRepNew = srcRepOld - amount;
                     _writeCheckpoint(srcRep, srcRepNum, srcRepOld, srcRepNew);
@@ -306,7 +297,7 @@ contract Shares is ERC20, Initializable {
                 if (dstRep != address(0)) {
                     uint256 dstRepNum = numCheckpoints[dstRep];
                     uint256 dstRepOld = dstRepNum != 0
-                        ? getCheckpoint(dstRep,dstRepNum - 1).votes
+                        ? getCheckpoint(dstRep, dstRepNum - 1).votes
                         : 0;
                     uint256 dstRepNew = dstRepOld + amount;
                     _writeCheckpoint(dstRep, dstRepNum, dstRepOld, dstRepNew);

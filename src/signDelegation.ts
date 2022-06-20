@@ -18,8 +18,8 @@ export default async function signDelegation(
   const types = {
     Delegation: [
       { name: 'delegatee', type: 'address' },
-      { name: 'nonce', type: 'uint' },
-      { name: 'expiry', type: 'uint' },
+      { name: 'nonce', type: 'uint256' },
+      { name: 'expiry', type: 'uint256' },
     ],
   }
 

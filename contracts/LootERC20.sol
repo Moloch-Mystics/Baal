@@ -5,10 +5,7 @@ import "@openzeppelin/contracts/access/Ownable.sol"; //https://github.com/OpenZe
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-
-interface IBaal {
-    function lootPaused() external returns (bool);
-}
+import "./interfaces/IBaal.sol";
 
 /// @title Loot
 /// @notice Accounting for Baal non voting shares
@@ -27,7 +24,7 @@ contract Loot is ERC20, Initializable {
         );
     bytes32 constant PERMIT_TYPEHASH =
         keccak256(
-            "Permit(address owner,address spender,uint value,uint nonce,uint deadline)"
+            "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
         );
 
     // Baal Config
@@ -45,7 +42,7 @@ contract Loot is ERC20, Initializable {
     /// @param name_ Name for ERC20 token trackers
     /// @param symbol_ Symbol for ERC20 token trackers
     function setUp(string memory name_, string memory symbol_)
-        public
+        external
         initializer
     {
         baal = IBaal(msg.sender); /*Configure Baal to setup sender*/
@@ -86,14 +83,14 @@ contract Loot is ERC20, Initializable {
     /// @notice Baal-only function to mint loot.
     /// @param recipient Address to receive loot
     /// @param amount Amount to mint
-    function mint(address recipient, uint256 amount) public baalOnly {
+    function mint(address recipient, uint256 amount) external baalOnly {
         _mint(recipient, amount);
     }
 
     /// @notice Baal-only function to burn loot.
     /// @param account Address to lose loot
     /// @param amount Amount to burn
-    function burn(address account, uint256 amount) public baalOnly {
+    function burn(address account, uint256 amount) external baalOnly {
         _burn(account, amount);
     }
 

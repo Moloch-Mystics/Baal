@@ -124,7 +124,7 @@ contract Baal is CloneFactory, Module {
             "EIP712Domain(string name,uint256 chainId,address verifyingContract)"
         );
     bytes32 constant VOTE_TYPEHASH =
-        keccak256("Vote(uint proposalId,bool support)");
+        keccak256("Vote(uint32 proposalId,bool support)");
 
     // DATA STRUCTURES
     struct Proposal {
@@ -145,7 +145,7 @@ contract Baal is CloneFactory, Module {
         string details; /*human-readable context for proposal*/
     }
 
-    /* Unborn -> Submitted -> Voting -> Grace -> Ready -> Processed 
+    /* Unborn -> Submitted -> Voting -> Grace -> Ready -> Processed
                               \-> Cancelled  \-> Defeated   */
     enum ProposalState {
         Unborn, /* 0 - can submit */
@@ -631,7 +631,7 @@ contract Baal is CloneFactory, Module {
         uint256 lootToBurn,
         address[] calldata tokens
     ) external nonReentrant {
-        for (uint256 i; i < tokens.length; i++) {
+        for (uint256 i = 0; i < tokens.length; i++) {
             if (i > 0) {
                 require(tokens[i] > tokens[i - 1], "!order");
             }
@@ -663,7 +663,7 @@ contract Baal is CloneFactory, Module {
             _burnShares(msg.sender, sharesToBurn); /*subtract `shares` from user account & Baal totals with erc20 accounting*/
         }
 
-        for (uint256 i; i < tokens.length; i++) {
+        for (uint256 i = 0; i < tokens.length; i++) {
             (, bytes memory balanceData) = tokens[i].staticcall(
                 abi.encodeWithSelector(0x70a08231, address(target))
             ); /*get Baal token balances - 'balanceOf(address)'*/
@@ -692,7 +692,7 @@ contract Baal is CloneFactory, Module {
         uint256[] calldata _permissions
     ) external baalOnly {
         require(_shamans.length == _permissions.length, "!array parity"); /*check array lengths match*/
-        for (uint256 i; i < _shamans.length; i++) {
+        for (uint256 i = 0; i < _shamans.length; i++) {
             uint256 permission = _permissions[i];
             if (adminLock)
                 require(
@@ -913,7 +913,7 @@ contract Baal is CloneFactory, Module {
     /// @notice Helper to get recorded proposal flags
     /// @param id Number of proposal in proposals
     /// @return [cancelled, processed, passed, actionFailed]
-    function getProposalStatus(uint32 id) public view returns (bool[4] memory) {
+    function getProposalStatus(uint32 id) external view returns (bool[4] memory) {
         return proposals[id].status;
     }
 
@@ -1046,22 +1046,6 @@ contract Baal is CloneFactory, Module {
         require(
             success && (data.length == 0 || abi.decode(data, (bool))),
             "transfer failed"
-        ); /*checks success & allows non-conforming transfers*/
-    }
-
-    /// @notice Provides 'safe' {transferFrom} for tokens that do not consistently return 'true/false'.
-    function _safeTransferFrom(
-        address token,
-        address from,
-        address to,
-        uint256 amount
-    ) private {
-        (bool success, bytes memory data) = token.call(
-            abi.encodeWithSelector(0x23b872dd, from, to, amount)
-        ); /*'transferFrom(address,address,uint)'*/
-        require(
-            success && (data.length == 0 || abi.decode(data, (bool))),
-            "transferFrom failed"
         ); /*checks success & allows non-conforming transfers*/
     }
 }
