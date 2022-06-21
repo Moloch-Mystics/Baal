@@ -1156,8 +1156,7 @@ contract BaalSummoner is ModuleProxyFactory {
         // TODO: allow safe to init baal
 
         bytes memory _anyCall = abi.encodeWithSignature("avatar()"); /*This call can be anything, it just needs to return successfully*/
-        Baal _baal = Baal(moduleProxyFactory.deployModule(template, _anyCall, _saltNonce));
- 
+        Baal _baal = Baal(moduleProxyFactory.deployModule(template, _anyCall, _saltNonce)); 
 
         bytes memory _initializationMultisendData = encodeMultisend(    
             initializationActions,
