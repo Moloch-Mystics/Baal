@@ -283,21 +283,6 @@ contract Baal is CloneFactory, Module {
         );
     }
 
-    function setUpActions(bytes memory _initializationMultisendData)
-        public
-        initializer
-    {
-        require(
-            exec(
-                multisendLibrary,
-                0,
-                _initializationMultisendData,
-                Enum.Operation.DelegateCall
-            ),
-            "call failure"
-        );
-    }
-
     /// @notice Summon Baal with voting configuration & initial array of `members` accounts with `shares` & `loot` weights.
     /// @param _initializationParams Encoded setup information.
     function setUp(bytes memory _initializationParams)
@@ -1168,7 +1153,16 @@ contract BaalSummoner is ModuleProxyFactory {
                 (string, string, address, address, address, address)
             );
 
-        
+        // TODO: allow safe to init baal
+
+        bytes memory _anyCall = abi.encodeWithSignature("avatar()"); /*This call can be anything, it just needs to return successfully*/
+        Baal _baal = Baal(moduleProxyFactory.deployModule(template, _anyCall, _saltNonce));
+ 
+
+        bytes memory _initializationMultisendData = encodeMultisend(    
+            initializationActions,
+            address(_baal)
+        );
         bytes memory _initializer = abi.encode(
             _name,
             _symbol,
@@ -1176,23 +1170,10 @@ contract BaalSummoner is ModuleProxyFactory {
             _sharesSingleton,
             _multisendLibrary,
             _safeAddr,
-            "" // no initialization actions because we can't build the multicall yet
-        );
-        // TODO: allow safe to init baal
-
-        Baal _baal = Baal(
-            moduleProxyFactory.deployModule(
-                template, 
-                abi.encodeWithSignature("setup(bytes)",_initializer),
-                _saltNonce
-            ));
-
-        bytes memory _initializationMultisendData = encodeMultisend(    
-            initializationActions,
-            address(_baal)
+            _initializationMultisendData
         );
         // can run the actions now because we have a baal
-        _baal.setUpActions(_initializationMultisendData);
+        _baal.setUp(_initializer);
 
         emit SummonBaal(
             address(_baal),

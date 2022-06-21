@@ -155,7 +155,8 @@ const getBaalParams = async function (
   adminConfig: [boolean, boolean],
   shamans: [string[], number[]],
   shares: [string[], number[]],
-  loots: [string[], number[]]
+  loots: [string[], number[]],
+  safeAddr?: string,
 ) {
   const governanceConfig = abiCoder.encode(
     ["uint32", "uint32", "uint256", "uint256", "uint256", "uint256"],
@@ -225,6 +226,7 @@ const getBaalParams = async function (
       ]
     ),
     initalizationActions,
+    safeAddr
   };
 };
 
@@ -3344,6 +3346,221 @@ describe("Baal contract - offering required", function () {
       101
     );
     const addresses = await getNewBaalAddresses(tx);
+
+    baal = BaalFactory.attach(addresses.baal) as Baal;
+    shamanBaal = await baal.connect(shaman);
+    const lootTokenAddress = await baal.lootToken();
+
+    sharesToken = SharesFactory.attach(addresses.shares) as Shares;
+    lootToken = LootFactory.attach(lootTokenAddress) as Loot;
+
+    const selfTransferAction = encodeMultiAction(
+      multisend,
+      ["0x"],
+      [baal.address],
+      [BigNumber.from(0)],
+      [0]
+    );
+
+    proposal = {
+      flag: 0,
+      account: summoner.address,
+      data: selfTransferAction,
+      details: "all hail baal",
+      expiration: 0,
+      baalGas: 0,
+    };
+  });
+
+  describe("submitProposal", function () {
+    it("happy case - offering is accepted, not self-sponsored", async function () {
+      // note - this also tests that the proposal is NOT sponsored
+      const countBefore = await baal.proposalCount();
+
+      console.log({ proposal });
+
+      await shamanBaal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        proposal.baalGas,
+        ethers.utils.id(proposal.details),
+        { value: 69 }
+      );
+
+      const countAfter = await baal.proposalCount();
+      expect(countAfter).to.equal(countBefore + 1);
+
+      const proposalData = await baal.proposals(1);
+      expect(proposalData.id).to.equal(1);
+      expect(proposalData.votingStarts).to.equal(0);
+    });
+
+    it("happy case - sponsors can submit without offering, auto-sponsors", async function () {
+      const countBefore = await baal.proposalCount();
+
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        proposal.baalGas,
+        ethers.utils.id(proposal.details)
+      );
+      const now = await blockTime();
+
+      const countAfter = await baal.proposalCount();
+      expect(countAfter).to.equal(countBefore + 1);
+      const proposalData = await baal.proposals(1);
+      expect(proposalData.id).to.equal(1);
+      expect(proposalData.votingStarts).to.equal(now);
+    });
+
+    it("edge case - sponsors can submit without offering at threshold", async function () {
+      const countBefore = await baal.proposalCount();
+      await sharesToken.transfer(shaman.address, 1); // transfer 1 share to shaman, putting them at threshold (1)
+
+      await shamanBaal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        proposal.baalGas,
+        ethers.utils.id(proposal.details)
+      );
+      const now = await blockTime();
+
+      const countAfter = await baal.proposalCount();
+      expect(countAfter).to.equal(countBefore + 1);
+      const proposalData = await baal.proposals(1);
+      expect(proposalData.id).to.equal(1);
+      expect(proposalData.votingStarts).to.equal(now);
+    });
+
+    it("require fail - no offering offered", async function () {
+      await expect(
+        shamanBaal.submitProposal(
+          proposal.data,
+          proposal.expiration,
+          proposal.baalGas,
+          ethers.utils.id(proposal.details)
+        )
+      ).to.be.revertedWith(revertMessages.submitProposalOffering);
+    });
+  });
+});
+
+
+describe.only("Baal contract - summon baal with current safe", function () {
+  let customConfig = {
+    ...deploymentConfig,
+    PROPOSAL_OFFERING: 69,
+    SPONSOR_THRESHOLD: 1,
+  };
+
+  let baal: Baal;
+  let shamanBaal: Baal;
+  let weth: TestErc20;
+  let multisend: MultiSend;
+  let poster: Poster;
+
+  let baalSingleton: Baal;
+  let baalSummoner: BaalSummoner;
+
+  let BaalFactory: ContractFactory;
+  let Poster: ContractFactory;
+
+  let lootSingleton: Loot;
+  let LootFactory: ContractFactory;
+  let lootToken: Loot;
+
+  let sharesSingleton: Shares;
+  let SharesFactory: ContractFactory;
+  let sharesToken: Shares;
+
+  let gnosisSafeSingleton: GnosisSafe;
+
+  let applicant: SignerWithAddress;
+  let summoner: SignerWithAddress;
+  let shaman: SignerWithAddress;
+
+  let moduleProxyFactory: ModuleProxyFactory;
+
+  let proposal: { [key: string]: any };
+
+  let encodedInitParams: any;
+
+  const loot = 500;
+  const shares = 100;
+  const sharesPaused = false;
+  const lootPaused = false;
+
+  this.beforeAll(async function () {
+    LootFactory = await ethers.getContractFactory("Loot");
+    lootSingleton = (await LootFactory.deploy()) as Loot;
+    SharesFactory = await ethers.getContractFactory("Shares");
+    sharesSingleton = (await SharesFactory.deploy()) as Shares;
+    BaalFactory = await ethers.getContractFactory("Baal");
+    baalSingleton = (await BaalFactory.deploy()) as Baal;
+    Poster = await ethers.getContractFactory("Poster");
+    poster = (await Poster.deploy()) as Poster;
+  });
+
+  beforeEach(async function () {
+    const MultisendContract = await ethers.getContractFactory("MultiSend");
+    const GnosisSafe = await ethers.getContractFactory("GnosisSafe");
+    const BaalSummoner = await ethers.getContractFactory("BaalSummoner");
+    const GnosisSafeProxyFactory = await ethers.getContractFactory(
+      "GnosisSafeProxyFactory"
+    );
+    const ModuleProxyFactory = await ethers.getContractFactory(
+      "ModuleProxyFactory"
+    );
+    const CompatibilityFallbackHandler = await ethers.getContractFactory(
+      "CompatibilityFallbackHandler"
+    );
+
+    [summoner, applicant, shaman] = await ethers.getSigners();
+
+    const ERC20 = await ethers.getContractFactory("TestERC20");
+    weth = (await ERC20.deploy("WETH", "WETH", 10000000)) as TestErc20;
+
+    multisend = (await MultisendContract.deploy()) as MultiSend;
+    gnosisSafeSingleton = (await GnosisSafe.deploy()) as GnosisSafe;
+    const handler =
+      (await CompatibilityFallbackHandler.deploy()) as CompatibilityFallbackHandler;
+
+    const proxy = await GnosisSafeProxyFactory.deploy();
+    moduleProxyFactory =
+      (await ModuleProxyFactory.deploy()) as ModuleProxyFactory;
+
+    baalSummoner = (await BaalSummoner.deploy(
+      baalSingleton.address,
+      gnosisSafeSingleton.address,
+      handler.address,
+      multisend.address,
+      proxy.address,
+      moduleProxyFactory.address
+    )) as BaalSummoner;
+
+    const encodedInitParams = await getBaalParams(
+      baalSingleton,
+      multisend,
+      lootSingleton,
+      sharesSingleton,
+      poster,
+      customConfig,
+      [metadataConfig.CONTENT, metadataConfig.TAG],
+      [sharesPaused, lootPaused],
+      [[shaman.address], [7]],
+      [[summoner.address], [shares]],
+      [[summoner.address], [loot]],
+      gnosisSafeSingleton.address
+    );
+
+    const tx = await baalSummoner.summonBaal(
+      encodedInitParams.initParams,
+      encodedInitParams.initalizationActions,
+      101
+    );
+    const addresses = await getNewBaalAddresses(tx);
+    console.log('addresses', addresses);
+    
 
     baal = BaalFactory.attach(addresses.baal) as Baal;
     shamanBaal = await baal.connect(shaman);
