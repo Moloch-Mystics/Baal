@@ -1263,7 +1263,7 @@ contract BaalSummoner is ModuleProxyFactory {
             _lootSingleton,
             _sharesSingleton,
             _multisendLibrary,
-            address(_safe),
+            _safe,
             _initializationMultisendData
         );
 
@@ -1273,7 +1273,7 @@ contract BaalSummoner is ModuleProxyFactory {
             address(_baal),
             address(_baal.lootToken()),
             address(_baal.sharesToken()),
-            address(_safe)
+            _safe
         );
 
         return (address(_baal));
