@@ -4,6 +4,16 @@
 
 *This is the most recent collaborative repository for Moloch V3, codename Baal. (Jan 13, 2022).  This message will change when the repository is depricated.*
 
+*this readme is out of date*
+
+## Goerli test deploy
+
+lootSingleton: 0x9391b6A7c55832a6802484dE054d81496D56545A
+sharesSingleton: 0xF69CF34FcB54f71fBD4fd83664F7Db6d4926dD34
+baalSingleton: 0x98B550caBec2602eE2c2259179d1A935777Ff257
+Summoner Address: 0x93ac67998B80692366c537D3537ea6640fc65c97
+
+
 Baal is a minimal yet composable DAO template continuing work from the [`Moloch`](https://github.com/MolochVentures/moloch), [`Minion`](https://github.com/raid-guild/moloch-minion) and [`Compound`](https://github.com/compound-finance/compound-protocol/tree/master/contracts/Governance) frameworks to make it easier for people to combine and command crypto assets with intuitive membership games.
 
 *Guilds, venture clubs and control panels can benefit from Baal:* 
