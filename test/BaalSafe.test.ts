@@ -31,6 +31,7 @@ import { string } from "hardhat/internal/core/params/argumentTypes";
 
 import { GnosisSafeProxyFactory } from "../src/types/GnosisSafeProxyFactory";
 import { ModuleProxyFactory } from "../src/types/ModuleProxyFactory";
+import { calculateProxyAddress } from "@gnosis.pm/zodiac";
 
 use(solidity);
 
@@ -155,7 +156,7 @@ const getBaalParams = async function (
   adminConfig: [boolean, boolean],
   shamans: [string[], number[]],
   shares: [string[], number[]],
-  loots: [string[], number[]]
+  loots: [string[], number[]],
 ) {
   const governanceConfig = abiCoder.encode(
     ["uint32", "uint32", "uint256", "uint256", "uint256", "uint256"],
@@ -225,6 +226,7 @@ const getBaalParams = async function (
       ]
     ),
     initalizationActions,
+    
   };
 };
 
@@ -3371,7 +3373,7 @@ describe("Baal contract - offering required", function () {
   });
 
   describe("submitProposal", function () {
-    it("happy case - offering is accepted, not self-sponsored", async function () {
+    it("submit proposal", async function () {
       // note - this also tests that the proposal is NOT sponsored
       const countBefore = await baal.proposalCount();
 
@@ -3390,7 +3392,7 @@ describe("Baal contract - offering required", function () {
 
       const proposalData = await baal.proposals(1);
       expect(proposalData.id).to.equal(1);
-      expect(proposalData.votingStarts).to.equal(0);
+
     });
 
     it("happy case - sponsors can submit without offering, auto-sponsors", async function () {
@@ -3440,5 +3442,282 @@ describe("Baal contract - offering required", function () {
         )
       ).to.be.revertedWith(revertMessages.submitProposalOffering);
     });
+  });
+});
+
+
+const getBaalParamsWithAvatar = async function (
+  baal: Baal,
+  multisend: MultiSend,
+  lootSingleton: Loot,
+  sharesSingleton: Shares,
+  poster: Poster,
+  config: {
+    PROPOSAL_OFFERING: any;
+    GRACE_PERIOD_IN_SECONDS: any;
+    VOTING_PERIOD_IN_SECONDS: any;
+    QUORUM_PERCENT: any;
+    SPONSOR_THRESHOLD: any;
+    MIN_RETENTION_PERCENT: any;
+    MIN_STAKING_PERCENT: any;
+    TOKEN_NAME: any;
+    TOKEN_SYMBOL: any;
+  },
+  metadata: [string, string],
+  adminConfig: [boolean, boolean],
+  shamans: [string[], number[]],
+  shares: [string[], number[]],
+  loots: [string[], number[]],
+  safeAddr?: string,
+) {
+  const governanceConfig = abiCoder.encode(
+    ["uint32", "uint32", "uint256", "uint256", "uint256", "uint256"],
+    [
+      config.VOTING_PERIOD_IN_SECONDS,
+      config.GRACE_PERIOD_IN_SECONDS,
+      config.PROPOSAL_OFFERING,
+      config.QUORUM_PERCENT,
+      config.SPONSOR_THRESHOLD,
+      config.MIN_RETENTION_PERCENT,
+    ]
+  );
+
+  // console.log('mint shares', shares);
+
+  const setAdminConfig = await baal.interface.encodeFunctionData(
+    "setAdminConfig",
+    adminConfig
+  );
+  const setGovernanceConfig = await baal.interface.encodeFunctionData(
+    "setGovernanceConfig",
+    [governanceConfig]
+  );
+  const setShaman = await baal.interface.encodeFunctionData(
+    "setShamans",
+    shamans
+  );
+  const mintShares = await baal.interface.encodeFunctionData(
+    "mintShares",
+    shares
+  );
+  const mintLoot = await baal.interface.encodeFunctionData("mintLoot", loots);
+  const postMetaData = await poster.interface.encodeFunctionData("post", [
+    metadataConfig.CONTENT,
+    metadataConfig.TAG,
+  ]);
+  const posterFromBaal = await baal.interface.encodeFunctionData(
+    "executeAsBaal",
+    [poster.address, 0, postMetaData]
+  );
+
+  const initalizationActions = [
+    setAdminConfig,
+    setGovernanceConfig,
+    setShaman,
+    mintLoot,
+    mintShares,
+    posterFromBaal,
+  ];
+
+  // const initalizationActionsMulti = encodeMultiAction(
+  //   multisend,
+  //   [setAdminConfig, setGovernanceConfig, setGuildTokens, setShaman, mintShares, mintLoot],
+  //   [baal.address, baal.address, baal.address, baal.address, baal.address, baal.address],
+  //   [BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0), BigNumber.from(0)],
+  //   [0, 0, 0, 0, 0, 0]
+  // )
+  return {
+    initParams: abiCoder.encode(
+      ["string", "string", "address", "address", "address", "address"],
+      [
+        config.TOKEN_NAME,
+        config.TOKEN_SYMBOL,
+        lootSingleton.address,
+        sharesSingleton.address,
+        multisend.address,
+        safeAddr,
+      ]
+    ),
+    initalizationActions,
+    
+  };
+};
+
+describe("Baal contract - summon baal with current safe", function () {
+  let customConfig = {
+    ...deploymentConfig,
+    PROPOSAL_OFFERING: 69,
+    SPONSOR_THRESHOLD: 1,
+  };
+
+  let baal: Baal;
+  let shamanBaal: Baal;
+  let weth: TestErc20;
+  let multisend: MultiSend;
+  let poster: Poster;
+
+  let baalSingleton: Baal;
+  let baalSummoner: BaalSummoner;
+
+  let BaalFactory: ContractFactory;
+  let Poster: ContractFactory;
+
+  let lootSingleton: Loot;
+  let LootFactory: ContractFactory;
+  let lootToken: Loot;
+
+  let sharesSingleton: Shares;
+  let SharesFactory: ContractFactory;
+  let sharesToken: Shares;
+
+  let gnosisSafeSingleton: GnosisSafe;
+
+  let applicant: SignerWithAddress;
+  let summoner: SignerWithAddress;
+  let shaman: SignerWithAddress;
+
+  let moduleProxyFactory: ModuleProxyFactory;
+
+  let proposal: { [key: string]: any };
+
+  let encodedInitParams: any;
+
+  const loot = 500;
+  const shares = 100;
+  const sharesPaused = false;
+  const lootPaused = false;
+
+  this.beforeAll(async function () {
+    LootFactory = await ethers.getContractFactory("Loot");
+    lootSingleton = (await LootFactory.deploy()) as Loot;
+    SharesFactory = await ethers.getContractFactory("Shares");
+    sharesSingleton = (await SharesFactory.deploy()) as Shares;
+    BaalFactory = await ethers.getContractFactory("Baal");
+    baalSingleton = (await BaalFactory.deploy()) as Baal;
+    Poster = await ethers.getContractFactory("Poster");
+    poster = (await Poster.deploy()) as Poster;
+  });
+
+
+  describe("Baal summoned after safe", function () {
+    it("should have the expected address of the module the same as the deployed", async function () {
+      beforeEach(async function () {
+        const MultisendContract = await ethers.getContractFactory("MultiSend");
+        const GnosisSafe = await ethers.getContractFactory("GnosisSafe");
+        const BaalSummoner = await ethers.getContractFactory("BaalSummoner");
+        const GnosisSafeProxyFactory = await ethers.getContractFactory(
+          "GnosisSafeProxyFactory"
+        );
+        const ModuleProxyFactory = await ethers.getContractFactory(
+          "ModuleProxyFactory"
+        );
+        const CompatibilityFallbackHandler = await ethers.getContractFactory(
+          "CompatibilityFallbackHandler"
+        );
+    
+        [summoner, applicant, shaman] = await ethers.getSigners();
+    
+        const ERC20 = await ethers.getContractFactory("TestERC20");
+        weth = (await ERC20.deploy("WETH", "WETH", 10000000)) as TestErc20;
+    
+        multisend = (await MultisendContract.deploy()) as MultiSend;
+        gnosisSafeSingleton = (await GnosisSafe.deploy()) as GnosisSafe;
+        const handler =
+          (await CompatibilityFallbackHandler.deploy()) as CompatibilityFallbackHandler;
+    
+        const proxy = await GnosisSafeProxyFactory.deploy();
+        moduleProxyFactory =
+          (await ModuleProxyFactory.deploy()) as ModuleProxyFactory;
+    
+    
+        // precalculate module, deploysafe, enable module
+    
+        const Avatar = await ethers.getContractFactory("TestAvatar");
+        const avatar = await Avatar.deploy();
+    
+        const moduleFactory = await ModuleProxyFactory.deploy();
+    
+    
+        baalSummoner = (await BaalSummoner.deploy(
+          baalSingleton.address,
+          gnosisSafeSingleton.address,
+          handler.address,
+          multisend.address,
+          proxy.address,
+          moduleProxyFactory.address // use valid safe address
+        )) as BaalSummoner;
+    
+        const encodedInitParams = await getBaalParamsWithAvatar(
+          baalSingleton,
+          multisend,
+          lootSingleton,
+          sharesSingleton,
+          poster,
+          customConfig,
+          [metadataConfig.CONTENT, metadataConfig.TAG],
+          [sharesPaused, lootPaused],
+          [[shaman.address], [7]],
+          [[summoner.address], [shares]],
+          [[summoner.address], [loot]],
+          avatar.address
+        );
+    
+        // view function used as placeholder in deployment 
+        const initData = baalSingleton.interface.encodeFunctionData("avatar");
+    
+        const avatarAddress = avatar.address;
+    
+        // pre calculated address for the new module
+        const expectedAddress = await calculateProxyAddress(
+          moduleProxyFactory,
+          baalSingleton.address,
+          initData,
+          "101"
+        );
+    
+        // enable module on safe, on the front end this should be part 1 of a multicall signed safe owners
+        await avatar.enableModule(expectedAddress);
+        
+        // summon baal, part 2 of multicall
+        const tx = await baalSummoner.summonBaal(
+          encodedInitParams.initParams,
+          encodedInitParams.initalizationActions,
+          101
+        );
+        const addresses = await getNewBaalAddresses(tx);
+        console.log('addresses', addresses);
+        
+    
+        baal = BaalFactory.attach(addresses.baal) as Baal;
+        shamanBaal = await baal.connect(shaman);
+        const lootTokenAddress = await baal.lootToken();
+    
+        sharesToken = SharesFactory.attach(addresses.shares) as Shares;
+        lootToken = LootFactory.attach(lootTokenAddress) as Loot;
+    
+        const selfTransferAction = encodeMultiAction(
+          multisend,
+          ["0x"],
+          [baal.address],
+          [BigNumber.from(0)],
+          [0]
+        );
+    
+        proposal = {
+          flag: 0,
+          account: summoner.address,
+          data: selfTransferAction,
+          details: "all hail baal",
+          expiration: 0,
+          baalGas: 0,
+        };
+
+      expect(expectedAddress).to.equal(addresses.baal);
+
+
+      });
+    });
+
+
   });
 });
