@@ -360,7 +360,6 @@ task("summon", "Summons a new DAO")
     const abiCoder = hre.ethers.utils.defaultAbiCoder;
     const getBaalParams = async function (
       baal: Baal,
-      multisend: MultiSend,
       poster: Poster,
       config: {
         PROPOSAL_OFFERING: any;
@@ -438,11 +437,10 @@ task("summon", "Summons a new DAO")
       // )
       return {
         initParams: abiCoder.encode(
-          ["string", "string", "address", "address", "address"],
+          ["string", "string"],
           [
             config.TOKEN_NAME,
-            config.TOKEN_SYMBOL,
-            multisend.address,
+            config.TOKEN_SYMBOL
           ]
         ),
         initalizationActions,
@@ -489,7 +487,6 @@ task("summon", "Summons a new DAO")
 
     encodedInitParams = await getBaalParams(
       baalSingleton,
-      multisend,
       poster,
       deploymentConfig,
       [metadataConfig.CONTENT, metadataConfig.TAG],

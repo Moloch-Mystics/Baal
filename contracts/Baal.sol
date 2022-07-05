@@ -1155,11 +1155,10 @@ contract BaalSummoner is ModuleProxyFactory {
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
             string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
-            address _multisendLibrary, /*address of multisend library*/
             address _safeAddr /*address of safe*/
         ) = abi.decode(
                 initializationParams,
-                (string, string, address, address)
+                (string, string, address)
             );
 
         // TODO: allow safe to init baal
@@ -1176,7 +1175,7 @@ contract BaalSummoner is ModuleProxyFactory {
             _symbol,
             lootSingleton,
             sharesSingleton,
-            _multisendLibrary,
+            gnosisMultisendLibrary,
             _safeAddr,
             _initializationMultisendData
         );
@@ -1247,11 +1246,10 @@ contract BaalSummoner is ModuleProxyFactory {
     ) external returns (address) {
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
-            string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
-            address _multisendLibrary /*address of multisend library*/
+            string memory _symbol /*_symbol Symbol for erc20 `shares` accounting*/
         ) = abi.decode(
                 initializationParams,
-                (string, string, address)
+                (string, string)
             );
 
         bytes memory _anyCall = abi.encodeWithSignature("avatar()"); /*This call can be anything, it just needs to return successfully*/
@@ -1269,7 +1267,7 @@ contract BaalSummoner is ModuleProxyFactory {
             _symbol,
             lootSingleton,
             sharesSingleton,
-            _multisendLibrary,
+            gnosisMultisendLibrary,
             _safe,
             _initializationMultisendData
         );
