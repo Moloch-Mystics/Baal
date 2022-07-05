@@ -107,8 +107,6 @@ const abiCoder = ethers.utils.defaultAbiCoder;
 const getBaalParams = async function (
   baal: Baal,
   multisend: MultiSend,
-  lootSingleton: Loot,
-  sharesSingleton: Shares,
   poster: Poster,
   config: {
     PROPOSAL_OFFERING: any;
@@ -175,12 +173,10 @@ const getBaalParams = async function (
 
   return {
     initParams: abiCoder.encode(
-      ["string", "string", "address", "address", "address"],
+      ["string", "string", "address"],
       [
         config.TOKEN_NAME,
         config.TOKEN_SYMBOL,
-        lootSingleton.address,
-        sharesSingleton.address,
         multisend.address,
       ]
     ),
@@ -290,14 +286,14 @@ describe("Tribute proposal type", function () {
       handler.address,
       multisend.address,
       proxy.address,
-      moduleProxyFactory.address
+      moduleProxyFactory.address,
+      lootSingleton.address,
+      sharesSingleton.address,
     )) as BaalSummoner;
 
     encodedInitParams = await getBaalParams(
       baalSingleton,
       multisend,
-      lootSingleton,
-      sharesSingleton,
       poster,
       deploymentConfig,
       [sharesPaused, lootPaused],

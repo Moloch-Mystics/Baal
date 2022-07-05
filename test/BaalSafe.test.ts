@@ -138,8 +138,6 @@ const abiCoder = ethers.utils.defaultAbiCoder;
 const getBaalParams = async function (
   baal: Baal,
   multisend: MultiSend,
-  lootSingleton: Loot,
-  sharesSingleton: Shares,
   poster: Poster,
   config: {
     PROPOSAL_OFFERING: any;
@@ -216,12 +214,10 @@ const getBaalParams = async function (
   // )
   return {
     initParams: abiCoder.encode(
-      ["string", "string", "address", "address", "address"],
+      ["string", "string", "address"],
       [
         config.TOKEN_NAME,
         config.TOKEN_SYMBOL,
-        lootSingleton.address,
-        sharesSingleton.address,
         multisend.address,
       ]
     ),
@@ -429,14 +425,14 @@ describe("Baal contract", function () {
       handler.address,
       multisend.address,
       proxy.address,
-      moduleProxyFactory.address
+      moduleProxyFactory.address,
+      lootSingleton.address,
+      sharesSingleton.address,
     )) as BaalSummoner;
 
     encodedInitParams = await getBaalParams(
       baalSingleton,
       multisend,
-      lootSingleton,
-      sharesSingleton,
       poster,
       deploymentConfig,
       [metadataConfig.CONTENT, metadataConfig.TAG],
@@ -3323,14 +3319,14 @@ describe("Baal contract - offering required", function () {
       handler.address,
       multisend.address,
       proxy.address,
-      moduleProxyFactory.address
+      moduleProxyFactory.address,
+      lootSingleton.address,
+      sharesSingleton.address,
     )) as BaalSummoner;
 
     const encodedInitParams = await getBaalParams(
       baalSingleton,
       multisend,
-      lootSingleton,
-      sharesSingleton,
       poster,
       customConfig,
       [metadataConfig.CONTENT, metadataConfig.TAG],
@@ -3343,7 +3339,7 @@ describe("Baal contract - offering required", function () {
     const tx = await baalSummoner.summonBaalAndSafe(
       encodedInitParams.initParams,
       encodedInitParams.initalizationActions,
-      101
+      101 // nonce
     );
     const addresses = await getNewBaalAddresses(tx);
 
@@ -3449,8 +3445,6 @@ describe("Baal contract - offering required", function () {
 const getBaalParamsWithAvatar = async function (
   baal: Baal,
   multisend: MultiSend,
-  lootSingleton: Loot,
-  sharesSingleton: Shares,
   poster: Poster,
   config: {
     PROPOSAL_OFFERING: any;
@@ -3528,12 +3522,10 @@ const getBaalParamsWithAvatar = async function (
   // )
   return {
     initParams: abiCoder.encode(
-      ["string", "string", "address", "address", "address", "address"],
+      ["string", "string", "address", "address"],
       [
         config.TOKEN_NAME,
         config.TOKEN_SYMBOL,
-        lootSingleton.address,
-        sharesSingleton.address,
         multisend.address,
         safeAddr,
       ]
@@ -3644,14 +3636,14 @@ describe("Baal contract - summon baal with current safe", function () {
           handler.address,
           multisend.address,
           proxy.address,
-          moduleProxyFactory.address // use valid safe address
+          moduleProxyFactory.address, 
+          lootSingleton.address,
+          sharesSingleton.address,
         )) as BaalSummoner;
     
         const encodedInitParams = await getBaalParamsWithAvatar(
           baalSingleton,
           multisend,
-          lootSingleton,
-          sharesSingleton,
           poster,
           customConfig,
           [metadataConfig.CONTENT, metadataConfig.TAG],

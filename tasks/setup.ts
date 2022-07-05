@@ -308,8 +308,6 @@ task("memberprop", "Submits a new member proposal")
 
 task("summon", "Summons a new DAO")
   .addParam("factory", "Dao factory address")
-  .addParam("loottemplate", "loot template")
-  .addParam("sharestemplate", "shares template")
   .addParam(
     "summoners",
     'the summoner addresses (array) (escape quotes) (no spaces) ex [\\"0x123...\\"]'
@@ -363,8 +361,6 @@ task("summon", "Summons a new DAO")
     const getBaalParams = async function (
       baal: Baal,
       multisend: MultiSend,
-      lootSingleton: Loot,
-      sharesSingleton: Shares,
       poster: Poster,
       config: {
         PROPOSAL_OFFERING: any;
@@ -446,8 +442,6 @@ task("summon", "Summons a new DAO")
           [
             config.TOKEN_NAME,
             config.TOKEN_SYMBOL,
-            lootSingleton.address,
-            sharesSingleton.address,
             multisend.address,
           ]
         ),
@@ -486,14 +480,6 @@ task("summon", "Summons a new DAO")
     const poster = (await posterFactory.attach(posterAddress)) as Poster;
     console.log("**********************");
 
-    const LootFactory = await hre.ethers.getContractFactory("Loot");
-    const lootSingleton = (await LootFactory.attach(
-      taskArgs.loottemplate
-    )) as Loot;
-    const SharesFactory = await hre.ethers.getContractFactory("Shares");
-    const sharesSingleton = (await SharesFactory.attach(
-      taskArgs.sharestemplate
-    )) as Shares;
     const Baal = await hre.ethers.getContractFactory("Baal");
     const baalSingleton = (await Baal.attach(baalTemplateAddr)) as Baal;
     const MultisendContract = await hre.ethers.getContractFactory("MultiSend");
@@ -504,8 +490,6 @@ task("summon", "Summons a new DAO")
     encodedInitParams = await getBaalParams(
       baalSingleton,
       multisend,
-      lootSingleton,
-      sharesSingleton,
       poster,
       deploymentConfig,
       [metadataConfig.CONTENT, metadataConfig.TAG],
