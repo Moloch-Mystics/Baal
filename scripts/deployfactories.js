@@ -13,13 +13,20 @@ const _shamans = {
 	42: ['']
 }
 
-// same for all networks
+// same default for all networks, but different sometimes
+// https://github.com/gnosis/zodiac/blob/master/src/factory/constants.ts#L20
+// https://github.com/safe-global/safe-deployments/tree/main/src/assets
+// moduleProxyFactory default 0x00000000062c52e29e8029dc2413172f6d619d85 goerli, optimism and arbitrum at 0x270c012B6C2A61153e8A6d82F2Cb4F88ddB7fD5E
 const _addresses = {
 	gnosisSingleton: "0xd9db270c1b5e3bd161e8c8503c55ceabee709552",
 	gnosisFallbackLibrary: "0xf48f2b2d2a534e402487b3ee7c18c33aec0fe5e4",
 	gnosisMultisendLibrary: "0xa238cbeb142c10ef7ad8442c6d1f9e89e07e7761",
-	poster: "0x000000000000cd17345801aa8147b8D3950260FF"
+	poster: "0x000000000000cd17345801aa8147b8D3950260FF",
+	gnosisSafeProxyFactory: "0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2",
+	moduleProxyFactory: "0x270c012B6C2A61153e8A6d82F2Cb4F88ddB7fD5E",
 	}
+
+
 
 const _shares = ['1']; 
 const _loot = ['1'];
@@ -78,9 +85,14 @@ async function main() {
 		baalSingleton.address, 
 		_addresses.gnosisSingleton, 
 		_addresses.gnosisFallbackLibrary, 
-		_addresses.gnosisMultisendLibrary))
+		_addresses.gnosisMultisendLibrary,
+		_addresses.gnosisSafeProxyFactory,
+		_addresses.moduleProxyFactory,
+		lootSingleton.address,
+		sharesSingleton.address))
     
 	await baalSummoner.deployed();
+
 
 	// const factory = await ethers.getContractFactory('Baal');
 	// const Baal = await factory.deploy(
@@ -103,7 +115,7 @@ async function main() {
 	const txHash = baalSummoner.deployTransaction.hash;
 	const receipt = await deployer.provider.getTransactionReceipt(txHash);
 	console.log('Transaction Hash:', txHash);
-	console.log('Contract Address:', baalSummoner.address);
+	console.log('Factory Contract Address:', baalSummoner.address);
 	console.log('Block Number:', receipt.blockNumber);
 }
 
