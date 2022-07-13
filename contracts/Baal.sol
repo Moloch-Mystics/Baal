@@ -690,9 +690,17 @@ contract Baal is CloneFactory, Module {
         }
 
         for (uint256 i; i < tokens.length; i++) {
+            (, bytes memory balanceData) = tokens[i].staticcall(
+                abi.encodeWithSelector(0x70a08231, address(target))
+            ); /*get Baal token balances - 'balanceOf(address)'*/
             uint256 balance = tokens[i] == ETH 
-                ? address(this).balance 
-                : IBaalToken(tokens[i]).balanceOf(address(this));
+                ? address(target).balance 
+                : abi.decode(balanceData, (uint256)); /*decode Baal token balances for calculation*/
+
+
+            // uint256 balance = tokens[i] == ETH 
+            //     ? address(target).balance 
+            //     : IBaalToken(tokens[i]).balanceOf(address(this));
             
             uint256 amountToRagequit = ((lootToBurn + sharesToBurn) * balance) /
                 _totalSupply; /*calculate 'fair shair' claims*/
@@ -1062,10 +1070,12 @@ contract Baal is CloneFactory, Module {
     function _safeTransferETH(address to, uint256 amount) internal {
         bool success;
 
-        assembly {
-            // Transfer the ETH and store if it succeeded or not.
-            success := call(gas(), to, amount, 0, 0, 0, 0)
-        }
+        // assembly {
+        //     // Transfer the ETH and store if it succeeded or not.
+        //     success := call(gas(), to, amount, 0, 0, 0, 0)
+        // }
+        
+        // transfer eth from target
 
         require(success, "ETH_TRANSFER_FAILED");
     }
