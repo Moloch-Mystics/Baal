@@ -1068,14 +1068,9 @@ contract Baal is CloneFactory, Module {
     
     /// @notice Provides 'safe' {transfer} for ETH.
     function _safeTransferETH(address to, uint256 amount) internal {
-        bool success;
-
-        // assembly {
-        //     // Transfer the ETH and store if it succeeded or not.
-        //     success := call(gas(), to, amount, 0, 0, 0, 0)
-        // }
         
         // transfer eth from target
+        (bool success, ) = execAndReturnData(to, amount, "", Enum.Operation.Call);
 
         require(success, "ETH_TRANSFER_FAILED");
     }
