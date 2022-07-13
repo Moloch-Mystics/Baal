@@ -78,6 +78,8 @@ contract Baal is CloneFactory, Module {
     IBaalToken public lootToken; /*Sub ERC20 for loot mgmt*/
     IBaalToken public sharesToken; /*Sub ERC20 for loot mgmt*/
 
+    address private constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE; /*ETH reference for redemptions*/
+
     mapping(address => mapping(address => uint256)) public allowance; /*maps approved pulls of `shares` with erc20 accounting*/
 
     // ADMIN PARAMETERS
@@ -1057,7 +1059,7 @@ contract Baal is CloneFactory, Module {
     }
     
     /// @notice Provides 'safe' {transfer} for ETH.
-    function safeTransferETH(address to, uint256 amount) internal {
+    function _safeTransferETH(address to, uint256 amount) internal {
         bool success;
 
         assembly {
