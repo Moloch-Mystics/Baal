@@ -2,14 +2,20 @@
 pragma solidity >=0.8.0;
 import "../Baal.sol";
 
-import "hardhat/console.sol";
+//  import "hardhat/console.sol";
 
-contract TributeEscrow {
+interface IERC20 {
+    function transferFrom(address from, address to, uint256 value) external returns (bool);
+}
+
+contract TributeMinion {
+    event TributeProposal(address indexed baal, address token, uint256 amount, address recipient, uint256 proposalId);
     struct Escrow {
         address token;
         address applicant;
         uint256 amount;
         bool released;
+        address safe;
     }
     mapping(address => mapping(uint256 => Escrow)) escrows;
 
@@ -26,7 +32,8 @@ contract TributeEscrow {
         _recipients[0] = recipient;
 
         bytes memory _releaseEscrow = abi.encodeWithSignature(
-            "releaseEscrow(uint32)",
+            "releaseEscrow(address,uint32)",
+            baal,
             proposalId
         );
 
@@ -92,41 +99,46 @@ contract TributeEscrow {
         uint256 amount,
         uint256 shares,
         uint256 loot,
-        address recipient,
         uint32 expiration,
         string memory details
-    ) public {
+    ) external {
         uint32 proposalId = baal.proposalCount() + 1;
         bytes memory encodedProposal = encodeTributeProposal(
             address(baal),
             shares,
             loot,
-            recipient,
+            msg.sender,
             proposalId,
             address(this)
         );
         escrows[address(baal)][proposalId] = Escrow(
             token,
-            recipient,
+            msg.sender,
             amount,
-            false
+            false,
+            baal.target()
         );
-        baal.submitProposal(encodedProposal, expiration, details);
+        baal.submitProposal(encodedProposal, expiration, 0, details);
+        emit TributeProposal(address(baal), token, amount, msg.sender, proposalId);
     }
 
-    function releaseEscrow(uint32 proposalId) external {
-        Baal baal = Baal(payable(msg.sender));
-        Escrow storage escrow = escrows[address(baal)][proposalId];
+    function releaseEscrow(address _baal, uint32 _proposalId) external {
+        // console.log("releasing");
+        Baal baal = Baal(_baal);
+        Escrow storage escrow = escrows[address(baal)][_proposalId];
         require(!escrow.released, "Already released");
+        // console.log("releasing1b");
 
-        bool[4] memory status = baal.getProposalStatus(proposalId);
+        bool[4] memory status = baal.getProposalStatus(_proposalId);
+        // console.log("releasing1c");
         require(status[2], "Not passed");
         escrow.released = true;
 
         IERC20 token = IERC20(escrow.token);
+        // console.log("releasing2");
 
         require(
-            token.transferFrom(escrow.applicant, address(baal), escrow.amount),
+            token.transferFrom(escrow.applicant, escrow.safe, escrow.amount),
             "Transfer failed"
         );
     }

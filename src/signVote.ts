@@ -17,7 +17,7 @@ export default async function signVote(
 
   const types = {
     Vote: [
-      { name: 'proposalId', type: 'uint' },
+      { name: 'proposalId', type: 'uint32' },
       { name: 'support', type: 'bool' },
     ],
   }

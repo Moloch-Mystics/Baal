@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "hardhat test --network hardhat",
-    "compile": "hardhat compile"
+    "compile": "TS_NODE_TRANSPILE_ONLY=1 hardhat typechain"
   },
   "repository": {
     "type": "git",
@@ -37,5 +37,9 @@
     "ts-node": "^10.0.0",
     "typescript": "^4.3.2",
     "@openzeppelin/contracts": "^4.3.2"
+  },
+  "dependencies": {
+    "@gnosis.pm/zodiac": "^1.0.3",
+    "hardhat-contract-sizer": "^2.4.0"
   }
 }
