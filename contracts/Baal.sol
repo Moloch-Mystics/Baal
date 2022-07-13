@@ -696,11 +696,6 @@ contract Baal is CloneFactory, Module {
             uint256 balance = tokens[i] == ETH 
                 ? address(target).balance 
                 : abi.decode(balanceData, (uint256)); /*decode Baal token balances for calculation*/
-
-
-            // uint256 balance = tokens[i] == ETH 
-            //     ? address(target).balance 
-            //     : IBaalToken(tokens[i]).balanceOf(address(this));
             
             uint256 amountToRagequit = ((lootToBurn + sharesToBurn) * balance) /
                 _totalSupply; /*calculate 'fair shair' claims*/
