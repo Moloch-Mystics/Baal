@@ -3045,6 +3045,37 @@ describe("Baal contract", function () {
       expect(safeWethAfter).to.equal(0);
     });
 
+    it.only("happy case - ragequit eth", async function () {
+      const ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+
+      const safeEthBeforeTransfer = await ethers.provider.getBalance(gnosisSafe.address);
+      // console.log('safeEthBeforeTransfer', safeEthBeforeTransfer);
+
+      const lootBefore = await lootToken.balanceOf(summoner.address);
+      const summonerEthBefore = await summoner.getBalance();
+      // console.log('summonerEthBefore', summonerEthBefore);
+      
+      await summoner.sendTransaction({
+        to: gnosisSafe.address,
+        value: ethers.utils.parseEther("1.0"), // Sends exactly 1.0 ether
+      });
+      const summonerEthAfterTransfer = await summoner.getBalance();
+      // console.log('summonerEthAfterTransfer', summonerEthAfterTransfer);
+      const safeEthBeforeRq = await ethers.provider.getBalance(gnosisSafe.address);
+      // console.log('safeEthBeforeRq', safeEthBeforeRq);
+      await baal.ragequit(summoner.address, shares, loot, [ETH]);
+      const sharesAfter = await sharesToken.balanceOf(summoner.address);
+      const lootAfter = await lootToken.balanceOf(summoner.address);
+      
+      const safeEthAfterRq = await ethers.provider.getBalance(gnosisSafe.address);
+      // console.log('safeEthAfterRq', safeEthAfterRq);
+      
+      expect(lootAfter).to.equal(lootBefore.sub(loot));
+      expect(safeEthBeforeRq).to.equal(ethers.utils.parseEther("1.0"));
+      expect(safeEthAfterRq).to.equal(0);
+ 
+    });
+
     it("happy case - partial ragequit", async function () {
       const lootBefore = await lootToken.balanceOf(summoner.address);
       const lootToBurn = 250;

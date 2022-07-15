@@ -74,8 +74,12 @@ contract Baal is CloneFactory, Module {
     using ECDSA for bytes32;
 
     // ERC20 SHARES + LOOT
+
     IBaalToken public lootToken; /*Sub ERC20 for loot mgmt*/
     IBaalToken public sharesToken; /*Sub ERC20 for loot mgmt*/
+
+    address private constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE; /*ETH reference for redemptions*/
+
     mapping(address => mapping(address => uint256)) public allowance; /*maps approved pulls of `shares` with erc20 accounting*/
 
     // ADMIN PARAMETERS
@@ -685,18 +689,22 @@ contract Baal is CloneFactory, Module {
             _burnShares(msg.sender, sharesToBurn); /*subtract `shares` from user account & Baal totals with erc20 accounting*/
         }
 
-        for (uint256 i = 0; i < tokens.length; i++) {
+        for (uint256 i; i < tokens.length; i++) {
             (, bytes memory balanceData) = tokens[i].staticcall(
                 abi.encodeWithSelector(0x70a08231, address(target))
             ); /*get Baal token balances - 'balanceOf(address)'*/
-            uint256 balance = abi.decode(balanceData, (uint256)); /*decode Baal token balances for calculation*/
-
+            uint256 balance = tokens[i] == ETH 
+                ? address(target).balance 
+                : abi.decode(balanceData, (uint256)); /*decode Baal token balances for calculation*/
+            
             uint256 amountToRagequit = ((lootToBurn + sharesToBurn) * balance) /
                 _totalSupply; /*calculate 'fair shair' claims*/
 
             if (amountToRagequit != 0) {
                 /*gas optimization to allow higher maximum token limit*/
-                _safeTransfer(tokens[i], to, amountToRagequit); /*execute 'safe' token transfer*/
+                tokens[i] == ETH
+                    ? _safeTransferETH(to, amountToRagequit) /*execute 'safe' ETH transfer*/
+                    : _safeTransfer(tokens[i], to, amountToRagequit); /*execute 'safe' token transfer*/
             }
         }
 
@@ -1051,6 +1059,15 @@ contract Baal is CloneFactory, Module {
         returns (bytes32 hash)
     {
         return keccak256(abi.encode(_transactions));
+    }
+    
+    /// @notice Provides 'safe' {transfer} for ETH.
+    function _safeTransferETH(address to, uint256 amount) internal {
+        
+        // transfer eth from target
+        (bool success, ) = execAndReturnData(to, amount, "", Enum.Operation.Call);
+
+        require(success, "ETH_TRANSFER_FAILED");
     }
 
     /// @notice Provides 'safe' {transfer} for tokens that do not consistently return 'true/false'.
