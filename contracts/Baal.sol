@@ -1116,7 +1116,8 @@ contract BaalSummoner is ModuleProxyFactory {
         address indexed baal,
         address indexed loot,
         address indexed shares,
-        address safe
+        address safe,
+        bool existingSafe
     );
 
     constructor(
@@ -1203,7 +1204,8 @@ contract BaalSummoner is ModuleProxyFactory {
             address(_baal),
             address(_baal.lootToken()),
             address(_baal.sharesToken()),
-            _safeAddr
+            _safeAddr,
+            true
         );
 
         return (address(_baal));
@@ -1295,7 +1297,8 @@ contract BaalSummoner is ModuleProxyFactory {
             address(_baal),
             address(_baal.lootToken()),
             address(_baal.sharesToken()),
-            _safe
+            _safe,
+            false
         );
 
         return (address(_baal));
