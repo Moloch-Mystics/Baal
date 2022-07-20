@@ -4,10 +4,11 @@ WIP: [Docs Page here](https://baal-docs.vercel.app/)
 
 ## Goerli test deploy
 
-- lootSingleton: 0x9391b6A7c55832a6802484dE054d81496D56545A
-- sharesSingleton: 0xF69CF34FcB54f71fBD4fd83664F7Db6d4926dD34
-- baalSingleton: 0x98B550caBec2602eE2c2259179d1A935777Ff257
-- Summoner Factory Address: 0x93ac67998B80692366c537D3537ea6640fc65c97
+- lootSingleton 0x0De84DCAc3B2d52581120059ee9723FDDecCB044
+- sharesSingleton 0x3109AeD0fD9777cEFb24dBa5eb5030987bd9E3F3
+- baalSingleton 0x69b442eb55714A0B144134AED015517394Ed1871
+- Transaction Hash: 0x62906ba23728bda0a1a0ffcca412371772448bac200497030462da615fc04598
+- **Factory Contract Address**: 0x0C5fd8AAdF995e11E5Ac1CD72139Ee4fd72cDeFC
 
 
 Baal is a minimal yet composable DAO template continuing work from the [`Moloch`](https://github.com/MolochVentures/moloch), [`Minion`](https://github.com/raid-guild/moloch-minion) and [`Compound`](https://github.com/compound-finance/compound-protocol/tree/master/contracts/Governance) frameworks to make it easier for people to combine and command crypto assets with intuitive membership games.
