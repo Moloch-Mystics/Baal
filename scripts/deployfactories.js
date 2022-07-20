@@ -93,31 +93,22 @@ async function main() {
     
 	await baalSummoner.deployed();
 
-
-	// const factory = await ethers.getContractFactory('Baal');
-	// const Baal = await factory.deploy(
-    //     _shamans[chainId],
-    //     // _guildTokens[chainId],
-    //     [_deployer],
-    //     _loot,
-    //     _shares,
-    //     _minVoting,
-    //     _maxVoting,
-	// 	_proposalOffering,
-    //     _name,
-    //     _symbol,
-    //     false,
-    //     false,
-	// );
-
-	// await Baal.deployed();
-
 	const txHash = baalSummoner.deployTransaction.hash;
 	const receipt = await deployer.provider.getTransactionReceipt(txHash);
 	console.log('Transaction Hash:', txHash);
 	console.log('Factory Contract Address:', baalSummoner.address);
 	console.log('Block Number:', receipt.blockNumber);
-}
+	console.log('full verify params:', baalSummoner.address, 
+	baalSingleton.address, 
+	_addresses.gnosisSingleton, 
+	_addresses.gnosisFallbackLibrary, 
+	_addresses.gnosisMultisendLibrary,
+	_addresses.gnosisSafeProxyFactory,
+	_addresses.moduleProxyFactory,
+	lootSingleton.address,
+	sharesSingleton.address);
+	}
+
 
 main()
 	.then(() => process.exit(0))
