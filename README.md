@@ -9,6 +9,7 @@ WIP: [Docs Page here](https://baal-docs.vercel.app/)
 - baalSingleton 0x69b442eb55714A0B144134AED015517394Ed1871
 - Transaction Hash: 0x62906ba23728bda0a1a0ffcca412371772448bac200497030462da615fc04598
 - **Factory Contract Address**: 0x0C5fd8AAdF995e11E5Ac1CD72139Ee4fd72cDeFC
+- tribute minion: 0x9C6f6e6E461FB1dB9761c960900A0Ae05B9786A7
 
 
 Baal is a minimal yet composable DAO template continuing work from the [`Moloch`](https://github.com/MolochVentures/moloch), [`Minion`](https://github.com/raid-guild/moloch-minion) and [`Compound`](https://github.com/compound-finance/compound-protocol/tree/master/contracts/Governance) frameworks to make it easier for people to combine and command crypto assets with intuitive membership games.
