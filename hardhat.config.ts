@@ -1,14 +1,15 @@
-import { task, HardhatUserConfig } from "hardhat/config";
+import { task, subtask, HardhatUserConfig } from "hardhat/config";
 import "@nomiclabs/hardhat-waffle";
 import "@nomiclabs/hardhat-ethers";
 import "hardhat-gas-reporter";
 import "@nomiclabs/hardhat-etherscan";
 import "solidity-coverage";
-import "hardhat-typechain";
 import "hardhat-contract-sizer";
+import "hardhat-abi-exporter";
 
 import * as fs from "fs";
-import "hardhat-typechain";
+import "@typechain/hardhat";
+import '@nomiclabs/hardhat-ethers'
 
 import "./tasks/setup";
 
@@ -157,6 +158,12 @@ const config: HardhatUserConfig = {
         },
       },
     ],
+  },
+  abiExporter: {
+    path: './abi',
+    clear: true,
+    flat: true,
+    except: ['@gnosis.pm', '@openzeppelin'],
   },
   typechain: {
     outDir: "src/types",

@@ -3,22 +3,23 @@ import { solidity } from "ethereum-waffle";
 import { use, expect } from "chai";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
-import { Baal } from "../src/types/Baal";
-import { TestErc20 } from "../src/types/TestErc20";
-import { TributeMinion } from "../src/types/TributeMinion";
-import { Loot } from "../src/types/Loot";
+import {
+  Baal,
+  TestERC20,
+  TributeMinion,
+  Loot,
+  MultiSend,
+  CompatibilityFallbackHandler,
+  BaalSummoner,
+  GnosisSafe,
+  Poster,
+  Shares,
+} from '../src/types';
 import { decodeMultiAction, encodeMultiAction } from "../src/util";
 import { BigNumber } from "@ethersproject/bignumber";
 import { buildContractCall } from "@gnosis.pm/safe-contracts";
-import { MultiSend } from "../src/types/MultiSend";
-import { CompatibilityFallbackHandler } from "../src/types/CompatibilityFallbackHandler";
 import { ContractFactory, ContractTransaction } from "ethers";
-import { ConfigExtender } from "hardhat/types";
 import { Test } from "mocha";
-import { BaalSummoner } from "../src/types/BaalSummoner";
-import { GnosisSafe } from "../src/types/GnosisSafe";
-import { Poster } from "../src/types/Poster";
-import { Shares } from "../src/types/Shares";
 
 use(solidity);
 
@@ -194,8 +195,8 @@ describe("Tribute proposal type", function () {
   let shamanLootToken: Loot;
   let shamanBaal: Baal;
   let applicantBaal: Baal;
-  let weth: TestErc20;
-  let applicantWeth: TestErc20;
+  let weth: TestERC20;
+  let applicantWeth: TestERC20;
   let multisend: MultiSend;
   let poster: Poster;
 
@@ -266,7 +267,7 @@ describe("Tribute proposal type", function () {
       await ethers.getSigners();
 
     ERC20 = await ethers.getContractFactory("TestERC20");
-    weth = (await ERC20.deploy("WETH", "WETH", 10000000)) as TestErc20;
+    weth = (await ERC20.deploy("WETH", "WETH", 10000000)) as TestERC20;
     applicantWeth = weth.connect(applicant);
 
     await weth.transfer(applicant.address, 1000);

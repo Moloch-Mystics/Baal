@@ -3,16 +3,21 @@ import { solidity } from "ethereum-waffle";
 import { use, expect } from "chai";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
-import { Shares } from "../src/types/Shares";
+import {
+  Shares,
+  Baal,
+  BaalSummoner,
+  Poster,
+  GnosisSafe,
+  CompatibilityFallbackHandler,
+  GnosisSafeProxy,
+  TestERC20,
+  Loot,
+  MultiSend,
+  GnosisSafeProxyFactory,
+  ModuleProxyFactory,
+} from '../src/types'
 
-import { Baal } from "../src/types/Baal";
-import { BaalSummoner } from "../src/types/BaalSummoner";
-import { Poster } from "../src/types/Poster";
-import { GnosisSafe } from "../src/types/GnosisSafe";
-import { CompatibilityFallbackHandler } from "../src/types/CompatibilityFallbackHandler";
-import { GnosisSafeProxy } from "../src/types/GnosisSafeProxy";
-import { TestErc20 } from "../src/types/TestErc20";
-import { Loot } from "../src/types/Loot";
 import {
   decodeMultiAction,
   encodeMultiAction,
@@ -20,17 +25,12 @@ import {
 } from "../src/util";
 import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
 import { buildContractCall } from "@gnosis.pm/safe-contracts";
-import { MultiSend } from "../src/types/MultiSend";
 import { ContractFactory, ContractTransaction, utils } from "ethers";
-import { ConfigExtender } from "hardhat/types";
 import { Test } from "mocha";
 import signVote from "../src/signVote";
 import signDelegation from "../src/signDelegation";
 import signPermit from "../src/signPermit";
 import { string } from "hardhat/internal/core/params/argumentTypes";
-
-import { GnosisSafeProxyFactory } from "../src/types/GnosisSafeProxyFactory";
-import { ModuleProxyFactory } from "../src/types/ModuleProxyFactory";
 import { calculateProxyAddress } from "@gnosis.pm/zodiac";
 
 use(solidity);
@@ -220,7 +220,7 @@ const getBaalParams = async function (
       ]
     ),
     initalizationActions,
-    
+
   };
 };
 
@@ -297,9 +297,9 @@ describe("Baal contract", function () {
   let shamanBaal: Baal;
   let shamanSharesToken: Shares;
   let applicantBaal: Baal;
-  let weth: TestErc20;
-  let weth2: TestErc20;
-  let applicantWeth: TestErc20;
+  let weth: TestERC20;
+  let weth2: TestERC20;
+  let applicantWeth: TestERC20;
   let multisend: MultiSend;
 
   let GnosisSafe: ContractFactory;
@@ -404,8 +404,8 @@ describe("Baal contract", function () {
       await ethers.getSigners();
 
     ERC20 = await ethers.getContractFactory("TestERC20");
-    weth = (await ERC20.deploy("WETH", "WETH", 10000000)) as TestErc20;
-    weth2 = (await ERC20.deploy("WETH2", "WETH2", 10000000)) as TestErc20;
+    weth = (await ERC20.deploy("WETH", "WETH", 10000000)) as TestERC20;
+    weth2 = (await ERC20.deploy("WETH2", "WETH2", 10000000)) as TestERC20;
     applicantWeth = weth.connect(applicant);
 
     multisend = (await MultisendContract.deploy()) as MultiSend;
@@ -3236,7 +3236,7 @@ describe("Baal contract - offering required", function () {
 
   let baal: Baal;
   let shamanBaal: Baal;
-  let weth: TestErc20;
+  let weth: TestERC20;
   let multisend: MultiSend;
   let poster: Poster;
 
@@ -3299,7 +3299,7 @@ describe("Baal contract - offering required", function () {
     [summoner, applicant, shaman] = await ethers.getSigners();
 
     const ERC20 = await ethers.getContractFactory("TestERC20");
-    weth = (await ERC20.deploy("WETH", "WETH", 10000000)) as TestErc20;
+    weth = (await ERC20.deploy("WETH", "WETH", 10000000)) as TestERC20;
 
     multisend = (await MultisendContract.deploy()) as MultiSend;
     gnosisSafeSingleton = (await GnosisSafe.deploy()) as GnosisSafe;
@@ -3525,7 +3525,7 @@ const getBaalParamsWithAvatar = async function (
       ]
     ),
     initalizationActions,
-    
+
   };
 };
 
@@ -3538,7 +3538,7 @@ describe("Baal contract - summon baal with current safe", function () {
 
   let baal: Baal;
   let shamanBaal: Baal;
-  let weth: TestErc20;
+  let weth: TestERC20;
   let multisend: MultiSend;
   let poster: Poster;
 
@@ -3600,41 +3600,41 @@ describe("Baal contract - summon baal with current safe", function () {
         const CompatibilityFallbackHandler = await ethers.getContractFactory(
           "CompatibilityFallbackHandler"
         );
-    
+
         [summoner, applicant, shaman] = await ethers.getSigners();
-    
+
         const ERC20 = await ethers.getContractFactory("TestERC20");
-        weth = (await ERC20.deploy("WETH", "WETH", 10000000)) as TestErc20;
-    
+        weth = (await ERC20.deploy("WETH", "WETH", 10000000)) as TestERC20;
+
         multisend = (await MultisendContract.deploy()) as MultiSend;
         gnosisSafeSingleton = (await GnosisSafe.deploy()) as GnosisSafe;
         const handler =
           (await CompatibilityFallbackHandler.deploy()) as CompatibilityFallbackHandler;
-    
+
         const proxy = await GnosisSafeProxyFactory.deploy();
         moduleProxyFactory =
           (await ModuleProxyFactory.deploy()) as ModuleProxyFactory;
-    
-    
+
+
         // precalculate module, deploysafe, enable module
-    
+
         const Avatar = await ethers.getContractFactory("TestAvatar");
         const avatar = await Avatar.deploy();
-    
+
         const moduleFactory = await ModuleProxyFactory.deploy();
-    
-    
+
+
         baalSummoner = (await BaalSummoner.deploy(
           baalSingleton.address,
           gnosisSafeSingleton.address,
           handler.address,
           multisend.address,
           proxy.address,
-          moduleProxyFactory.address, 
+          moduleProxyFactory.address,
           lootSingleton.address,
           sharesSingleton.address,
         )) as BaalSummoner;
-    
+
         const encodedInitParams = await getBaalParamsWithAvatar(
           baalSingleton,
           poster,
@@ -3646,12 +3646,12 @@ describe("Baal contract - summon baal with current safe", function () {
           [[summoner.address], [loot]],
           avatar.address
         );
-    
-        // view function used as placeholder in deployment 
+
+        // view function used as placeholder in deployment
         const initData = baalSingleton.interface.encodeFunctionData("avatar");
-    
+
         const avatarAddress = avatar.address;
-    
+
         // pre calculated address for the new module
         const expectedAddress = await calculateProxyAddress(
           moduleProxyFactory,
@@ -3659,10 +3659,10 @@ describe("Baal contract - summon baal with current safe", function () {
           initData,
           "101"
         );
-    
+
         // enable module on safe, on the front end this should be part 1 of a multicall signed safe owners
         await avatar.enableModule(expectedAddress);
-        
+
         // summon baal, part 2 of multicall
         const tx = await baalSummoner.summonBaal(
           encodedInitParams.initParams,
@@ -3671,15 +3671,15 @@ describe("Baal contract - summon baal with current safe", function () {
         );
         const addresses = await getNewBaalAddresses(tx);
         console.log('addresses', addresses);
-        
-    
+
+
         baal = BaalFactory.attach(addresses.baal) as Baal;
         shamanBaal = await baal.connect(shaman);
         const lootTokenAddress = await baal.lootToken();
-    
+
         sharesToken = SharesFactory.attach(addresses.shares) as Shares;
         lootToken = LootFactory.attach(lootTokenAddress) as Loot;
-    
+
         const selfTransferAction = encodeMultiAction(
           multisend,
           ["0x"],
@@ -3687,7 +3687,7 @@ describe("Baal contract - summon baal with current safe", function () {
           [BigNumber.from(0)],
           [0]
         );
-    
+
         proposal = {
           flag: 0,
           account: summoner.address,
