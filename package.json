@@ -7,8 +7,8 @@
   "lockfileVersion": 2,
   "scripts": {
     "test": "hardhat test --network hardhat",
-    "publish": "npm run compile && npm publish --access public --scope=daohaus",
-    "build": "npm run build:sol && npm run build:abi && npm run build:ts && npm run build:declarations",
+    "publish": "yarn compile && npm publish --access public --scope=daohaus",
+    "build": "yarn build:sol && yarn build:abi && yarn build:ts && yarn build:declarations",
     "build:ts": "npx tsc --build tsconfig.build.json",
     "build:abi": "npx hardhat export-abi",
     "build:sol": "npx hardhat compile --force",
