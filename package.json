@@ -1,13 +1,13 @@
 {
   "name": "@daohaus/baal-contracts",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Lo, also it is the time of His rain.",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "lockfileVersion": 2,
   "scripts": {
     "test": "hardhat test --network hardhat",
-    "publish": "yarn compile && npm publish --access public --scope=daohaus",
+    "publish": "yarn build && npm publish --access public --scope=daohaus",
     "build": "yarn build:sol && yarn build:abi && yarn build:ts && yarn build:declarations",
     "build:ts": "npx tsc --build tsconfig.build.json",
     "build:abi": "npx hardhat export-abi",
