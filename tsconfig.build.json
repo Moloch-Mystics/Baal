@@ -29,6 +29,8 @@
     "src/index.ts",
     "src/types/contracts/**/*.ts",
     "src/types/factories/contracts/**/*.ts",
+    "src/types/factories/@gnosis.pm/safe-contracts/contracts/libraries",
+    "src/types/@gnosis.pm/safe-contracts/contracts/libraries",
     "src/types/common.ts",
     "abi/**/*.json"
   ],

@@ -11,3 +11,4 @@ export { Loot__factory as LootFactory } from './types/factories/contracts/LootER
 export { Shares__factory as SharesFactory } from './types/factories/contracts/SharesERC20.sol/Shares__factory';
 export { Poster__factory as PosterFactory } from './types/factories/contracts/tools/Poster__factory';
 export { TributeMinion__factory as TributeMinionFactory } from './types/factories/contracts/tools/TributeMinion.sol/TributeMinion__factory';
+export { MultiSend__factory as MultiSendFactory } from './types/factories/@gnosis.pm/safe-contracts/contracts/libraries/MultiSend__factory';
