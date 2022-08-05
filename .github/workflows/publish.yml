@@ -27,7 +27,12 @@ jobs:
           echo ${{steps.get-versions.outputs.package_version > steps.get-versions.outputs.npm_version}}
       - run: yarn install
         if: steps.get-versions.outputs.package_version > steps.get-versions.outputs.npm_version
-      - run: yarn publish # builds and publishes
+      - run: yarn build
         if: steps.get-versions.outputs.package_version > steps.get-versions.outputs.npm_version
+      - name: publishing
+        if: steps.get-versions.outputs.package_version > steps.get-versions.outputs.npm_version
+        run: |
+          echo '//registry.npmjs.org/:_authToken=${{secrets.NPM_TOKEN}}' > .npmrc
+          npm publish --access public --scope=daohaus
         env:
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
