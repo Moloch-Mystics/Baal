@@ -33,12 +33,12 @@ This project uses the [hardhat](https://hardhat.org/) ethereum tools for solidit
 
 ## Publishing
 
-the Baal contracts, types, and abis are published through the dist folder, after making changes to the repo, and when you are ready to publish the packages, do the following:
+the Baal contracts, types, and abis are published through the CI process, after making changes to the repo, and when you are ready to publish the packages, do the following:
 
-1) bump the `version` in the `package.json` file.
-2) run `yarn publish`
+1) bump the version in `package.json`
+2) push and merge into `feat/baalZodiac` branch
 
-running `yarn publish` will run `yarn build` and then publish the `@daohaus/baal-contracts` package to npm.
+running the CI process will trigger on `merges to feat/baalZodiac branch` build the dist folder and publish it to `@daohaus/baal-contracts` package to npm if the package.json version is different than the current latest on npm.
 
 ### Testing
 

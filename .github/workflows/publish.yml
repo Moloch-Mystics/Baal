@@ -33,6 +33,4 @@ jobs:
         if: steps.get-versions.outputs.package_version > steps.get-versions.outputs.npm_version
         run: |
           echo '//registry.npmjs.org/:_authToken=${{secrets.NPM_TOKEN}}' > .npmrc
-          npm publish --access public --scope=daohaus
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+          npm publish --access public --scope daohaus --otp ${{ secrets.NPM_TOKEN }}
