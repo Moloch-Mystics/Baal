@@ -39,6 +39,8 @@
     "src/types/factories/contracts/tools/TributeMinion.sol/TributeMinion__factory.ts",
     "src/types/@gnosis.pm/safe-contracts/contracts/libraries/MultiSend.ts",
     "src/types/factories/@gnosis.pm/safe-contracts/contracts/libraries/MultiSend__factory.ts",
+    "src/types/contracts/Baal.sol/IBaalToken.ts",
+    "src/types/contracts/interfaces/IBaal.ts",
     "src/types/common.ts"
   ]
 }

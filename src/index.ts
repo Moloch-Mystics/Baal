@@ -19,3 +19,7 @@ export { TributeMinion } from './types/contracts/tools/TributeMinion.sol/Tribute
 export { TributeMinion__factory as TributeMinionFactory } from './types/factories/contracts/tools/TributeMinion.sol/TributeMinion__factory';
 export { MultiSend } from './types/@gnosis.pm/safe-contracts/contracts/libraries/MultiSend';
 export { MultiSend__factory as MultiSendFactory } from './types/factories/@gnosis.pm/safe-contracts/contracts/libraries/MultiSend__factory';
+
+// Interfaces
+export { IBaalToken } from './types/contracts/Baal.sol/IBaalToken';
+export { IBaal } from './types/contracts/interfaces/IBaal';
