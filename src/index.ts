@@ -2,7 +2,7 @@
   in order to adjust the build folder:
     1) add any files here you want in the build
     2) copy the file path
-    3) add the path to the ts.config.build.json under the include configuration.
+    3) add the path to the ts.config.build.json under the **include: [...]** configuration.
 */
 
 export { Baal } from './types/contracts/Baal.sol/Baal';
