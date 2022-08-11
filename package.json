@@ -49,7 +49,6 @@
     "typescript": "^4.3.2"
   },
   "dependencies": {
-    "2": "^3.0.0",
     "@gnosis.pm/zodiac": "^1.0.3",
     "hardhat-contract-sizer": "^2.4.0"
   }
