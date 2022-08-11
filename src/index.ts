@@ -1,9 +1,9 @@
-export { default as BaalABI } from '../abi/Baal.json';
-export { default as BaalSummonerABI } from '../abi/BaalSummoner.json';
-export { default as LootABI } from '../abi/Loot.json';
-export { default as SharesABI } from '../abi/Shares.json';
-export { default as PosterABI } from '../abi/Poster.json';
-export { default as TributeMinionABI } from '../abi/TributeMinion.json';
+/*
+  in order to adjust the build folder:
+    1) add any files here you want in the build
+    2) copy the file path
+    3) add the path to the ts.config.build.json under the include configuration.
+*/
 
 export { Baal } from './types/contracts/Baal.sol/Baal';
 export { Baal__factory as BaalFactory } from './types/factories/contracts/Baal.sol/Baal__factory';
