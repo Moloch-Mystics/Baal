@@ -1,9 +1,10 @@
-export { default as BaalABI } from '../abi/Baal.json';
-export { default as BaalSummonerABI } from '../abi/BaalSummoner.json';
-export { default as LootABI } from '../abi/Loot.json';
-export { default as SharesABI } from '../abi/Shares.json';
-export { default as PosterABI } from '../abi/Poster.json';
-export { default as TributeMinionABI } from '../abi/TributeMinion.json';
+/*
+  in order to adjust the build folder:
+    1) import any files here you want in the build.
+    2) copy the file path of the import.
+    3) add the path to the ts.config.build.json under the { include: [...] } configuration.
+    4) bump package.json version to publish a new package to npm.
+*/
 
 export { Baal } from './types/contracts/Baal.sol/Baal';
 export { Baal__factory as BaalFactory } from './types/factories/contracts/Baal.sol/Baal__factory';
@@ -19,3 +20,7 @@ export { TributeMinion } from './types/contracts/tools/TributeMinion.sol/Tribute
 export { TributeMinion__factory as TributeMinionFactory } from './types/factories/contracts/tools/TributeMinion.sol/TributeMinion__factory';
 export { MultiSend } from './types/@gnosis.pm/safe-contracts/contracts/libraries/MultiSend';
 export { MultiSend__factory as MultiSendFactory } from './types/factories/@gnosis.pm/safe-contracts/contracts/libraries/MultiSend__factory';
+
+// Interfaces
+export { IBaalToken } from './types/contracts/Baal.sol/IBaalToken';
+export { IBaal } from './types/contracts/interfaces/IBaal';
