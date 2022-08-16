@@ -7,12 +7,11 @@
 ███      █    █     ▀
         █    █
        ▀    ▀*/
-pragma solidity >=0.8.0;
+pragma solidity 0.8.13;
 
 import "@gnosis.pm/safe-contracts/contracts/base/Executor.sol";
 import "@gnosis.pm/safe-contracts/contracts/GnosisSafe.sol";
 import "@gnosis.pm/zodiac/contracts/core/Module.sol";
-import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
@@ -117,12 +116,11 @@ contract Baal is CloneFactory, Module {
     mapping(uint256 => Proposal) public proposals; /*maps `proposal id` to struct details*/
 
     // MISCELLANEOUS PARAMS
-    uint256 status; /*internal reentrancy check tracking value*/
+    uint256 public status; /*internal reentrancy check tracking value*/
     uint32 public latestSponsoredProposalId; /* the id of the last proposal to be sponsored */
-    address multisendLibrary; /*address of multisend library*/
+    address public multisendLibrary; /*address of multisend library*/
 
     // SIGNATURE HELPERS
-    mapping(address => uint256) public nonces; /*maps record of states for signing & validating signatures*/
     bytes32 constant DOMAIN_TYPEHASH =
         keccak256(
             "EIP712Domain(string name,uint256 chainId,address verifyingContract)"
@@ -266,7 +264,7 @@ contract Baal is CloneFactory, Module {
     event LootPaused(bool paused); /*emits when loot is paused or unpaused*/
 
     function encodeMultisend(bytes[] memory _calls, address _target)
-        public
+        external
         pure
         returns (bytes memory encodedMultisend)
     {
@@ -314,16 +312,20 @@ contract Baal is CloneFactory, Module {
         avatar = _avatar;
         target = _avatar; /*Set target to same address as avatar on setup - can be changed later via setTarget, though probably not a good idea*/
 
+        require(_lootSingleton != address(0), "!lootSingleton");
         lootToken = IBaalToken(createClone(_lootSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
         lootToken.setUp(
             string(abi.encodePacked(_name, " LOOT")),
             string(abi.encodePacked(_symbol, "-LOOT"))
         ); /*TODO this naming feels too opinionated*/
 
+        require(_sharesSingleton != address(0), "!sharesSingleton");
         sharesToken = IBaalToken(createClone(_sharesSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
         sharesToken.setUp(_name, _symbol);
 
         multisendLibrary = _multisendLibrary; /*Set address of Gnosis multisend library to use for all execution*/
+
+        status = 1; /*initialize 'reentrancy guard' status*/
 
         // Execute all setups including but not limited to
         // * mint shares
@@ -354,8 +356,6 @@ contract Baal is CloneFactory, Module {
             totalShares(),
             totalLoot()
         );
-
-        status = 1; /*initialize 'reentrancy guard' status*/
     }
 
     /*****************
@@ -382,7 +382,6 @@ contract Baal is CloneFactory, Module {
             selfSponsor = true; /*if above sponsor threshold, self-sponsor*/
         } else {
             require(msg.value == proposalOffering, "Baal requires an offering"); /*Optional anti-spam gas token tribute*/
-            // require(msg.value == proposalOffering);
             (bool _success, ) = target.call{value: msg.value}(""); /*Send ETH to sink*/
             require(_success, "could not send");
         }
@@ -483,6 +482,7 @@ contract Baal is CloneFactory, Module {
                 keccak256(bytes(name)),
                 block.chainid,
                 address(this)
+                // TODO dont we need version in this Domain Seperator?
             )
         ); /*calculate EIP-712 domain hash*/
         bytes32 structHash = keccak256(abi.encode(VOTE_TYPEHASH, id, approved)); /*calculate EIP-712 struct hash*/
@@ -693,10 +693,10 @@ contract Baal is CloneFactory, Module {
             (, bytes memory balanceData) = tokens[i].staticcall(
                 abi.encodeWithSelector(0x70a08231, address(target))
             ); /*get Baal token balances - 'balanceOf(address)'*/
-            uint256 balance = tokens[i] == ETH 
-                ? address(target).balance 
+            uint256 balance = tokens[i] == ETH
+                ? address(target).balance
                 : abi.decode(balanceData, (uint256)); /*decode Baal token balances for calculation*/
-            
+
             uint256 amountToRagequit = ((lootToBurn + sharesToBurn) * balance) /
                 _totalSupply; /*calculate 'fair shair' claims*/
 
@@ -943,7 +943,11 @@ contract Baal is CloneFactory, Module {
     /// @notice Helper to get recorded proposal flags
     /// @param id Number of proposal in proposals
     /// @return [cancelled, processed, passed, actionFailed]
-    function getProposalStatus(uint32 id) external view returns (bool[4] memory) {
+    function getProposalStatus(uint32 id)
+        external
+        view
+        returns (bool[4] memory)
+    {
         return proposals[id].status;
     }
 
@@ -1060,12 +1064,16 @@ contract Baal is CloneFactory, Module {
     {
         return keccak256(abi.encode(_transactions));
     }
-    
+
     /// @notice Provides 'safe' {transfer} for ETH.
     function _safeTransferETH(address to, uint256 amount) internal {
-        
         // transfer eth from target
-        (bool success, ) = execAndReturnData(to, amount, "", Enum.Operation.Call);
+        (bool success, ) = execAndReturnData(
+            to,
+            amount,
+            "",
+            Enum.Operation.Call
+        );
 
         require(success, "ETH_TRANSFER_FAILED");
     }
@@ -1127,9 +1135,12 @@ contract BaalSummoner is ModuleProxyFactory {
         address _gnosisMultisendLibrary,
         address _gnosisSafeProxyFactory,
         address _moduleProxyFactory,
-        address _lootSingleton, 
-        address _sharesSingleton 
+        address _lootSingleton,
+        address _sharesSingleton
     ) {
+        require(_lootSingleton != address(0), "!lootSingleton");
+        require(_sharesSingleton != address(0), "!sharesSingleton");
+        require(_gnosisSingleton != address(0), "!gnosisSingleton");
         template = _template;
         gnosisSingleton = _gnosisSingleton;
         gnosisFallbackLibrary = _gnosisFallbackLibrary;
@@ -1140,7 +1151,6 @@ contract BaalSummoner is ModuleProxyFactory {
         moduleProxyFactory = ModuleProxyFactory(_moduleProxyFactory);
         lootSingleton = _lootSingleton;
         sharesSingleton = _sharesSingleton;
-        
     }
 
     function encodeMultisend(bytes[] memory _calls, address _target)
@@ -1174,17 +1184,16 @@ contract BaalSummoner is ModuleProxyFactory {
             string memory _name, /*_name Name for erc20 `shares` accounting*/
             string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
             address _safeAddr /*address of safe*/
-        ) = abi.decode(
-                initializationParams,
-                (string, string, address)
-            );
+        ) = abi.decode(initializationParams, (string, string, address));
 
         // TODO: allow safe to init baal
 
         bytes memory _anyCall = abi.encodeWithSignature("avatar()"); /*This call can be anything, it just needs to return successfully*/
-        Baal _baal = Baal(moduleProxyFactory.deployModule(template, _anyCall, _saltNonce)); 
+        Baal _baal = Baal(
+            moduleProxyFactory.deployModule(template, _anyCall, _saltNonce)
+        );
 
-        bytes memory _initializationMultisendData = encodeMultisend(    
+        bytes memory _initializationMultisendData = encodeMultisend(
             initializationActions,
             address(_baal)
         );
@@ -1211,7 +1220,10 @@ contract BaalSummoner is ModuleProxyFactory {
         return (address(_baal));
     }
 
-    function deployAndSetupSafe(address _moduleAddr, uint256 _saltNonce) internal returns(address) {
+    function deployAndSetupSafe(address _moduleAddr, uint256 _saltNonce)
+        internal
+        returns (address)
+    {
         // Deploy new safe but do not set it up yet
         GnosisSafe _safe = GnosisSafe(
             payable(
@@ -1233,7 +1245,7 @@ contract BaalSummoner is ModuleProxyFactory {
             uint256(_enableBaal.length),
             bytes(_enableBaal)
         );
-        
+
         bytes memory _multisendAction = abi.encodeWithSignature(
             "multiSend(bytes)",
             _enableBaalMultisend
@@ -1266,13 +1278,12 @@ contract BaalSummoner is ModuleProxyFactory {
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
             string memory _symbol /*_symbol Symbol for erc20 `shares` accounting*/
-        ) = abi.decode(
-                initializationParams,
-                (string, string)
-            );
+        ) = abi.decode(initializationParams, (string, string));
 
         bytes memory _anyCall = abi.encodeWithSignature("avatar()"); /*This call can be anything, it just needs to return successfully*/
-        Baal _baal = Baal(moduleProxyFactory.deployModule(template, _anyCall, _saltNonce));
+        Baal _baal = Baal(
+            moduleProxyFactory.deployModule(template, _anyCall, _saltNonce)
+        );
 
         address _safe = deployAndSetupSafe(address(_baal), _saltNonce);
 

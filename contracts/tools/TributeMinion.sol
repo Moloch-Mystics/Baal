@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity >=0.8.0;
+pragma solidity 0.8.13;
 import "../Baal.sol";
 
 //  import "hardhat/console.sol";
@@ -17,7 +17,7 @@ contract TributeMinion {
         bool released;
         address safe;
     }
-    mapping(address => mapping(uint256 => Escrow)) escrows;
+    mapping(address => mapping(uint256 => Escrow)) public escrows;
 
     function encodeTributeProposal(
         address baal,
