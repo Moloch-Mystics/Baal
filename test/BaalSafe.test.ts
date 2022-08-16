@@ -2088,7 +2088,7 @@ describe("Baal contract", function () {
         ethers.utils.id(proposal.details)
       );
       await moveForwardPeriods(2);
-      console.log(now > expiration, proposal.baalGas);
+      // console.log(now > expiration, proposal.baalGas);
 
       // TODO: fix
       await expect(baal.sponsorProposal(1)).to.be.revertedWith(
@@ -2368,7 +2368,7 @@ describe("Baal contract", function () {
         0,
         0
       );
-      console.log(summoner.address);
+      // console.log(summoner.address);
       await shamanSharesToken.delegateBySig(shaman.address, 0, 0, signature);
       const summonerDelegate = await sharesToken.delegates(summoner.address);
       expect(summonerDelegate).to.equal(shaman.address);
@@ -2390,7 +2390,7 @@ describe("Baal contract", function () {
         0,
         0
       );
-      console.log(summoner.address);
+      // console.log(summoner.address);
       await shamanSharesToken.delegateBySig(shaman.address, 0, 0, signature);
       expect(
         shamanSharesToken.delegateBySig(shaman.address, 0, 0, signature)
@@ -3369,7 +3369,7 @@ describe("Baal contract - offering required", function () {
       // note - this also tests that the proposal is NOT sponsored
       const countBefore = await baal.proposalCount();
 
-      console.log({ proposal });
+      // console.log({ proposal });
 
       await shamanBaal.submitProposal(
         proposal.data,
@@ -3670,7 +3670,7 @@ describe("Baal contract - summon baal with current safe", function () {
           101
         );
         const addresses = await getNewBaalAddresses(tx);
-        console.log('addresses', addresses);
+        // console.log('addresses', addresses);
 
 
         baal = BaalFactory.attach(addresses.baal) as Baal;
