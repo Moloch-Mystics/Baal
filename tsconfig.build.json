@@ -25,21 +25,21 @@
     "src/index.ts"
   ],
   "include": [
-    "src/types/contracts/Baal.sol/Baal.ts",
-    "src/types/factories/contracts/Baal.sol/Baal__factory.ts",
-    "src/types/contracts/Baal.sol/BaalSummoner.ts",
-    "src/types/factories/contracts/Baal.sol/BaalSummoner__factory.ts",
+    "src/types/contracts/Baal.ts",
+    "src/types/factories/contracts/Baal__factory.ts",
+    "src/types/contracts/BaalSummoner.ts",
+    "src/types/factories/contracts/BaalSummoner__factory.ts",
     "src/types/contracts/LootERC20.sol/Loot.ts",
     "src/types/factories/contracts/LootERC20.sol/Loot__factory.ts",
     "src/types/contracts/SharesERC20.sol/Shares.ts",
     "src/types/factories/contracts/SharesERC20.sol/Shares__factory.ts",
-    "src/types/contracts/tools/Poster.ts",
-    "src/types/factories/contracts/tools/Poster__factory.ts",
+    "src/types/contracts/utils/Poster.ts",
+    "src/types/factories/contracts/utils/Poster__factory.ts",
     "src/types/contracts/tools/TributeMinion.sol/TributeMinion.ts",
     "src/types/factories/contracts/tools/TributeMinion.sol/TributeMinion__factory.ts",
     "src/types/@gnosis.pm/safe-contracts/contracts/libraries/MultiSend.ts",
     "src/types/factories/@gnosis.pm/safe-contracts/contracts/libraries/MultiSend__factory.ts",
-    "src/types/contracts/Baal.sol/IBaalToken.ts",
+    "src/types/contracts/interfaces/IBaalToken.ts",
     "src/types/contracts/interfaces/IBaal.ts",
     "src/types/common.ts"
   ]
