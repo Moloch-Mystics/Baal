@@ -329,7 +329,7 @@ contract Baal is Module {
         );
 
         bool selfSponsor = false; /*plant sponsor flag*/
-        if (getCurrentVotes(msg.sender) >= sponsorThreshold) {
+        if (sharesToken.getCurrentVotes(msg.sender) >= sponsorThreshold) {
             selfSponsor = true; /*if above sponsor threshold, self-sponsor*/
         } else {
             require(msg.value == proposalOffering, "Baal requires an offering"); /*Optional anti-spam gas token tribute*/
@@ -385,7 +385,7 @@ contract Baal is Module {
     function sponsorProposal(uint32 id) external nonReentrant {
         Proposal storage prop = proposals[id]; /*alias proposal storage pointers*/
 
-        require(getCurrentVotes(msg.sender) >= sponsorThreshold, "!sponsor"); /*check 'votes > threshold - required to sponsor proposal*/
+        require(sharesToken.getCurrentVotes(msg.sender) >= sponsorThreshold, "!sponsor"); /*check 'votes > threshold - required to sponsor proposal*/
         require(state(id) == ProposalState.Submitted, "!submitted");
         require(
             prop.expiration == 0 ||
@@ -900,23 +900,6 @@ contract Baal is Module {
         returns (bool[4] memory)
     {
         return proposals[id].status;
-    }
-
-    /// @notice Returns the current delegated `vote` balance for `account`.
-    /// @param account The user to check delegated `votes` for.
-    /// @return votes Current `votes` delegated to `account`.
-    // TODO: shares token
-    function getCurrentVotes(address account)
-        public
-        view
-        returns (uint256 votes)
-    {
-        uint256 nCheckpoints = sharesToken.numCheckpoints(account); /*Get most recent checkpoint, or 0 if no checkpoints*/
-        unchecked {
-            votes = nCheckpoints != 0
-                ? sharesToken.getCheckpoint(account, nCheckpoints - 1).votes
-                : 0;
-        }
     }
 
     /// @notice Helper to check if shaman permission contains admin capabilities

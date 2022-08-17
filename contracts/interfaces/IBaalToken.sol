@@ -16,9 +16,8 @@ interface IBaalToken {
 
     // below is shares token specific
     struct Checkpoint {
-        /*Baal checkpoint for marking number of delegated votes*/
-        uint32 fromTimeStamp; /*unix time for referencing voting balance*/
-        uint256 votes; /*votes at given unix time*/
+        uint32 fromTimeStamp; 
+        uint256 votes; 
     }
 
     function getPriorVotes(address account, uint256 timeStamp) external view returns (uint256);
@@ -29,4 +28,6 @@ interface IBaalToken {
         external
         view
         returns (Checkpoint memory);
+    
+    function getCurrentVotes(address account) external view returns(uint256);
 }

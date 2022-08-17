@@ -85,11 +85,11 @@ the dao contracts and the Safe treasury and one to use an existing Safe treasury
 ----
 
 ## Folder Structure
-./abi - generated abis
-./contracts - main solidity contracts, interfaces, tools and utils
-./scripts - deploy scripts and helpers
-./tasks - hard hat cli tasks
-./tests - test files
+- ./abi - generated abis
+- ./contracts - main solidity contracts, interfaces, tools and utils
+- ./scripts - deploy scripts and helpers
+- ./tasks - hard hat cli tasks
+- ./tests - test files
 
 ----
 ## Privileged roles

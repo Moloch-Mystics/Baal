@@ -222,6 +222,23 @@ abstract contract BaalVotes is ERC20Permit {
         }
     }
 
+    /// @notice Returns the current delegated `vote` balance for `account`.
+    /// @param account The user to check delegated `votes` for.
+    /// @return votes Current `votes` delegated to `account`.
+    function getCurrentVotes(address account)
+        public
+        view
+        virtual
+        returns (uint256 votes)
+    {
+        uint256 nCheckpoints = numCheckpoints[account]; /*Get most recent checkpoint, or 0 if no checkpoints*/
+        unchecked {
+            votes = nCheckpoints != 0
+                ? getCheckpoint(account, nCheckpoints - 1).votes
+                : 0;
+        }
+    }
+
     function getCheckpoint(address delegatee, uint256 nCheckpoints)
         public
         view

@@ -52,6 +52,20 @@ contract Loot is ERC20, ERC20Snapshot, ERC20Permit, Initializable {
         _snapshot();
     }
 
+    /// @notice Baal-only function to mint loot.
+    /// @param recipient Address to receive loot
+    /// @param amount Amount to mint
+    function mint(address recipient, uint256 amount) external baalOnly {
+        _mint(recipient, amount);
+    }
+
+    /// @notice Baal-only function to burn loot.
+    /// @param account Address to lose loot
+    /// @param amount Amount to burn
+    function burn(address account, uint256 amount) external baalOnly {
+        _burn(account, amount);
+    }
+
 
     /// @notice Internal hook to restrict token transfers unless allowed by baal
     /// @dev Allows transfers if msg.sender is Baal which enables minting and burning
@@ -70,19 +84,5 @@ contract Loot is ERC20, ERC20Snapshot, ERC20Permit, Initializable {
                 !baal.lootPaused(),
             "!transferable"
         );
-    }
-
-    /// @notice Baal-only function to mint loot.
-    /// @param recipient Address to receive loot
-    /// @param amount Amount to mint
-    function mint(address recipient, uint256 amount) external baalOnly {
-        _mint(recipient, amount);
-    }
-
-    /// @notice Baal-only function to burn loot.
-    /// @param account Address to lose loot
-    /// @param amount Amount to burn
-    function burn(address account, uint256 amount) external baalOnly {
-        _burn(account, amount);
     }
 }
