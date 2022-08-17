@@ -1,3 +1,6 @@
+//SPDX-License-Identifier: MIT
+pragma solidity 0.8.13;
+
 interface IBaalToken {
     function name() external view returns (string memory);
 
@@ -17,6 +20,8 @@ interface IBaalToken {
         uint32 fromTimeStamp; /*unix time for referencing voting balance*/
         uint256 votes; /*votes at given unix time*/
     }
+
+    function getPriorVotes(address account, uint256 timeStamp) external view returns (uint256);
 
     function numCheckpoints(address) external view returns (uint256);
 
