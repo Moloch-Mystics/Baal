@@ -1,17 +1,8 @@
 # Baal 👺
 
-WIP: [Docs Page here](https://baal-docs.vercel.app/)
-
-## Goerli test deploy
-
-- lootSingleton 0x0De84DCAc3B2d52581120059ee9723FDDecCB044
-- sharesSingleton 0x3109AeD0fD9777cEFb24dBa5eb5030987bd9E3F3
-- baalSingleton 0x69b442eb55714A0B144134AED015517394Ed1871
-- Transaction Hash: 0x62906ba23728bda0a1a0ffcca412371772448bac200497030462da615fc04598
-- **Factory Contract Address**: 0x0C5fd8AAdF995e11E5Ac1CD72139Ee4fd72cDeFC
-- tribute minion: 0x9C6f6e6E461FB1dB9761c960900A0Ae05B9786A7
-
-Baal is a minimal yet composable DAO template continuing work from the [`Moloch`](https://github.com/MolochVentures/moloch), [`Minion`](https://github.com/raid-guild/moloch-minion) and [`Compound`](https://github.com/compound-finance/compound-protocol/tree/master/contracts/Governance) frameworks to make it easier for people to combine and command crypto assets with intuitive membership games.
+Baal (Molochv3) is a minimal yet composable DAO template continuing work from the
+Moloch, Minion, Compound/OZ and Safe frameworks to make it easier for people to
+combine and command crypto assets with intuitive membership games. 
 
 *Guilds, venture clubs and control panels can benefit from Baal:*
 
@@ -19,7 +10,7 @@ Baal is a minimal yet composable DAO template continuing work from the [`Moloch`
 
 ## Setup
 
-If you are going to just use this project feel free to clone it.  If you would like to submit any pull requests please create an issue or work on a current issue and fork the repo.  The two main groups that are contributing to this project are [DaoHaus](https://discord.com/channels/709210493549674598) and [MetaCartel](https://discord.com/channels/702325961433284609).
+If you are going to just use this project feel free to clone it.  If you would like to submit any pull requests please create an issue or work on a current issue and fork the repo.  The main groups that are contributing to this project are [Moloch Mystics](https://github.com/Moloch-Mystics/Baal), [DaoHaus](https://discord.com/channels/709210493549674598) [MetaCartel](https://discord.com/channels/702325961433284609).
 
 ### Setup Environment
 
@@ -45,5 +36,82 @@ running the CI process will trigger on `merges to feat/baalZodiac branch` build 
 If you are looking to work on unit tests for this project be sure to read the README file in the test directory.
 
 `npx hardhat test` - run the unit tests
+
+----
+## Contracts 
+### **Baal (contracts/Baal.sol)**
+is a minimal yet composable DAO template continuing work from
+the Moloch, Minion and Compound frameworks to make it easier for
+people to combine and command crypto assets with intuitive membership
+games.
+
+#### Interfaces
+OZ Minimal Clone Factoy [EIP 1167 Clones](https://docs.openzeppelin.com/contracts/4.x/api/proxy#Clones)
+Gnosis Safe Module [Zodiac](https://github.com/gnosis/zodiac)
+
+### **Shares (contracts/SharesERC20.sol)**
+have direct execution, voting, and exit rights around actions
+taken by the main DAO contract. Shareholders are the collective DAO
+admins.
+
+#### Interfaces
+ERC20,  Initializable [OpenZeplin v4](https://docs.openzeppelin.com/contracts/4.x/)
+
+
+### **BaalVotes (contracts/utils/BaalVotes.sol)**
+abstract with a similar Implimentation of ERC20VOTES with the main 
+difference being auto self-delegation and the use of timestmap instead of block.number.
+#### Interfaces
+ERC20Permit
+
+### **Loot (contracts/LootERC20.sol)**
+has only exit rights against the DAO treasury, so loot does
+not have the ability to admin the DAO config. However, because it has
+exit rights, it is still a powerful unit, and because it is an ERC-20
+can be used in many composable ways.
+
+#### Interfaces
+ERC20, ERC20Snapshot, ERC20Permit, Initializable [OpenZeplin v4](https://docs.openzeppelin.com/contracts/4.x/)
+
+### **TributeMinion (contracts/tools/TributeMinion.sol)** 
+is a helper contract for making tribute proposals.
+Provides contract to approve ERC-20 transfers. Provides a simple
+function/interface to make a single proposal type.
+
+### **BaalSummoner (contracts/BaalSummoner.sol)**
+Factory to summon new dao contracts. It has 2 main functions one to deploy
+the dao contracts and the Safe treasury and one to use an existing Safe treasury.
+ 
+----
+
+## Folder Structure
+./abi - generated abis
+./contracts - main solidity contracts, interfaces, tools and utils
+./scripts - deploy scripts and helpers
+./tasks - hard hat cli tasks
+./tests - test files
+
+----
+## Privileged roles
+- Shamans - are specific addresses that have more granular control
+outside the standard governance proposal flow. These addresses should
+always be contracts that have been explicitly given these rights
+through the standard proposal flow or during initial DAO setup.
+- Governor - can cancel a proposal, set Governance Config (change the
+length of proposals, if there is a required quorum, etc.).
+- Manager - can mint/burn shares/loot.
+- Admin - can set Admin configuration and pause/unpause shares/loot.
+- DAO - is always a super admin over its config and can vote to make
+changes to its configuration at any time.
+
+## Risks
+- In case of Shaman keys leak, an attacker can get access to Baal
+(admin) functionalities, burn, mint, give shaman roles etc. 
+Because of this Shamans are ment to be external contracts and not EOAs
+but it is up to the DAO to enforce this.
+
+## More Documentation
+
+More docs for [Functions](https://baal-docs.vercel.app/functions) and [Events](https://baal-docs.vercel.app/events), [V3 updates](https://baal-docs.vercel.app/features/updates), patterns, stories and other superficial musings can be found at the [Docs Page here](https://baal-docs.vercel.app/)
 
 <p align="center"><img src="https://media.giphy.com/media/rgwNTGFUbNTgsgiYha/giphy.gif"></p>
