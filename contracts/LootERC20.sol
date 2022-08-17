@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Snapshot.sol";
@@ -70,27 +70,6 @@ contract Loot is ERC20, ERC20Snapshot, ERC20Permit, Initializable {
                 !baal.lootPaused(),
             "!transferable"
         );
-    }
-
-    // /// @notice Transfer `amount` tokens from `from` to `to`.
-    // /// @param from The address of the source account.
-    // /// @param to The address of the destination account.
-    // /// @param amount The number of `loot` tokens to transfer.
-    // /// @return success Whether or not the transfer succeeded.
-    // /// TODO: use after transfer or remove if dup
-    function transferFrom(
-        address from,
-        address to,
-        uint256 amount
-    ) public override(ERC20) returns (bool success) {
-        _transfer(from, to, amount);
-
-        uint256 currentAllowance = allowance(from, msg.sender);
-        if (currentAllowance != type(uint256).max) {
-            _approve(from, msg.sender, currentAllowance - amount);
-        }
-
-        return true;
     }
 
     /// @notice Baal-only function to mint loot.

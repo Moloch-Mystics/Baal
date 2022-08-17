@@ -1859,14 +1859,14 @@ describe("Baal contract", function () {
 
     it("require fails - shares paused", async function () {
       await shamanBaal.setAdminConfig(true, false); // pause shares
-      await sharesToken.approve(
-        shaman.address,
+      await shamanSharesToken.approve(
+        summoner.address,
         deploymentConfig.SPONSOR_THRESHOLD
       );
       await expect(
-        sharesToken.transferFrom(
-          summoner.address,
+        summonerSharesToken.transferFrom(
           shaman.address,
+          summoner.address,
           deploymentConfig.SPONSOR_THRESHOLD
         )
       ).to.be.revertedWith(revertMessages.sharesTransferPaused);
@@ -1958,7 +1958,7 @@ describe("Baal contract", function () {
     });
 
     it("require fails - insufficient balance", async function () {
-      await lootToken.approve(shaman.address, 500);
+      await lootToken.approve(shaman.address, 501);
       await expect(
         shamanLootToken.transferFrom(summoner.address, shaman.address, 501)
       ).to.be.revertedWith(revertMessages.lootInsufficientBalance);
@@ -2195,7 +2195,7 @@ describe("Baal contract", function () {
       const votes = (
         await sharesToken.checkpoints(summoner.address, nCheckpoints.sub(1))
       ).votes;
-      const priorVotes = await baal.getPriorVotes(
+      const priorVotes = await sharesToken.getPriorVotes(
         summoner.address,
         prop.votingStarts
       );
@@ -2246,14 +2246,14 @@ describe("Baal contract", function () {
       await baal.submitVote(1, yes);
       await baal.submitVote(2, yes);
       const prop1 = await baal.proposals(1);
-      const votes1 = await baal.getPriorVotes(
+      const votes1 = await sharesToken.getPriorVotes(
         summoner.address,
         prop1.votingStarts
       );
       expect(prop1.yesVotes).to.equal(votes1);
 
       const prop2 = await baal.proposals(2);
-      const votes2 = await baal.getPriorVotes(
+      const votes2 = await sharesToken.getPriorVotes(
         summoner.address,
         prop2.votingStarts
       );
@@ -2342,7 +2342,7 @@ describe("Baal contract", function () {
       const votes = (
         await sharesToken.checkpoints(summoner.address, nCheckpoints.sub(1))
       ).votes;
-      const priorVotes = await baal.getPriorVotes(
+      const priorVotes = await sharesToken.getPriorVotes(
         summoner.address,
         prop.votingStarts
       );
@@ -3199,7 +3199,7 @@ describe("Baal contract", function () {
     it("happy case - yes vote", async function () {
       const blockT = await blockTime();
       await baal.submitVote(1, yes);
-      const priorVote = await baal.getPriorVotes(summoner.address, blockT);
+      const priorVote = await sharesToken.getPriorVotes(summoner.address, blockT);
       const nCheckpoints = await sharesToken.numCheckpoints(summoner.address);
       const votes = (
         await sharesToken.checkpoints(summoner.address, nCheckpoints.sub(1))
@@ -3210,7 +3210,7 @@ describe("Baal contract", function () {
     it("happy case - no vote", async function () {
       const blockT = await blockTime();
       await baal.submitVote(1, no);
-      const priorVote = await baal.getPriorVotes(summoner.address, blockT);
+      const priorVote = await sharesToken.getPriorVotes(summoner.address, blockT);
       const nCheckpoints = await sharesToken.numCheckpoints(summoner.address);
       const votes = (
         await sharesToken.checkpoints(summoner.address, nCheckpoints.sub(1))
@@ -3221,7 +3221,7 @@ describe("Baal contract", function () {
     it("require fail - timestamp not determined", async function () {
       const blockT = await blockTime();
       await expect(
-        baal.getPriorVotes(summoner.address, blockT)
+        sharesToken.getPriorVotes(summoner.address, blockT)
       ).to.be.revertedWith("!determined");
     });
   });
