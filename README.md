@@ -46,6 +46,7 @@ people to combine and command crypto assets with intuitive membership
 games.
 
 #### Interfaces
+EIP721
 OZ Minimal Clone Factoy [EIP 1167 Clones](https://docs.openzeppelin.com/contracts/4.x/api/proxy#Clones)
 Gnosis Safe Module [Zodiac](https://github.com/gnosis/zodiac)
 
