@@ -12,13 +12,10 @@ import "./interfaces/IBaal.sol";
 /// @title Shares
 /// @notice Accounting for Baal non voting shares
 contract Shares is ERC20, BaalVotes, Initializable {
-    
-
     // ERC20 CONFIG
     string private __name; /*Name for ERC20 trackers*/
     string private __symbol; /*Symbol for ERC20 trackers*/
 
-   
     // Baal Config
     IBaal public baal;
 
@@ -87,7 +84,5 @@ contract Shares is ERC20, BaalVotes, Initializable {
                 !baal.sharesPaused(),
             "!transferable"
         );
-
     }
-    
 }

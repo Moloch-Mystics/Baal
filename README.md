@@ -2,7 +2,7 @@
 
 Baal (Molochv3) is a minimal yet composable DAO template continuing work from the
 Moloch, Minion, Compound/OZ and Safe frameworks to make it easier for people to
-combine and command crypto assets with intuitive membership games. 
+combine and command crypto assets with intuitive membership games.
 
 *Guilds, venture clubs and control panels can benefit from Baal:*
 
@@ -38,7 +38,7 @@ If you are looking to work on unit tests for this project be sure to read the RE
 `npx hardhat test` - run the unit tests
 
 ----
-## Contracts 
+## Contracts
 ### **Baal (contracts/Baal.sol)**
 is a minimal yet composable DAO template continuing work from
 the Moloch, Minion and Compound frameworks to make it easier for
@@ -59,7 +59,7 @@ ERC20,  Initializable [OpenZeplin v4](https://docs.openzeppelin.com/contracts/4.
 
 
 ### **BaalVotes (contracts/utils/BaalVotes.sol)**
-abstract with a similar Implimentation of ERC20VOTES with the main 
+abstract with a similar Implimentation of ERC20VOTES with the main
 difference being auto self-delegation and the use of timestmap instead of block.number.
 #### Interfaces
 ERC20Permit
@@ -73,7 +73,7 @@ can be used in many composable ways.
 #### Interfaces
 ERC20, ERC20Snapshot, ERC20Permit, Initializable [OpenZeplin v4](https://docs.openzeppelin.com/contracts/4.x/)
 
-### **TributeMinion (contracts/tools/TributeMinion.sol)** 
+### **TributeMinion (contracts/tools/TributeMinion.sol)**
 is a helper contract for making tribute proposals.
 Provides contract to approve ERC-20 transfers. Provides a simple
 function/interface to make a single proposal type.
@@ -81,7 +81,7 @@ function/interface to make a single proposal type.
 ### **BaalSummoner (contracts/BaalSummoner.sol)**
 Factory to summon new dao contracts. It has 2 main functions one to deploy
 the dao contracts and the Safe treasury and one to use an existing Safe treasury.
- 
+
 ----
 
 ## Folder Structure
@@ -106,7 +106,7 @@ changes to its configuration at any time.
 
 ## Risks
 - In case of Shaman keys leak, an attacker can get access to Baal
-(admin) functionalities, burn, mint, give shaman roles etc. 
+(admin) functionalities, burn, mint, give shaman roles etc.
 Because of this Shamans are ment to be external contracts and not EOAs
 but it is up to the DAO to enforce this.
 

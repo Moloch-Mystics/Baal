@@ -2088,7 +2088,6 @@ describe("Baal contract", function () {
         ethers.utils.id(proposal.details)
       );
       await moveForwardPeriods(2);
-      // console.log(now > expiration, proposal.baalGas);
 
       // TODO: fix
       await expect(baal.sponsorProposal(1)).to.be.revertedWith(
@@ -2332,11 +2331,13 @@ describe("Baal contract", function () {
         chainId,
         baal.address,
         summoner,
-        deploymentConfig.TOKEN_NAME,
+        "Vote", // deploymentConfig.TOKEN_NAME
         1,
         true
       );
-      await baal.submitVoteWithSig(1, true, signature);
+
+      const {v,r,s} = await ethers.utils.splitSignature(signature);
+      await baal.submitVoteWithSig(summoner.address, 1, true, v, r, s);
       const prop = await baal.proposals(1);
       const nCheckpoints = await sharesToken.numCheckpoints(summoner.address);
       const votes = (
@@ -2349,52 +2350,106 @@ describe("Baal contract", function () {
       expect(priorVotes).to.equal(votes);
       expect(prop.yesVotes).to.equal(votes);
     });
+
+    it("fail case - fails with different voter", async function () {
+      const signature = await signVote(
+        chainId,
+        baal.address,
+        summoner,
+        "Vote", // deploymentConfig.TOKEN_NAME
+        1,
+        true
+      );
+
+      const {v,r,s} = await ethers.utils.splitSignature(signature);
+      expect(
+        baal.submitVoteWithSig(applicant.address, 1, true, v, r, s)
+      ).to.be.revertedWith("invalid signature");
+    });
+
+    it("fail case - cant vote twice", async function () {
+      const signature = await signVote(
+        chainId,
+        baal.address,
+        summoner,
+        "Vote", // deploymentConfig.TOKEN_NAME
+        1,
+        true
+      );
+
+      const {v,r,s} = await ethers.utils.splitSignature(signature);
+      await baal.submitVoteWithSig(summoner.address, 1, true, v, r, s);
+
+      expect(
+        baal.submitVoteWithSig(summoner.address, 1, true, v, r, s)
+      ).to.be.revertedWith("voted");
+    });
   });
 
   describe("delegateBySig", function () {
-    it("happy case ", async function () {
+    beforeEach(async function () {
       await baal.submitProposal(
         proposal.data,
         proposal.expiration,
         proposal.baalGas,
         ethers.utils.id(proposal.details)
       );
+    });
+    it("happy case ", async function () {
+      const expiry = (await blockTime()) + 10000;
+      const nonce = 0;
       const signature = await signDelegation(
         chainId,
         sharesToken.address,
         summoner,
-        deploymentConfig.TOKEN_NAME,
+        'Shares', // deploymentConfig.TOKEN_NAME
         shaman.address,
-        0,
-        0
+        nonce,
+        expiry
       );
-      // console.log(summoner.address);
-      await shamanSharesToken.delegateBySig(shaman.address, 0, 0, signature);
+
+      const {v, r, s} = await ethers.utils.splitSignature(signature);
+      await shamanSharesToken.delegateBySig(shaman.address, nonce, expiry, v, r, s);
       const summonerDelegate = await sharesToken.delegates(summoner.address);
       expect(summonerDelegate).to.equal(shaman.address);
     });
 
     it("require fail - nonce is re-used", async function () {
-      await baal.submitProposal(
-        proposal.data,
-        proposal.expiration,
-        proposal.baalGas,
-        ethers.utils.id(proposal.details)
-      );
+      const expiry = (await blockTime()) + 10000;
+      const nonce = 0;
       const signature = await signDelegation(
         chainId,
         sharesToken.address,
         summoner,
-        deploymentConfig.TOKEN_NAME,
+        'Shares', // deploymentConfig.TOKEN_NAME
         shaman.address,
-        0,
+        nonce,
+        expiry
+      );
+
+      const {v, r, s} = await ethers.utils.splitSignature(signature);
+      await shamanSharesToken.delegateBySig(shaman.address, nonce, expiry, v, r, s);
+      expect(
+        shamanSharesToken.delegateBySig(shaman.address, nonce, expiry, v, r, s)
+      ).to.be.revertedWith("ERC20Votes: invalid nonce");
+    });
+
+    it("require fail - signature expired", async function () {
+      const nonce = 0;
+      const signature = await signDelegation(
+        chainId,
+        sharesToken.address,
+        summoner,
+        'Shares', // deploymentConfig.TOKEN_NAME
+        shaman.address,
+        nonce,
         0
       );
-      // console.log(summoner.address);
-      await shamanSharesToken.delegateBySig(shaman.address, 0, 0, signature);
+
+      const {v, r, s} = await ethers.utils.splitSignature(signature);
       expect(
-        shamanSharesToken.delegateBySig(shaman.address, 0, 0, signature)
-      ).to.be.revertedWith("!nonce");
+        shamanSharesToken.delegateBySig(shaman.address, nonce, 0, v, r, s)
+      ).to.be.revertedWith("ERC20Votes: signature expired");
     });
   });
 
@@ -3698,11 +3753,7 @@ describe("Baal contract - summon baal with current safe", function () {
         };
 
       expect(expectedAddress).to.equal(addresses.baal);
-
-
       });
     });
-
-
   });
 });

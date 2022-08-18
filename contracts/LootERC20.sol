@@ -9,7 +9,6 @@ import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "./interfaces/IBaal.sol";
 
 contract Loot is ERC20, ERC20Snapshot, ERC20Permit, Initializable {
-    
     // ERC20 CONFIG
     string private __name; /*Name for ERC20 trackers*/
     string private __symbol; /*Symbol for ERC20 trackers*/
@@ -48,7 +47,7 @@ contract Loot is ERC20, ERC20Snapshot, ERC20Permit, Initializable {
     }
 
     /// @notice Allows baal to create a snapshot
-    function snapshot() public baalOnly {
+    function snapshot() external baalOnly {
         _snapshot();
     }
 
@@ -65,7 +64,6 @@ contract Loot is ERC20, ERC20Snapshot, ERC20Permit, Initializable {
     function burn(address account, uint256 amount) external baalOnly {
         _burn(account, amount);
     }
-
 
     /// @notice Internal hook to restrict token transfers unless allowed by baal
     /// @dev Allows transfers if msg.sender is Baal which enables minting and burning

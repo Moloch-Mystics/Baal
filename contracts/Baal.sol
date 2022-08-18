@@ -14,13 +14,14 @@ import "@gnosis.pm/safe-contracts/contracts/GnosisSafe.sol";
 import "@gnosis.pm/zodiac/contracts/core/Module.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
 
 import "./interfaces/IBaalToken.sol";
 
 /// @title Baal ';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
-contract Baal is Module {
+contract Baal is Module, EIP712 {
     using ECDSA for bytes32;
 
     // ERC20 SHARES + LOOT
@@ -72,12 +73,7 @@ contract Baal is Module {
     address public multisendLibrary; /*address of multisend library*/
 
     // SIGNATURE HELPERS
-    bytes32 constant DOMAIN_TYPEHASH =
-        keccak256(
-            "EIP712Domain(string name,uint256 chainId,address verifyingContract)"
-        );
-    bytes32 constant VOTE_TYPEHASH =
-        keccak256("Vote(uint32 proposalId,bool support)");
+    bytes32 constant VOTE_TYPEHASH = keccak256("Vote(address voter,uint32 proposalId,bool support)");
 
     // DATA STRUCTURES
     struct Proposal {
@@ -236,6 +232,8 @@ contract Baal is Module {
         );
     }
 
+    constructor() EIP712("Vote", "4") initializer {} /*Configure template to be unusable*/
+
     /// @notice Summon Baal with voting configuration & initial array of `members` accounts with `shares` & `loot` weights.
     /// @param _initializationParams Encoded setup information.
     function setUp(bytes memory _initializationParams)
@@ -276,8 +274,6 @@ contract Baal is Module {
 
         multisendLibrary = _multisendLibrary; /*Set address of Gnosis multisend library to use for all execution*/
 
-        status = 1; /*initialize 'reentrancy guard' status*/
-
         // Execute all setups including but not limited to
         // * mint shares
         // * convert shares to loot
@@ -307,6 +303,8 @@ contract Baal is Module {
             totalShares(),
             totalLoot()
         );
+
+        status = 1; /*initialize 'reentrancy guard' status*/
     }
 
     /*****************
@@ -418,33 +416,29 @@ contract Baal is Module {
     }
 
     /// @notice Submit vote with EIP-712 signature - proposal must exist & voting period must not have ended.
+    /// @param voter Address of member who submitted vote.
     /// @param id Number of proposal in `proposals` mapping to cast vote on.
     /// @param approved If 'true', member will cast `yesVotes` onto proposal - if 'false', `noVotes` will be counted.
-    /// @param signature Concatenated signature
+    /// @param v v in signature
+    /// @param r r in signature
+    /// @param s s in signature
     function submitVoteWithSig(
+        address voter,
         uint32 id,
         bool approved,
-        bytes calldata signature
+        uint8 v,
+        bytes32 r,
+        bytes32 s
     ) external nonReentrant {
-        string memory name = sharesToken.name();
-        bytes32 domainSeparator = keccak256(
-            abi.encode(
-                DOMAIN_TYPEHASH,
-                keccak256(bytes(name)),
-                block.chainid,
-                address(this)
-                // TODO dont we need version in this Domain Seperator?
-            )
-        ); /*calculate EIP-712 domain hash*/
-        bytes32 structHash = keccak256(abi.encode(VOTE_TYPEHASH, id, approved)); /*calculate EIP-712 struct hash*/
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", domainSeparator, structHash)
-        ); /*calculate EIP-712 digest for signature*/
-        address signatory = digest.recover(signature); /*recover signer from hash data*/
+        /*calculate EIP-712 struct hash*/
+        bytes32 structHash = keccak256(abi.encode(VOTE_TYPEHASH, voter, id, approved));
+        bytes32 hash = _hashTypedDataV4(structHash);
+        address signer = ECDSA.recover(hash, v, r, s);
 
-        require(signatory != address(0), "!signatory"); /*check signer is not null*/
+        require(signer == voter, "invalid signature");
+        require(signer != address(0), "!signer");
 
-        _submitVote(signatory, id, approved);
+        _submitVote(signer, id, approved);
     }
 
     /// @notice Execute vote submission internally - callable by submit vote or submit vote with signature
@@ -640,7 +634,7 @@ contract Baal is Module {
             _burnShares(msg.sender, sharesToBurn); /*subtract `shares` from user account & Baal totals with erc20 accounting*/
         }
 
-        for (uint256 i; i < tokens.length; i++) {
+        for (uint256 i = 0; i < tokens.length; i++) {
             (, bytes memory balanceData) = tokens[i].staticcall(
                 abi.encodeWithSelector(0x70a08231, address(target))
             ); /*get Baal token balances - 'balanceOf(address)'*/
@@ -991,4 +985,3 @@ contract Baal is Module {
         ); /*checks success & allows non-conforming transfers*/
     }
 }
-

@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
 
 /**
  * @dev similar to Openzeplin ERC20Votes
- * 
+ *
  * uses timestamp instead of block.number and auto self delegates.
  *
  * This extension keeps a history (checkpoints) of each account's vote power. Vote power can be delegated either
@@ -28,13 +28,8 @@ abstract contract BaalVotes is ERC20Permit {
     mapping(address => address) public delegates; /*maps record of each account's `shares` delegate*/
 
     // SIGNATURE HELPERS
-    mapping(address => uint256) public _nonces; /*maps record of states for signing & validating signatures*/
     bytes32 constant DELEGATION_TYPEHASH =
         keccak256("Delegation(address delegatee,uint256 nonce,uint256 expiry)");
-    bytes32 constant DOMAIN_TYPEHASH =
-        keccak256(
-            "EIP712Domain(string name,uint256 chainId,address verifyingContract)"
-        );
 
     event DelegateChanged(
         address indexed delegator,
@@ -64,46 +59,38 @@ abstract contract BaalVotes is ERC20Permit {
 
     /// @notice Delegate votes from user to `delegatee`.
     /// @param delegatee The address to delegate votes to.
-    function delegate(address delegatee) public virtual {
+    function delegate(address delegatee) external virtual {
         _delegate(msg.sender, delegatee);
     }
 
-    /// @notice Delegates votes from `signatory` to `delegatee` with EIP-712 signature.
+    /// @notice Delegates votes from `signer` to `delegatee` with EIP-712 signature.
     /// @param delegatee The address to delegate 'votes' to.
     /// @param nonce The contract state required to match the signature.
-    /// @param deadline The time at which to expire the signature.
-    /// @param signature The concatenated signature
+    /// @param expiry The time at which to expire the signature.
+    /// @param v The v signature
+    /// @param r The r signature
+    /// @param s The s signature
     function delegateBySig(
         address delegatee,
         uint256 nonce,
-        uint256 deadline,
-        bytes calldata signature
-    ) public virtual {
-        bytes32 domainSeparator = keccak256(
-            abi.encode(
-                DOMAIN_TYPEHASH,
-                keccak256(bytes(name())),
-                // keccak256(bytes(name)),
-                block.chainid,
-                address(this)
-            )
-        ); /*calculate EIP-712 domain hash*/
-        bytes32 structHash = keccak256(
-            abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, deadline)
-        ); /*calculate EIP-712 struct hash*/
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", domainSeparator, structHash)
-        ); /*calculate EIP-712 digest for signature*/
-        address signatory = digest.recover(signature); /*recover signer from hash data*/
-
-        require(signatory != address(0), "!signatory"); /*check signer is not null*/
-        unchecked {
-            require(nonce == _nonces[signatory]++, "!nonce"); /*check given `nonce` is next in `nonces`*/
-        }
-
-        require(deadline == 0 || deadline < block.timestamp, "expired");
-
-        _delegate(signatory, delegatee); /*execute delegation*/
+        uint256 expiry,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public {
+        require(block.timestamp <= expiry, "ERC20Votes: signature expired");
+        address signer = ECDSA.recover(
+            _hashTypedDataV4(
+                keccak256(
+                    abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, expiry)
+                )
+            ),
+            v,
+            r,
+            s
+        );
+        require(nonce == _useNonce(signer), "ERC20Votes: invalid nonce");
+        _delegate(signer, delegatee);
     }
 
     /// @notice Delegates Baal voting weight.
@@ -192,7 +179,7 @@ abstract contract BaalVotes is ERC20Permit {
     /// @param timeStamp The unix time to check `votes` for.
     /// @return votes Prior `votes` delegated to `account`.
     function getPriorVotes(address account, uint256 timeStamp)
-        public
+        external
         view
         virtual
         returns (uint256 votes)
@@ -226,7 +213,7 @@ abstract contract BaalVotes is ERC20Permit {
     /// @param account The user to check delegated `votes` for.
     /// @return votes Current `votes` delegated to `account`.
     function getCurrentVotes(address account)
-        public
+        external
         view
         virtual
         returns (uint256 votes)

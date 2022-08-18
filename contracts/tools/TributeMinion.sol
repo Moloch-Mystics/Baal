@@ -2,8 +2,6 @@
 pragma solidity 0.8.13;
 import "../Baal.sol";
 
-//  import "hardhat/console.sol";
-
 interface IERC20 {
     function transferFrom(address from, address to, uint256 value) external returns (bool);
 }
