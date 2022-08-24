@@ -16,12 +16,13 @@ import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 import "./interfaces/IBaalToken.sol";
 
 /// @title Baal ';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
-contract Baal is Module, EIP712 {
+contract Baal is Module, EIP712, ReentrancyGuard {
     using ECDSA for bytes32;
 
     // ERC20 SHARES + LOOT
@@ -30,8 +31,6 @@ contract Baal is Module, EIP712 {
     IBaalToken public sharesToken; /*Sub ERC20 for loot mgmt*/
 
     address private constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE; /*ETH reference for redemptions*/
-
-    mapping(address => mapping(address => uint256)) public allowance; /*maps approved pulls of `shares` with erc20 accounting*/
 
     // ADMIN PARAMETERS
     bool public lootPaused; /*tracks transferability of `loot` economic weight - amendable through 'period'[2] proposal*/
@@ -68,7 +67,6 @@ contract Baal is Module, EIP712 {
     mapping(uint256 => Proposal) public proposals; /*maps `proposal id` to struct details*/
 
     // MISCELLANEOUS PARAMS
-    uint256 public status; /*internal reentrancy check tracking value*/
     uint32 public latestSponsoredProposalId; /* the id of the last proposal to be sponsored */
     address public multisendLibrary; /*address of multisend library*/
 
@@ -108,13 +106,6 @@ contract Baal is Module, EIP712 {
     }
 
     // MODIFIERS
-    modifier nonReentrant() {
-        /*reentrancy guard*/
-        require(status == 1, "reentrant");
-        status = 2;
-        _;
-        status = 1;
-    }
 
     modifier baalOnly() {
         require(msg.sender == avatar, "!baal");
@@ -240,6 +231,7 @@ contract Baal is Module, EIP712 {
         public
         override(FactoryFriendly)
         initializer
+        nonReentrant
     {
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
@@ -304,7 +296,6 @@ contract Baal is Module, EIP712 {
             totalLoot()
         );
 
-        status = 1; /*initialize 'reentrancy guard' status*/
     }
 
     /*****************

@@ -41,7 +41,8 @@ const networkName = {
 	5: 'Goerli',
 	1: 'mainnet',
 	137: 'matic',
-	42: 'kovan'
+	42: 'kovan',
+	42: 'gnosis'
 };
 
 const networkCurrency = {
@@ -49,7 +50,8 @@ const networkCurrency = {
 	5: 'ETH',
 	1: 'ETH',
 	137: 'matic',
-	42: 'ETH'
+	42: 'ETH',
+	100: 'ETH'
 };
 
 async function main() {
@@ -68,18 +70,28 @@ async function main() {
 	// const network = await ethers.provider.getNetwork()
     // chainId = network.chainId
 	
+	console.log('start deploy');
 
 	const LootFactory = await ethers.getContractFactory('Loot')
     const lootSingleton = (await LootFactory.deploy())
+	await lootSingleton.deployed();
+	console.log('loot deploy');
+	console.log('lootSingleton',lootSingleton.address)
 	const SharesFactory = await ethers.getContractFactory('Shares')
     const sharesSingleton = (await SharesFactory.deploy())
+	await sharesSingleton.deployed();
+	console.log('shares deploy');
+	console.log('sharesSingleton',sharesSingleton.address)
+
     const BaalFactory = await ethers.getContractFactory('Baal')
     const baalSingleton = (await BaalFactory.deploy())
+	await baalSingleton.deployed();
+
+	console.log('baal deploy');
+	console.log('baalSingleton',baalSingleton.address)
+
 	const BaalSummoner = await ethers.getContractFactory('BaalSummoner')
 	
-	console.log('lootSingleton',lootSingleton.address)
-	console.log('sharesSingleton',sharesSingleton.address)
-	console.log('baalSingleton',baalSingleton.address)
 
     const baalSummoner = (await BaalSummoner.deploy(
 		baalSingleton.address, 

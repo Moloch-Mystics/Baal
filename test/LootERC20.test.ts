@@ -185,7 +185,7 @@ describe('Loot ERC20 contract', async function () {
       const {v,r,s} = await ethers.utils.splitSignature(permitSignature)
       await lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s) //  owner, spender, value, deadline, v, r, s
       const s1Allowance = await lootToken.allowance(summoner.address, s1.address)
-      console.log(s1Allowance)
+      // console.log(s1Allowance)
       expect(s1Allowance).to.equal(500)
     })
 
