@@ -28,8 +28,7 @@ abstract contract BaalVotes is ERC20Permit {
     mapping(address => address) public delegates; /*maps record of each account's `shares` delegate*/
 
     // SIGNATURE HELPERS
-    bytes32 constant DELEGATION_TYPEHASH =
-        keccak256("Delegation(address delegatee,uint256 nonce,uint256 expiry)");
+    bytes32 constant DELEGATION_TYPEHASH = keccak256("Delegation(string name,address delegatee,uint256 nonce,uint256 expiry)");
 
     event DelegateChanged(
         address indexed delegator,
@@ -82,7 +81,13 @@ abstract contract BaalVotes is ERC20Permit {
         address signer = ECDSA.recover(
             _hashTypedDataV4(
                 keccak256(
-                    abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, expiry)
+                    abi.encode(
+                        DELEGATION_TYPEHASH,
+                        keccak256(abi.encodePacked(name())),
+                        delegatee,
+                        nonce,
+                        expiry
+                    )
                 )
             ),
             v,

@@ -10,7 +10,7 @@ export default async function signDelegation(
   expiry: number
 ) {
   const domain = {
-    name,
+    name: 'Shares',
     version: '1',
     chainId,
     verifyingContract: contractAddress,
@@ -18,17 +18,21 @@ export default async function signDelegation(
 
   const types = {
     Delegation: [
+      { name: 'name', type: 'string' },
       { name: 'delegatee', type: 'address' },
       { name: 'nonce', type: 'uint256' },
       { name: 'expiry', type: 'uint256' },
     ],
   }
 
-  const sig = await signer._signTypedData(domain, types, {
+  const values = {
+    name,
     delegatee,
     nonce,
     expiry,
-  })
+  }
+
+  const sig = await signer._signTypedData(domain, types, values)
 
   return sig
 }

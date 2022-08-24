@@ -2331,7 +2331,7 @@ describe("Baal contract", function () {
         chainId,
         baal.address,
         summoner,
-        "Vote", // deploymentConfig.TOKEN_NAME
+        deploymentConfig.TOKEN_NAME,
         1,
         true
       );
@@ -2356,7 +2356,7 @@ describe("Baal contract", function () {
         chainId,
         baal.address,
         summoner,
-        "Vote", // deploymentConfig.TOKEN_NAME
+        deploymentConfig.TOKEN_NAME,
         1,
         true
       );
@@ -2372,7 +2372,7 @@ describe("Baal contract", function () {
         chainId,
         baal.address,
         summoner,
-        "Vote", // deploymentConfig.TOKEN_NAME
+        deploymentConfig.TOKEN_NAME,
         1,
         true
       );
@@ -2402,7 +2402,7 @@ describe("Baal contract", function () {
         chainId,
         sharesToken.address,
         summoner,
-        'Shares', // deploymentConfig.TOKEN_NAME
+        deploymentConfig.TOKEN_NAME,
         shaman.address,
         nonce,
         expiry
@@ -2421,7 +2421,7 @@ describe("Baal contract", function () {
         chainId,
         sharesToken.address,
         summoner,
-        'Shares', // deploymentConfig.TOKEN_NAME
+        deploymentConfig.TOKEN_NAME,
         shaman.address,
         nonce,
         expiry
@@ -2440,7 +2440,7 @@ describe("Baal contract", function () {
         chainId,
         sharesToken.address,
         summoner,
-        'Shares', // deploymentConfig.TOKEN_NAME
+        deploymentConfig.TOKEN_NAME,
         shaman.address,
         nonce,
         0

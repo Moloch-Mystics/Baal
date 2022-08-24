@@ -73,7 +73,7 @@ contract Baal is Module, EIP712 {
     address public multisendLibrary; /*address of multisend library*/
 
     // SIGNATURE HELPERS
-    bytes32 constant VOTE_TYPEHASH = keccak256("Vote(address voter,uint32 proposalId,bool support)");
+    bytes32 constant VOTE_TYPEHASH = keccak256("Vote(string name,address voter,uint32 proposalId,bool support)");
 
     // DATA STRUCTURES
     struct Proposal {
@@ -431,7 +431,15 @@ contract Baal is Module, EIP712 {
         bytes32 s
     ) external nonReentrant {
         /*calculate EIP-712 struct hash*/
-        bytes32 structHash = keccak256(abi.encode(VOTE_TYPEHASH, voter, id, approved));
+        bytes32 structHash = keccak256(
+            abi.encode(
+                VOTE_TYPEHASH,
+                keccak256(abi.encodePacked(sharesToken.name())),
+                voter,
+                id,
+                approved
+            )
+        );
         bytes32 hash = _hashTypedDataV4(structHash);
         address signer = ECDSA.recover(hash, v, r, s);
 
