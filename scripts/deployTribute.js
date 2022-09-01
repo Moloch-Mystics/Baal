@@ -5,13 +5,15 @@ const { ethers } = require('hardhat');
 const networkName = {
 	4: 'Rinkeby',
 	1: 'mainnet',
-	137: 'matic'
+	137: 'matic',
+	100: 'Gnosis'
 };
 
 const networkCurrency = {
 	4: 'ETH',
 	1: 'ETH',
-	137: 'matic'
+	137: 'matic',
+	100: 'xDai'
 };
 
 async function main() {
