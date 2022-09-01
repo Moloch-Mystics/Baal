@@ -10,7 +10,8 @@ const _shamans = {
     4: [''],
 	1: [''],
 	137: [''],
-	42: ['']
+	42: [''],
+	100: [''],
 }
 
 // same default for all networks, but different sometimes
@@ -23,7 +24,7 @@ const _addresses = {
 	gnosisMultisendLibrary: "0xa238cbeb142c10ef7ad8442c6d1f9e89e07e7761",
 	poster: "0x000000000000cd17345801aa8147b8D3950260FF",
 	gnosisSafeProxyFactory: "0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2",
-	moduleProxyFactory: "0x270c012B6C2A61153e8A6d82F2Cb4F88ddB7fD5E",
+	moduleProxyFactory: "0x00000000062c52e29e8029dc2413172f6d619d85",
 	}
 
 
@@ -42,7 +43,7 @@ const networkName = {
 	1: 'mainnet',
 	137: 'matic',
 	42: 'kovan',
-	42: 'gnosis'
+	100: 'gnosis'
 };
 
 const networkCurrency = {
@@ -51,7 +52,7 @@ const networkCurrency = {
 	1: 'ETH',
 	137: 'matic',
 	42: 'ETH',
-	100: 'ETH'
+	100: 'xDai'
 };
 
 async function main() {
