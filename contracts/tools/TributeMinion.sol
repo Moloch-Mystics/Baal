@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity >=0.8.0;
+pragma solidity 0.8.13;
 import "../Baal.sol";
-
-//  import "hardhat/console.sol";
 
 interface IERC20 {
     function transferFrom(address from, address to, uint256 value) external returns (bool);
@@ -17,7 +15,7 @@ contract TributeMinion {
         bool released;
         address safe;
     }
-    mapping(address => mapping(uint256 => Escrow)) escrows;
+    mapping(address => mapping(uint256 => Escrow)) public escrows;
 
     function encodeTributeProposal(
         address baal,
@@ -101,7 +99,7 @@ contract TributeMinion {
         uint256 loot,
         uint32 expiration,
         string memory details
-    ) public {
+    ) external {
         uint32 proposalId = baal.proposalCount() + 1;
         bytes memory encodedProposal = encodeTributeProposal(
             address(baal),

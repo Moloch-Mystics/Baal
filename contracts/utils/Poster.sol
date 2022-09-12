@@ -11,13 +11,12 @@ Made with ❤️ by Auryn.eth
 */
 // SPDX-License-Identifier: LGPL-3.0-only
 
-pragma solidity >=0.8.0;
-
+pragma solidity 0.8.13;
 
 contract Poster {
     event NewPost(address indexed user, string content, string indexed tag);
 
-    function post(string calldata content, string calldata tag) public {
+    function post(string calldata content, string calldata tag) external {
         emit NewPost(msg.sender, content, tag);
     }
 }

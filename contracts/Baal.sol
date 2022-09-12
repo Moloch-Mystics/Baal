@@ -7,75 +7,30 @@
 ███      █    █     ▀
         █    █
        ▀    ▀*/
-pragma solidity >=0.8.0;
+pragma solidity 0.8.13;
 
 import "@gnosis.pm/safe-contracts/contracts/base/Executor.sol";
 import "@gnosis.pm/safe-contracts/contracts/GnosisSafe.sol";
 import "@gnosis.pm/zodiac/contracts/core/Module.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
-import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
+import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
+import "@openzeppelin/contracts/proxy/Clones.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-// import "hardhat/console.sol";
-
-interface IBaalToken {
-    function name() external view returns (string memory);
-
-    function setUp(string memory _name, string memory _symbol) external;
-
-    function mint(address recipient, uint256 amount) external;
-
-    function burn(address account, uint256 amount) external;
-
-    function balanceOf(address account) external view returns (uint256);
-
-    function totalSupply() external view returns (uint256);
-
-    // below is shares token specific
-    struct Checkpoint {
-        /*Baal checkpoint for marking number of delegated votes*/
-        uint32 fromTimeStamp; /*unix time for referencing voting balance*/
-        uint256 votes; /*votes at given unix time*/
-    }
-
-    function numCheckpoints(address) external view returns (uint256);
-
-    function getCheckpoint(address, uint256)
-        external
-        view
-        returns (Checkpoint memory);
-}
-
-contract CloneFactory {
-    // implementation of eip-1167 - see https://eips.ethereum.org/EIPS/eip-1167
-    function createClone(address target) internal returns (address result) {
-        bytes20 targetBytes = bytes20(target);
-        assembly {
-            let clone := mload(0x40)
-            mstore(
-                clone,
-                0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000
-            )
-            mstore(add(clone, 0x14), targetBytes)
-            mstore(
-                add(clone, 0x28),
-                0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000
-            )
-            result := create(0, clone, 0x37)
-        }
-    }
-}
+import "./interfaces/IBaalToken.sol";
 
 /// @title Baal ';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
-contract Baal is CloneFactory, Module {
+contract Baal is Module, EIP712, ReentrancyGuard {
     using ECDSA for bytes32;
 
     // ERC20 SHARES + LOOT
+
     IBaalToken public lootToken; /*Sub ERC20 for loot mgmt*/
     IBaalToken public sharesToken; /*Sub ERC20 for loot mgmt*/
-    mapping(address => mapping(address => uint256)) public allowance; /*maps approved pulls of `shares` with erc20 accounting*/
+
+    address private constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE; /*ETH reference for redemptions*/
 
     // ADMIN PARAMETERS
     bool public lootPaused; /*tracks transferability of `loot` economic weight - amendable through 'period'[2] proposal*/
@@ -112,18 +67,11 @@ contract Baal is CloneFactory, Module {
     mapping(uint256 => Proposal) public proposals; /*maps `proposal id` to struct details*/
 
     // MISCELLANEOUS PARAMS
-    uint256 status; /*internal reentrancy check tracking value*/
     uint32 public latestSponsoredProposalId; /* the id of the last proposal to be sponsored */
-    address multisendLibrary; /*address of multisend library*/
+    address public multisendLibrary; /*address of multisend library*/
 
     // SIGNATURE HELPERS
-    mapping(address => uint256) public nonces; /*maps record of states for signing & validating signatures*/
-    bytes32 constant DOMAIN_TYPEHASH =
-        keccak256(
-            "EIP712Domain(string name,uint256 chainId,address verifyingContract)"
-        );
-    bytes32 constant VOTE_TYPEHASH =
-        keccak256("Vote(uint proposalId,bool support)");
+    bytes32 constant VOTE_TYPEHASH = keccak256("Vote(string name,address voter,uint32 proposalId,bool support)");
 
     // DATA STRUCTURES
     struct Proposal {
@@ -144,7 +92,7 @@ contract Baal is CloneFactory, Module {
         string details; /*human-readable context for proposal*/
     }
 
-    /* Unborn -> Submitted -> Voting -> Grace -> Ready -> Processed 
+    /* Unborn -> Submitted -> Voting -> Grace -> Ready -> Processed
                               \-> Cancelled  \-> Defeated   */
     enum ProposalState {
         Unborn, /* 0 - can submit */
@@ -158,13 +106,6 @@ contract Baal is CloneFactory, Module {
     }
 
     // MODIFIERS
-    modifier nonReentrant() {
-        /*reentrancy guard*/
-        require(status == 1, "reentrant");
-        status = 2;
-        _;
-        status = 1;
-    }
 
     modifier baalOnly() {
         require(msg.sender == avatar, "!baal");
@@ -260,12 +201,37 @@ contract Baal is CloneFactory, Module {
     event SharesPaused(bool paused); /*emits when shares are paused or unpaused*/
     event LootPaused(bool paused); /*emits when loot is paused or unpaused*/
 
+    function encodeMultisend(bytes[] memory _calls, address _target)
+        external
+        pure
+        returns (bytes memory encodedMultisend)
+    {
+        bytes memory encodedActions;
+        for (uint256 i = 0; i < _calls.length; i++) {
+            encodedActions = abi.encodePacked(
+                encodedActions,
+                uint8(0),
+                _target,
+                uint256(0),
+                uint256(_calls[i].length),
+                bytes(_calls[i])
+            );
+        }
+        encodedMultisend = abi.encodeWithSignature(
+            "multiSend(bytes)",
+            encodedActions
+        );
+    }
+
+    constructor() EIP712("Vote", "4") initializer {} /*Configure template to be unusable*/
+
     /// @notice Summon Baal with voting configuration & initial array of `members` accounts with `shares` & `loot` weights.
     /// @param _initializationParams Encoded setup information.
     function setUp(bytes memory _initializationParams)
         public
         override(FactoryFriendly)
         initializer
+        nonReentrant
     {
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
@@ -287,13 +253,15 @@ contract Baal is CloneFactory, Module {
         avatar = _avatar;
         target = _avatar; /*Set target to same address as avatar on setup - can be changed later via setTarget, though probably not a good idea*/
 
-        lootToken = IBaalToken(createClone(_lootSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
+        require(_lootSingleton != address(0), "!lootSingleton");
+        lootToken = IBaalToken(Clones.clone(_lootSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
         lootToken.setUp(
             string(abi.encodePacked(_name, " LOOT")),
             string(abi.encodePacked(_symbol, "-LOOT"))
         ); /*TODO this naming feels too opinionated*/
 
-        sharesToken = IBaalToken(createClone(_sharesSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
+        require(_sharesSingleton != address(0), "!sharesSingleton");
+        sharesToken = IBaalToken(Clones.clone(_sharesSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
         sharesToken.setUp(_name, _symbol);
 
         multisendLibrary = _multisendLibrary; /*Set address of Gnosis multisend library to use for all execution*/
@@ -328,7 +296,6 @@ contract Baal is CloneFactory, Module {
             totalLoot()
         );
 
-        status = 1; /*initialize 'reentrancy guard' status*/
     }
 
     /*****************
@@ -351,11 +318,10 @@ contract Baal is CloneFactory, Module {
         );
 
         bool selfSponsor = false; /*plant sponsor flag*/
-        if (getCurrentVotes(msg.sender) >= sponsorThreshold) {
+        if (sharesToken.getCurrentVotes(msg.sender) >= sponsorThreshold) {
             selfSponsor = true; /*if above sponsor threshold, self-sponsor*/
         } else {
             require(msg.value == proposalOffering, "Baal requires an offering"); /*Optional anti-spam gas token tribute*/
-            // require(msg.value == proposalOffering);
             (bool _success, ) = target.call{value: msg.value}(""); /*Send ETH to sink*/
             require(_success, "could not send");
         }
@@ -408,7 +374,7 @@ contract Baal is CloneFactory, Module {
     function sponsorProposal(uint32 id) external nonReentrant {
         Proposal storage prop = proposals[id]; /*alias proposal storage pointers*/
 
-        require(getCurrentVotes(msg.sender) >= sponsorThreshold, "!sponsor"); /*check 'votes > threshold - required to sponsor proposal*/
+        require(sharesToken.getCurrentVotes(msg.sender) >= sponsorThreshold, "!sponsor"); /*check 'votes > threshold - required to sponsor proposal*/
         require(state(id) == ProposalState.Submitted, "!submitted");
         require(
             prop.expiration == 0 ||
@@ -441,32 +407,37 @@ contract Baal is CloneFactory, Module {
     }
 
     /// @notice Submit vote with EIP-712 signature - proposal must exist & voting period must not have ended.
+    /// @param voter Address of member who submitted vote.
     /// @param id Number of proposal in `proposals` mapping to cast vote on.
     /// @param approved If 'true', member will cast `yesVotes` onto proposal - if 'false', `noVotes` will be counted.
-    /// @param signature Concatenated signature
+    /// @param v v in signature
+    /// @param r r in signature
+    /// @param s s in signature
     function submitVoteWithSig(
+        address voter,
         uint32 id,
         bool approved,
-        bytes calldata signature
+        uint8 v,
+        bytes32 r,
+        bytes32 s
     ) external nonReentrant {
-        string memory name = sharesToken.name();
-        bytes32 domainSeparator = keccak256(
+        /*calculate EIP-712 struct hash*/
+        bytes32 structHash = keccak256(
             abi.encode(
-                DOMAIN_TYPEHASH,
-                keccak256(bytes(name)),
-                block.chainid,
-                address(this)
+                VOTE_TYPEHASH,
+                keccak256(abi.encodePacked(sharesToken.name())),
+                voter,
+                id,
+                approved
             )
-        ); /*calculate EIP-712 domain hash*/
-        bytes32 structHash = keccak256(abi.encode(VOTE_TYPEHASH, id, approved)); /*calculate EIP-712 struct hash*/
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", domainSeparator, structHash)
-        ); /*calculate EIP-712 digest for signature*/
-        address signatory = digest.recover(signature); /*recover signer from hash data*/
+        );
+        bytes32 hash = _hashTypedDataV4(structHash);
+        address signer = ECDSA.recover(hash, v, r, s);
 
-        require(signatory != address(0), "!signatory"); /*check signer is not null*/
+        require(signer == voter, "invalid signature");
+        require(signer != address(0), "!signer");
 
-        _submitVote(signatory, id, approved);
+        _submitVote(signer, id, approved);
     }
 
     /// @notice Execute vote submission internally - callable by submit vote or submit vote with signature
@@ -481,7 +452,7 @@ contract Baal is CloneFactory, Module {
         Proposal storage prop = proposals[id]; /*alias proposal storage pointers*/
         require(state(id) == ProposalState.Voting, "!voting");
 
-        uint256 balance = getPriorVotes(voter, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
+        uint256 balance = sharesToken.getPriorVotes(voter, prop.votingStarts); /*fetch & gas-optimize voting weight at proposal creation time*/
 
         require(balance > 0, "!member"); /* check that user has shares*/
         require(!memberVoted[voter][id], "voted"); /*check vote not already cast*/
@@ -591,7 +562,7 @@ contract Baal is CloneFactory, Module {
         require(state(id) == ProposalState.Voting, "!voting");
         require(
             msg.sender == prop.sponsor ||
-                getPriorVotes(prop.sponsor, block.timestamp - 1) <
+                sharesToken.getPriorVotes(prop.sponsor, block.timestamp - 1) <
                 sponsorThreshold ||
                 isGovernor(msg.sender),
             "!cancellable"
@@ -630,7 +601,7 @@ contract Baal is CloneFactory, Module {
         uint256 lootToBurn,
         address[] calldata tokens
     ) external nonReentrant {
-        for (uint256 i; i < tokens.length; i++) {
+        for (uint256 i = 0; i < tokens.length; i++) {
             if (i > 0) {
                 require(tokens[i] > tokens[i - 1], "!order");
             }
@@ -650,7 +621,6 @@ contract Baal is CloneFactory, Module {
         uint256 lootToBurn,
         address[] memory tokens
     ) internal {
-
         uint256 _totalSupply = totalSupply();
 
         if (lootToBurn != 0) {
@@ -663,18 +633,22 @@ contract Baal is CloneFactory, Module {
             _burnShares(msg.sender, sharesToBurn); /*subtract `shares` from user account & Baal totals with erc20 accounting*/
         }
 
-        for (uint256 i; i < tokens.length; i++) {
+        for (uint256 i = 0; i < tokens.length; i++) {
             (, bytes memory balanceData) = tokens[i].staticcall(
                 abi.encodeWithSelector(0x70a08231, address(target))
             ); /*get Baal token balances - 'balanceOf(address)'*/
-            uint256 balance = abi.decode(balanceData, (uint256)); /*decode Baal token balances for calculation*/
+            uint256 balance = tokens[i] == ETH
+                ? address(target).balance
+                : abi.decode(balanceData, (uint256)); /*decode Baal token balances for calculation*/
 
             uint256 amountToRagequit = ((lootToBurn + sharesToBurn) * balance) /
                 _totalSupply; /*calculate 'fair shair' claims*/
 
             if (amountToRagequit != 0) {
                 /*gas optimization to allow higher maximum token limit*/
-                _safeTransfer(tokens[i], to, amountToRagequit); /*execute 'safe' token transfer*/
+                tokens[i] == ETH
+                    ? _safeTransferETH(to, amountToRagequit) /*execute 'safe' ETH transfer*/
+                    : _safeTransfer(tokens[i], to, amountToRagequit); /*execute 'safe' token transfer*/
             }
         }
 
@@ -692,7 +666,7 @@ contract Baal is CloneFactory, Module {
         uint256[] calldata _permissions
     ) external baalOnly {
         require(_shamans.length == _permissions.length, "!array parity"); /*check array lengths match*/
-        for (uint256 i; i < _shamans.length; i++) {
+        for (uint256 i = 0; i < _shamans.length; i++) {
             uint256 permission = _permissions[i];
             if (adminLock)
                 require(
@@ -913,64 +887,12 @@ contract Baal is CloneFactory, Module {
     /// @notice Helper to get recorded proposal flags
     /// @param id Number of proposal in proposals
     /// @return [cancelled, processed, passed, actionFailed]
-    function getProposalStatus(uint32 id) public view returns (bool[4] memory) {
+    function getProposalStatus(uint32 id)
+        external
+        view
+        returns (bool[4] memory)
+    {
         return proposals[id].status;
-    }
-
-    /// @notice Returns the current delegated `vote` balance for `account`.
-    /// @param account The user to check delegated `votes` for.
-    /// @return votes Current `votes` delegated to `account`.
-    // TODO: shares token
-    function getCurrentVotes(address account)
-        public
-        view
-        returns (uint256 votes)
-    {
-        uint256 nCheckpoints = sharesToken.numCheckpoints(account); /*Get most recent checkpoint, or 0 if no checkpoints*/
-        unchecked {
-            votes = nCheckpoints != 0
-                ? sharesToken.getCheckpoint(account, nCheckpoints - 1).votes
-                : 0;
-        }
-    }
-
-    /// @notice Returns the prior number of `votes` for `account` as of `timeStamp`.
-    /// @param account The user to check `votes` for.
-    /// @param timeStamp The unix time to check `votes` for.
-    /// @return votes Prior `votes` delegated to `account`.
-    function getPriorVotes(address account, uint256 timeStamp)
-        public
-        view
-        returns (uint256 votes)
-    {
-        require(timeStamp < block.timestamp, "!determined"); /* Prior votes must be in the past*/
-
-        uint256 nCheckpoints = sharesToken.numCheckpoints(account);
-        if (nCheckpoints == 0) return 0;
-
-        unchecked {
-            if (
-                sharesToken
-                    .getCheckpoint(account, nCheckpoints - 1)
-                    .fromTimeStamp <= timeStamp
-            ) return sharesToken.getCheckpoint(account, nCheckpoints - 1).votes; /* If most recent checkpoint is at or after desired timestamp, return*/
-            if (sharesToken.getCheckpoint(account, 0).fromTimeStamp > timeStamp)
-                return 0;
-            uint256 lower = 0;
-            uint256 upper = nCheckpoints - 1;
-            while (upper > lower) {
-                /* Binary search to look for highest timestamp before desired timestamp*/
-                uint256 center = upper - (upper - lower) / 2;
-                IBaalToken.Checkpoint memory cp = sharesToken.getCheckpoint(
-                    account,
-                    center
-                );
-                if (cp.fromTimeStamp == timeStamp) return cp.votes;
-                else if (cp.fromTimeStamp < timeStamp) lower = center;
-                else upper = center - 1;
-            }
-            votes = sharesToken.getCheckpoint(account, lower).votes;
-        }
     }
 
     /// @notice Helper to check if shaman permission contains admin capabilities
@@ -1031,6 +953,19 @@ contract Baal is CloneFactory, Module {
         return keccak256(abi.encode(_transactions));
     }
 
+    /// @notice Provides 'safe' {transfer} for ETH.
+    function _safeTransferETH(address to, uint256 amount) internal {
+        // transfer eth from target
+        (bool success, ) = execAndReturnData(
+            to,
+            amount,
+            "",
+            Enum.Operation.Call
+        );
+
+        require(success, "ETH_TRANSFER_FAILED");
+    }
+
     /// @notice Provides 'safe' {transfer} for tokens that do not consistently return 'true/false'.
     function _safeTransfer(
         address token,
@@ -1047,177 +982,5 @@ contract Baal is CloneFactory, Module {
             success && (data.length == 0 || abi.decode(data, (bool))),
             "transfer failed"
         ); /*checks success & allows non-conforming transfers*/
-    }
-
-    /// @notice Provides 'safe' {transferFrom} for tokens that do not consistently return 'true/false'.
-    function _safeTransferFrom(
-        address token,
-        address from,
-        address to,
-        uint256 amount
-    ) private {
-        (bool success, bytes memory data) = token.call(
-            abi.encodeWithSelector(0x23b872dd, from, to, amount)
-        ); /*'transferFrom(address,address,uint)'*/
-        require(
-            success && (data.length == 0 || abi.decode(data, (bool))),
-            "transferFrom failed"
-        ); /*checks success & allows non-conforming transfers*/
-    }
-}
-
-contract BaalSummoner is ModuleProxyFactory {
-    address payable public immutable template; // fixed template for baal using eip-1167 proxy pattern
-
-    // Template contract to use for new Gnosis safe proxies
-    address public immutable gnosisSingleton;
-
-    // Library to use for EIP1271 compatability
-    address public immutable gnosisFallbackLibrary;
-
-    // Library to use for all safe transaction executions
-    address public immutable gnosisMultisendLibrary;
-
-    event SummonBaal(
-        address indexed baal,
-        address indexed loot,
-        address indexed shares,
-        address safe
-    );
-
-    constructor(
-        address payable _template,
-        address _gnosisSingleton,
-        address _gnosisFallbackLibrary,
-        address _gnosisMultisendLibrary
-    ) {
-        template = _template;
-        gnosisSingleton = _gnosisSingleton;
-        gnosisFallbackLibrary = _gnosisFallbackLibrary;
-        gnosisMultisendLibrary = _gnosisMultisendLibrary;
-    }
-
-    function encodeMultisend(bytes[] memory _calls, address _target)
-        public
-        pure
-        returns (bytes memory encodedMultisend)
-    {
-        bytes memory encodedActions;
-        for (uint256 i = 0; i < _calls.length; i++) {
-            encodedActions = abi.encodePacked(
-                encodedActions,
-                uint8(0),
-                _target,
-                uint256(0),
-                uint256(_calls[i].length),
-                bytes(_calls[i])
-            );
-        }
-        encodedMultisend = abi.encodeWithSignature(
-            "multiSend(bytes)",
-            encodedActions
-        );
-    }
-
-    function summonBaal(address _safe) external returns (address) {
-        Baal _baal = Baal(_safe);
-
-        emit SummonBaal(
-            address(_baal),
-            address(_baal.lootToken()),
-            address(_baal.sharesToken()),
-            address(_safe)
-        );
-
-        return (address(_baal));
-    }
-
-    function summonBaalAndSafe(
-        bytes calldata initializationParams,
-        bytes[] calldata initializationActions,
-        uint256 _saltNonce
-    ) external returns (address) {
-        (
-            string memory _name, /*_name Name for erc20 `shares` accounting*/
-            string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
-            address _lootSingleton, /*template contract to clone for loot ERC20 token*/
-            address _sharesSingleton, /*template contract to clone for loot ERC20 token*/
-            address _multisendLibrary /*address of multisend library*/
-        ) = abi.decode(
-                initializationParams,
-                (string, string, address, address, address)
-            );
-
-        // Deploy new safe but do not set it up yet
-        GnosisSafe _safe = GnosisSafe(
-            payable(
-                createProxy(
-                    gnosisSingleton,
-                    keccak256(abi.encodePacked(_saltNonce))
-                )
-            )
-        );
-
-        Baal _baal = Baal(
-            createProxy(template, keccak256(abi.encodePacked(_saltNonce)))
-        );
-        bytes memory _initializationMultisendData = encodeMultisend(
-            initializationActions,
-            address(_baal)
-        );
-
-        // Generate delegate calls so the safe calls enableModule on itself during setup
-        bytes memory _enableBaal = abi.encodeWithSignature(
-            "enableModule(address)",
-            address(_baal)
-        );
-        bytes memory _enableBaalMultisend = abi.encodePacked(
-            uint8(0),
-            address(_safe),
-            uint256(0),
-            uint256(_enableBaal.length),
-            bytes(_enableBaal)
-        );
-        bytes memory _multisendAction = abi.encodeWithSignature(
-            "multiSend(bytes)",
-            _enableBaalMultisend
-        );
-
-        // Workaround for solidity dynamic memory array
-        address[] memory _owners = new address[](1);
-        _owners[0] = address(_baal);
-
-        // Call setup on safe to enable our new module and set the module as the only signer
-        _safe.setup(
-            _owners,
-            1,
-            gnosisMultisendLibrary,
-            _multisendAction,
-            gnosisFallbackLibrary,
-            address(0),
-            0,
-            payable(address(0))
-        );
-
-        bytes memory _initializer = abi.encode(
-            _name,
-            _symbol,
-            _lootSingleton,
-            _sharesSingleton,
-            _multisendLibrary,
-            address(_safe),
-            _initializationMultisendData
-        );
-
-        _baal.setUp(_initializer);
-
-        emit SummonBaal(
-            address(_baal),
-            address(_baal.lootToken()),
-            address(_baal.sharesToken()),
-            address(_safe)
-        );
-
-        return (address(_baal));
     }
 }

@@ -1,14 +1,15 @@
-import { task, HardhatUserConfig } from "hardhat/config";
+import { task, subtask, HardhatUserConfig } from "hardhat/config";
 import "@nomiclabs/hardhat-waffle";
 import "@nomiclabs/hardhat-ethers";
 import "hardhat-gas-reporter";
 import "@nomiclabs/hardhat-etherscan";
 import "solidity-coverage";
-import "hardhat-typechain";
 import "hardhat-contract-sizer";
+import "hardhat-abi-exporter";
 
 import * as fs from "fs";
-import "hardhat-typechain";
+import "@typechain/hardhat";
+import '@nomiclabs/hardhat-ethers'
 
 import "./tasks/setup";
 
@@ -82,13 +83,17 @@ const config: HardhatUserConfig = {
     },
     goerli: {
       url: "https://goerli.infura.io/v3/460f40a260564ac4a4f4b3fffb032dad", //<---- YOUR INFURA ID! (or it won't work)
+      gas: 5000000,
+      gasPrice: 8000000000,
+      gasMultiplier: 2,
       accounts: {
         mnemonic: mnemonic(),
       },
     },
     xdai: {
-      url: "https://rpc.xdaichain.com/",
-      gasPrice: 1000000000,
+      url: "https://rpc.gnosischain.com/",
+      gas: 5000000,
+      gasPrice: 8000000000,
       accounts: {
         mnemonic: mnemonic(),
       },
@@ -127,7 +132,7 @@ const config: HardhatUserConfig = {
         },
       },
       {
-        version: "0.8.7",
+        version: "0.8.13",
         settings: {
           optimizer: {
             enabled: true,
@@ -154,6 +159,12 @@ const config: HardhatUserConfig = {
         },
       },
     ],
+  },
+  abiExporter: {
+    path: './abi',
+    clear: true,
+    flat: true,
+    except: ['@gnosis.pm', '@openzeppelin'],
   },
   typechain: {
     outDir: "src/types",

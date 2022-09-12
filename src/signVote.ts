@@ -10,22 +10,29 @@ export default async function signVote(
 
 ) {
   const domain = {
-    name,
+    name: 'Vote',
+    version: '4',
     chainId,
     verifyingContract: contractAddress,
   }
 
   const types = {
     Vote: [
-      { name: 'proposalId', type: 'uint' },
+      { name: 'name', type: 'string' },
+      { name: 'voter', type: 'address' },
+      { name: 'proposalId', type: 'uint32' },
       { name: 'support', type: 'bool' },
     ],
   }
 
-  const sig = await signer._signTypedData(domain, types, {
+  const values = {
+    name,
+    voter: signer.address,
     proposalId,
     support
-  })
+  }
+
+  const sig = await signer._signTypedData(domain, types, values)
 
   return sig
 }

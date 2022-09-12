@@ -1,7 +1,7 @@
 import { BigNumber } from '@ethersproject/bignumber'
 import { ethers } from 'hardhat'
 import { encodeMultiSend, MetaTransaction } from '@gnosis.pm/safe-contracts'
-import { MultiSend } from './types/MultiSend'
+import { MultiSend } from './types'
 
 export const encodeMultiAction = (multisend: MultiSend, actions: string[], tos: string[], values: BigNumber[], operations: number[]) => {
   let metatransactions: MetaTransaction[] = []

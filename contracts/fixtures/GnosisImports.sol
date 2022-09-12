@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-pragma solidity ^0.8.7;
+pragma solidity 0.8.13;
 
 import "@gnosis.pm/safe-contracts/contracts/GnosisSafe.sol"; //https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol
 import "@gnosis.pm/safe-contracts/contracts/proxies/GnosisSafeProxyFactory.sol"; //https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol
