@@ -174,7 +174,7 @@ describe('Loot ERC20 contract', async function () {
         chainId, // chainId
         lootToken.address, // contractAddress
         summoner, // signer
-        'Loot', // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
+        await lootToken.name(), // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
         summoner.address, // owner
         s1.address, // spender
         500, // value
@@ -196,7 +196,7 @@ describe('Loot ERC20 contract', async function () {
         chainId,
         lootToken.address,
         summoner,
-        'Loot', // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
+        await lootToken.name(), // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
         summoner.address,
         s1.address,
         500,
@@ -215,7 +215,7 @@ describe('Loot ERC20 contract', async function () {
         420,
         lootToken.address,
         summoner,
-        'Loot', // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
+        await lootToken.name(), // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
         summoner.address,
         s1.address,
         500,
@@ -242,7 +242,7 @@ describe('Loot ERC20 contract', async function () {
         chainId,
         zeroAddress,
         summoner,
-        'Loot', // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
+        await lootToken.name(), // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
         summoner.address,
         s1.address,
         500,
@@ -261,7 +261,7 @@ describe('Loot ERC20 contract', async function () {
         chainId,
         lootToken.address,
         summoner,
-        'Loot', // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
+        await lootToken.name(), // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
         s1.address,
         s1.address,
         500,
@@ -280,7 +280,7 @@ describe('Loot ERC20 contract', async function () {
         chainId,
         lootToken.address,
         summoner,
-        'Loot', // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
+        await lootToken.name(), // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
         summoner.address,
         s2.address,
         500,
@@ -299,7 +299,7 @@ describe('Loot ERC20 contract', async function () {
         chainId,
         lootToken.address,
         summoner,
-        'Loot', // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
+        await lootToken.name(), // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
         summoner.address,
         s1.address,
         499,
@@ -318,7 +318,7 @@ describe('Loot ERC20 contract', async function () {
         chainId,
         lootToken.address,
         summoner,
-        'Loot', // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
+        await lootToken.name(), // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
         summoner.address,
         s1.address,
         500,
@@ -337,7 +337,7 @@ describe('Loot ERC20 contract', async function () {
         chainId,
         lootToken.address,
         summoner,
-        'Loot', // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
+        await lootToken.name(), // name -- replacing await lootToken.name()  with 'Loot' for new signing scope
         summoner.address,
         s1.address,
         500,

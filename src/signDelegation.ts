@@ -10,7 +10,7 @@ export default async function signDelegation(
   expiry: number
 ) {
   const domain = {
-    name: 'Shares',
+    name,
     version: '1',
     chainId,
     verifyingContract: contractAddress,

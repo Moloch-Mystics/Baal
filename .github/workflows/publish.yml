@@ -29,6 +29,8 @@ jobs:
         if: steps.get-versions.outputs.package_version > steps.get-versions.outputs.npm_version
       - run: yarn build
         if: steps.get-versions.outputs.package_version > steps.get-versions.outputs.npm_version
+      - run: yarn test
+        if: steps.get-versions.outputs.package_version > steps.get-versions.outputs.npm_version
       - name: publishing
         if: steps.get-versions.outputs.package_version > steps.get-versions.outputs.npm_version
         run: |

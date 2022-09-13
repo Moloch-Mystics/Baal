@@ -4,7 +4,7 @@ cache/
 .DS_Store
 *.swp
 *.txt
-
+yarn-error.log
 
 dist/
 src/types/

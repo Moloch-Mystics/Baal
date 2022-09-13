@@ -7,7 +7,7 @@
 ███      █    █     ▀
         █    █
        ▀    ▀*/
-pragma solidity 0.8.13;
+pragma solidity 0.8.7;
 
 import "@gnosis.pm/safe-contracts/contracts/base/Executor.sol";
 import "@gnosis.pm/safe-contracts/contracts/GnosisSafe.sol";
@@ -254,17 +254,23 @@ contract Baal is Module, EIP712, ReentrancyGuard {
         target = _avatar; /*Set target to same address as avatar on setup - can be changed later via setTarget, though probably not a good idea*/
 
         require(_lootSingleton != address(0), "!lootSingleton");
-        lootToken = IBaalToken(Clones.clone(_lootSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
+
+        /*Clone loot singleton using EIP1167 minimal proxy pattern*/
+        lootToken = IBaalToken(Clones.clone(_lootSingleton));
+        /*TODO this naming feels too opinionated*/
         lootToken.setUp(
             string(abi.encodePacked(_name, " LOOT")),
             string(abi.encodePacked(_symbol, "-LOOT"))
-        ); /*TODO this naming feels too opinionated*/
+        );
 
         require(_sharesSingleton != address(0), "!sharesSingleton");
-        sharesToken = IBaalToken(Clones.clone(_sharesSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
+
+        /*Clone loot singleton using EIP1167 minimal proxy pattern*/
+        sharesToken = IBaalToken(Clones.clone(_sharesSingleton));
         sharesToken.setUp(_name, _symbol);
 
-        multisendLibrary = _multisendLibrary; /*Set address of Gnosis multisend library to use for all execution*/
+        /*Set address of Gnosis multisend library to use for all execution*/
+        multisendLibrary = _multisendLibrary;
 
         // Execute all setups including but not limited to
         // * mint shares
