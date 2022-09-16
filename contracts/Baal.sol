@@ -13,11 +13,11 @@ import "@gnosis.pm/safe-contracts/contracts/base/Executor.sol";
 import "@gnosis.pm/safe-contracts/contracts/GnosisSafe.sol";
 import "@gnosis.pm/zodiac/contracts/core/Module.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
+import "@opengsn/contracts/src/ERC2771Recipient.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@opengsn/contracts/src/ERC2771Recipient.sol";
 
 import "./interfaces/IBaalToken.sol";
 
@@ -240,8 +240,8 @@ contract Baal is Module, EIP712, ReentrancyGuard, ERC7221Recipient {
             address _lootSingleton, /*template contract to clone for loot ERC20 token*/
             address _sharesSingleton, /*template contract to clone for loot ERC20 token*/
             address _multisendLibrary, /*address of multisend library*/
-            address _forwarder, /*address of trusted forwarder for meta-transactions (EIP-2771)*/
             address _avatar, /*Safe contract address*/
+            address _forwarder, /*address of trusted forwarder for meta-transactions (EIP-2771)*/
             bytes memory _initializationMultisendData /*here you call BaalOnly functions to set up initial shares, loot, shamans, periods, etc.*/
         ) = abi.decode(
                 _initializationParams,
