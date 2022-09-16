@@ -799,10 +799,22 @@
     "@types/sinon-chai" "^3.2.3"
     "@types/web3" "1.0.19"
 
+"@opengsn/contracts@^3.0.0-beta.1":
+  version "3.0.0-beta.1"
+  resolved "https://registry.yarnpkg.com/@opengsn/contracts/-/contracts-3.0.0-beta.1.tgz#4068326fb4d5268aa9f67c68fad18e9c5e9f31b5"
+  integrity sha512-ZQrpe8F45ONSyLnCeEbbSXWqUpP5EIjnOsIMHIudYDT+0c689EpzsZIMluX3RZhYrUMvc7JW05zx/sbCBeEhug==
+  dependencies:
+    "@openzeppelin/contracts" "^4.2.0"
+
 "@openzeppelin/contracts-upgradeable@^4.2.0":
   version "4.7.2"
   resolved "https://registry.yarnpkg.com/@openzeppelin/contracts-upgradeable/-/contracts-upgradeable-4.7.2.tgz#414096e21f048200cbb7ad4fe4c6de2e822513bf"
   integrity sha512-3dgc6qVmFch/uOmlmKnw5/v3JxwXcZD4T10/9CI1OUbX8AqjoZrBGKfxN1z3QxnIXRU/X31/BItJezJSDDTe7Q==
+
+"@openzeppelin/contracts@^4.2.0":
+  version "4.7.3"
+  resolved "https://registry.yarnpkg.com/@openzeppelin/contracts/-/contracts-4.7.3.tgz#939534757a81f8d69cc854c7692805684ff3111e"
+  integrity sha512-dGRS0agJzu8ybo44pCIf3xBaPQN/65AIXNgK8+4gzKd5kbvlqyxryUYVLJv7fK98Seyd2hDZzVEHSWAh0Bt1Yw==
 
 "@openzeppelin/contracts@^4.3.2":
   version "4.7.2"
