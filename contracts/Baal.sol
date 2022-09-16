@@ -240,11 +240,12 @@ contract Baal is Module, EIP712, ReentrancyGuard, ERC7221Recipient {
             address _lootSingleton, /*template contract to clone for loot ERC20 token*/
             address _sharesSingleton, /*template contract to clone for loot ERC20 token*/
             address _multisendLibrary, /*address of multisend library*/
+            address _forwarder, /*address of trusted forwarder for meta-transactions (EIP-2771)*/
             address _avatar, /*Safe contract address*/
             bytes memory _initializationMultisendData /*here you call BaalOnly functions to set up initial shares, loot, shamans, periods, etc.*/
         ) = abi.decode(
                 _initializationParams,
-                (string, string, address, address, address, address, bytes)
+                (string, string, address, address, address, address, address, bytes)
             );
 
         __Ownable_init();
@@ -253,6 +254,9 @@ contract Baal is Module, EIP712, ReentrancyGuard, ERC7221Recipient {
         // Set the Gnosis safe address
         avatar = _avatar;
         target = _avatar; /*Set target to same address as avatar on setup - can be changed later via setTarget, though probably not a good idea*/
+
+        // Set trusted forwarder
+        _setTrustedForwarder(_forwarder);
 
         require(_lootSingleton != address(0), "!lootSingleton");
 
