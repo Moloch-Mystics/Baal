@@ -18,12 +18,13 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
 
 import "./interfaces/IBaalToken.sol";
 
 /// @title Baal ';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
-contract Baal is Module, EIP712, ReentrancyGuard, ERC7221Recipient {
+contract Baal is Module, EIP712, ReentrancyGuard, ERC2771Recipient {
     using ECDSA for bytes32;
 
     // ERC20 SHARES + LOOT
@@ -993,5 +994,15 @@ contract Baal is Module, EIP712, ReentrancyGuard, ERC7221Recipient {
             success && (data.length == 0 || abi.decode(data, (bool))),
             "transfer failed"
         ); /*checks success & allows non-conforming transfers*/
+    }
+
+    function _msgSender() internal view override(ContextUpgradeable, ERC2771Recipient)
+        returns (address sender) {
+        sender = ERC2771Recipient._msgSender();
+    }
+
+    function _msgData() internal view override(ContextUpgradeable, ERC2771Recipient)
+        returns (bytes calldata) {
+        return ERC2771Recipient._msgData();
     }
 }

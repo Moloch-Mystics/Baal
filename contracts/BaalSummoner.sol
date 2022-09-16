@@ -267,6 +267,7 @@ contract BaalSummoner is ModuleProxyFactory {    address payable public immutabl
             sharesSingleton,
             gnosisMultisendLibrary,
             _safe,
+            _forwarder,
             _initializationMultisendData
         );
 
