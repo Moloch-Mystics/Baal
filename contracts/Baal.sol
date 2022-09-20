@@ -13,7 +13,7 @@ import "@gnosis.pm/safe-contracts/contracts/base/Executor.sol";
 import "@gnosis.pm/safe-contracts/contracts/GnosisSafe.sol";
 import "@gnosis.pm/zodiac/contracts/core/Module.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
-import "@opengsn/contracts/src/ERC2771Recipient.sol";
+import "@opengsn/contracts/src/BaseRelayRecipient.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
@@ -24,7 +24,7 @@ import "./interfaces/IBaalToken.sol";
 
 /// @title Baal ';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
-contract Baal is Module, EIP712, ReentrancyGuard, ERC2771Recipient {
+contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
     using ECDSA for bytes32;
 
     // ERC20 SHARES + LOOT
@@ -996,13 +996,13 @@ contract Baal is Module, EIP712, ReentrancyGuard, ERC2771Recipient {
         ); /*checks success & allows non-conforming transfers*/
     }
 
-    function _msgSender() internal view override(ContextUpgradeable, ERC2771Recipient)
+    function _msgSender() internal view override(ContextUpgradeable, BaseRelayRecipient)
         returns (address sender) {
-        sender = ERC2771Recipient._msgSender();
+        sender = BaseRelayRecipient._msgSender();
     }
 
-    function _msgData() internal view override(ContextUpgradeable, ERC2771Recipient)
+    function _msgData() internal view override(ContextUpgradeable, BaseRelayRecipient)
         returns (bytes calldata) {
-        return ERC2771Recipient._msgData();
+        return BaseRelayRecipient._msgData();
     }
 }
