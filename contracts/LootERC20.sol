@@ -4,12 +4,18 @@ pragma solidity 0.8.7;
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20SnapshotUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/draft-ERC20PermitUpgradeable.sol";
-import "./interfaces/IBaal.sol";
-
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
+import "./interfaces/IBaal.sol";
 
-contract Loot is ERC20SnapshotUpgradeable, ERC20PermitUpgradeable {
+contract Loot is
+    ERC20SnapshotUpgradeable,
+    ERC20PermitUpgradeable,
+    OwnableUpgradeable,
+    UUPSUpgradeable
+{
     // Baal Config
     IBaal public baal;
 
@@ -26,10 +32,14 @@ contract Loot is ERC20SnapshotUpgradeable, ERC20PermitUpgradeable {
     /// @dev initializer should prevent this from being called again
     /// @param name_ Name for ERC20 token trackers
     /// @param symbol_ Symbol for ERC20 token trackers
-    function setUp(string memory name_, string memory symbol_) external initializer {
+    function setUp(string memory name_, string memory symbol_)
+        external
+        initializer
+    {
         baal = IBaal(msg.sender); /*Configure Baal to setup sender*/
         __ERC20_init(name_, symbol_);
         __ERC20Permit_init(name_);
+        __Ownable_init();
     }
 
     /// @notice Allows baal to create a snapshot
@@ -69,4 +79,6 @@ contract Loot is ERC20SnapshotUpgradeable, ERC20PermitUpgradeable {
             "!transferable"
         );
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }

@@ -15,7 +15,7 @@ import "@gnosis.pm/zodiac/contracts/core/Module.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
-import "@openzeppelin/contracts/proxy/Clones.sol";
+import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 import "./interfaces/IBaalToken.sol";
@@ -255,19 +255,23 @@ contract Baal is Module, EIP712, ReentrancyGuard {
 
         require(_lootSingleton != address(0), "!lootSingleton");
 
-        /*Clone loot singleton using EIP1167 minimal proxy pattern*/
-        lootToken = IBaalToken(Clones.clone(_lootSingleton));
-        /*TODO this naming feels too opinionated*/
-        lootToken.setUp(
-            string(abi.encodePacked(_name, " LOOT")),
-            string(abi.encodePacked(_symbol, "-LOOT"))
-        );
+        lootToken = IBaalToken(address(new ERC1967Proxy(
+            _lootSingleton,
+            abi.encodeWithSelector(
+                IBaalToken(_lootSingleton).setUp.selector, 
+                string(abi.encodePacked(_name, " LOOT")), 
+                string(abi.encodePacked(_symbol, "-LOOT")))
+        )));
 
         require(_sharesSingleton != address(0), "!sharesSingleton");
 
-        /*Clone loot singleton using EIP1167 minimal proxy pattern*/
-        sharesToken = IBaalToken(Clones.clone(_sharesSingleton));
-        sharesToken.setUp(_name, _symbol);
+        sharesToken = IBaalToken(address(new ERC1967Proxy(
+            _sharesSingleton,
+            abi.encodeWithSelector(
+                IBaalToken(_sharesSingleton).setUp.selector, 
+                _name, 
+                _symbol)
+        )));
 
         /*Set address of Gnosis multisend library to use for all execution*/
         multisendLibrary = _multisendLibrary;
