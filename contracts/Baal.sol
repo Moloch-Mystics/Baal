@@ -832,7 +832,7 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
             uint256 newOffering,
             uint256 quorum,
             uint256 sponsor,
-            uint256 minRetention
+            uint256 minRetention,
         ) = abi.decode(
                 _governanceConfig,
                 (uint32, uint32, uint256, uint256, uint256, uint256)
@@ -851,6 +851,15 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
             sponsor,
             minRetention
         );
+    }
+
+    /// @notice Baal-or-governance only function to set trusted forwarder for meta-transactions.
+    /// @param address Trusted forwarder's address
+    function setTrustedForwarder(address calldata _trustedForwarderAddress)
+        external
+        baalOrGovernorOnly
+    { 
+        _setTrustedForwarder(_forwarder);
     }
 
     /***************
