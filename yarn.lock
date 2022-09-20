@@ -799,10 +799,10 @@
     "@types/sinon-chai" "^3.2.3"
     "@types/web3" "1.0.19"
 
-"@opengsn/contracts@^3.0.0-beta.1":
-  version "3.0.0-beta.1"
-  resolved "https://registry.yarnpkg.com/@opengsn/contracts/-/contracts-3.0.0-beta.1.tgz#4068326fb4d5268aa9f67c68fad18e9c5e9f31b5"
-  integrity sha512-ZQrpe8F45ONSyLnCeEbbSXWqUpP5EIjnOsIMHIudYDT+0c689EpzsZIMluX3RZhYrUMvc7JW05zx/sbCBeEhug==
+"@opengsn/contracts@2.2.5":
+  version "2.2.5"
+  resolved "https://registry.yarnpkg.com/@opengsn/contracts/-/contracts-2.2.5.tgz#24a61799649548d2b356efcfe0cb6d0c307cb516"
+  integrity sha512-o0z8b1A7D0cYMQ+gIxM1YKJ2uV25jcrfItu7ABeQBwbaeG0NBEhXHM6Z+rnsqLJvl3RJcKmHfxaFNCk3b3bzOQ==
   dependencies:
     "@openzeppelin/contracts" "^4.2.0"
 
