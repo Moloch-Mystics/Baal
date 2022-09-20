@@ -6,7 +6,8 @@ import "@gnosis.pm/safe-contracts/contracts/proxies/GnosisSafeProxyFactory.sol";
 
 import "./Baal.sol";
 
-contract BaalSummoner is ModuleProxyFactory {    address payable public immutable template; // fixed template for baal using eip-1167 proxy pattern
+contract BaalSummoner is ModuleProxyFactory {
+    address payable public immutable template; // fixed template for baal using eip-1167 proxy pattern
 
     // Template contract to use for new Gnosis safe proxies
     address public immutable gnosisSingleton;
@@ -200,9 +201,8 @@ contract BaalSummoner is ModuleProxyFactory {    address payable public immutabl
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
             string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
-            address _safeAddr, /*address of safe*/
-            address _forwarder /*address of forwarder for meta transactions (EIP-2771)*/
-        ) = abi.decode(initializationParams, (string, string, address, address));
+            address _safeAddr /*address of safe*/
+        ) = abi.decode(initializationParams, (string, string, address));
 
         bytes memory _anyCall = abi.encodeWithSignature("avatar()"); /*This call can be anything, it just needs to return successfully*/
         Baal _baal = Baal(
@@ -220,7 +220,6 @@ contract BaalSummoner is ModuleProxyFactory {    address payable public immutabl
             sharesSingleton,
             gnosisMultisendLibrary,
             _safeAddr,
-            _forwarder,
             _initializationMultisendData
         );
         // can run the actions now because we have a baal
@@ -244,9 +243,8 @@ contract BaalSummoner is ModuleProxyFactory {    address payable public immutabl
     ) internal returns (address) {
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
-            string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/ 
-            address _forwarder /*address of forwarder for meta transactions (EIP-2771)*/
-        ) = abi.decode(initializationParams, (string, string, address));
+            string memory _symbol /*_symbol Symbol for erc20 `shares` accounting*/
+        ) = abi.decode(initializationParams, (string, string));
 
         bytes memory _anyCall = abi.encodeWithSignature("avatar()"); /*This call can be anything, it just needs to return successfully*/
         Baal _baal = Baal(
@@ -267,7 +265,6 @@ contract BaalSummoner is ModuleProxyFactory {    address payable public immutabl
             sharesSingleton,
             gnosisMultisendLibrary,
             _safe,
-            _forwarder,
             _initializationMultisendData
         );
 
