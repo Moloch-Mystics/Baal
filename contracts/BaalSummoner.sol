@@ -221,8 +221,9 @@ contract BaalSummoner is ModuleProxyFactory {
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
             string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
-            address _safeAddr /*address of safe*/
-        ) = abi.decode(initializationParams, (string, string, address));
+            address _safeAddr, /*address of safe*/
+            address _forwarder /*Trusted forwarder address for meta-transactions (EIP 2771)*/
+        ) = abi.decode(initializationParams, (string, string, address, address));
 
         bytes memory _anyCall = abi.encodeWithSignature("avatar()"); /*This call can be anything, it just needs to return successfully*/
         Baal _baal = Baal(
@@ -246,6 +247,7 @@ contract BaalSummoner is ModuleProxyFactory {
             _sharesToken,
             gnosisMultisendLibrary,
             _safeAddr,
+            _forwarder,
             _initializationMultisendData
         );
         // can run the actions now because we have a baal
@@ -269,8 +271,9 @@ contract BaalSummoner is ModuleProxyFactory {
     ) internal returns (address) {
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
-            string memory _symbol /*_symbol Symbol for erc20 `shares` accounting*/
-        ) = abi.decode(initializationParams, (string, string));
+            string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
+            address _forwarder /*Trusted forwarder address for meta-transactions (EIP 2771)*/
+        ) = abi.decode(initializationParams, (string, string, address));
 
         bytes memory _anyCall = abi.encodeWithSignature("avatar()"); /*This call can be anything, it just needs to return successfully*/
         Baal _baal = Baal(
@@ -296,6 +299,7 @@ contract BaalSummoner is ModuleProxyFactory {
             _sharesToken,
             gnosisMultisendLibrary,
             _safe,
+            _forwarder,
             _initializationMultisendData
         );
 

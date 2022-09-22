@@ -13,6 +13,7 @@ import "@gnosis.pm/safe-contracts/contracts/base/Executor.sol";
 import "@gnosis.pm/safe-contracts/contracts/GnosisSafe.sol";
 import "@gnosis.pm/zodiac/contracts/core/Module.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
+import "@opengsn/contracts/src/BaseRelayRecipient.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -21,7 +22,7 @@ import "./interfaces/IBaalToken.sol";
 
 /// @title Baal ';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
-contract Baal is Module, EIP712, ReentrancyGuard {
+contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
     using ECDSA for bytes32;
 
     // ERC20 SHARES + LOOT
@@ -62,6 +63,7 @@ contract Baal is Module, EIP712, ReentrancyGuard {
     // MISCELLANEOUS PARAMS
     uint32 public latestSponsoredProposalId; /* the id of the last proposal to be sponsored */
     address public multisendLibrary; /*address of multisend library*/
+    string public override versionRecipient = "2.2.5"; /* version recipient for OpenGSN */
 
     // SIGNATURE HELPERS
     bytes32 constant VOTE_TYPEHASH = keccak256("Vote(string name,address voter,uint32 proposalId,bool support)");
@@ -101,18 +103,18 @@ contract Baal is Module, EIP712, ReentrancyGuard {
     // MODIFIERS
 
     modifier baalOnly() {
-        require(msg.sender == avatar, "!baal");
+        require(_msgSender() == avatar, "!baal");
         _;
     }
 
     modifier baalOrAdminOnly() {
-        require(msg.sender == avatar || isAdmin(msg.sender), "!baal & !admin"); /*check `shaman` is admin*/
+        require(_msgSender() == avatar || isAdmin(_msgSender()), "!baal & !admin"); /*check `shaman` is admin*/
         _;
     }
 
     modifier baalOrManagerOnly() {
         require(
-            msg.sender == avatar || isManager(msg.sender),
+            _msgSender() == avatar || isManager(_msgSender()),
             "!baal & !manager"
         ); /*check `shaman` is manager*/
         _;
@@ -120,7 +122,7 @@ contract Baal is Module, EIP712, ReentrancyGuard {
 
     modifier baalOrGovernorOnly() {
         require(
-            msg.sender == avatar || isGovernor(msg.sender),
+            _msgSender() == avatar || isGovernor(_msgSender()),
             "!baal & !governor"
         ); /*check `shaman` is governor*/
         _;
@@ -231,10 +233,11 @@ contract Baal is Module, EIP712, ReentrancyGuard {
             address _sharesToken, /*shares ERC20 token*/
             address _multisendLibrary, /*address of multisend library*/
             address _avatar, /*Safe contract address*/
+            address _forwarder, /*Trusted forwarder address for meta-transactions (EIP 2771)*/
             bytes memory _initializationMultisendData /*here you call BaalOnly functions to set up initial shares, loot, shamans, periods, etc.*/
         ) = abi.decode(
                 _initializationParams,
-                (address, address, address, address, bytes)
+                (address, address, address, address, address, bytes)
             );
 
         __Ownable_init();
@@ -243,6 +246,9 @@ contract Baal is Module, EIP712, ReentrancyGuard {
         // Set the Gnosis safe address
         avatar = _avatar;
         target = _avatar; /*Set target to same address as avatar on setup - can be changed later via setTarget, though probably not a good idea*/
+
+        // Set trusted forwarder
+        _setTrustedForwarder(_forwarder);
 
         lootToken = IBaalToken(_lootToken);
         sharesToken = IBaalToken(_sharesToken);
@@ -302,7 +308,7 @@ contract Baal is Module, EIP712, ReentrancyGuard {
         );
 
         bool selfSponsor = false; /*plant sponsor flag*/
-        if (sharesToken.getCurrentVotes(msg.sender) >= sponsorThreshold) {
+        if (sharesToken.getCurrentVotes(_msgSender()) >= sponsorThreshold) {
             selfSponsor = true; /*if above sponsor threshold, self-sponsor*/
         } else {
             require(msg.value == proposalOffering, "Baal requires an offering"); /*Optional anti-spam gas token tribute*/
@@ -328,7 +334,7 @@ contract Baal is Module, EIP712, ReentrancyGuard {
                 0, /* no votes */
                 0, /* highestMaxSharesAndLootAtYesVote */
                 [false, false, false, false], /* [cancelled, processed, passed, actionFailed] */
-                selfSponsor ? msg.sender : address(0),
+                selfSponsor ? _msgSender() : address(0),
                 proposalDataHash,
                 details
             );
@@ -358,7 +364,7 @@ contract Baal is Module, EIP712, ReentrancyGuard {
     function sponsorProposal(uint32 id) external nonReentrant {
         Proposal storage prop = proposals[id]; /*alias proposal storage pointers*/
 
-        require(sharesToken.getCurrentVotes(msg.sender) >= sponsorThreshold, "!sponsor"); /*check 'votes > threshold - required to sponsor proposal*/
+        require(sharesToken.getCurrentVotes(_msgSender()) >= sponsorThreshold, "!sponsor"); /*check 'votes > threshold - required to sponsor proposal*/
         require(state(id) == ProposalState.Submitted, "!submitted");
         require(
             prop.expiration == 0 ||
@@ -377,17 +383,17 @@ contract Baal is Module, EIP712, ReentrancyGuard {
         }
 
         prop.prevProposalId = latestSponsoredProposalId;
-        prop.sponsor = msg.sender;
+        prop.sponsor = _msgSender();
         latestSponsoredProposalId = id;
 
-        emit SponsorProposal(msg.sender, id, block.timestamp);
+        emit SponsorProposal(_msgSender(), id, block.timestamp);
     }
 
     /// @notice Submit vote - proposal must exist & voting period must not have ended.
     /// @param id Number of proposal in `proposals` mapping to cast vote on.
     /// @param approved If 'true', member will cast `yesVotes` onto proposal - if 'false', `noVotes` will be counted.
     function submitVote(uint32 id, bool approved) external nonReentrant {
-        _submitVote(msg.sender, id, approved);
+        _submitVote(_msgSender(), id, approved);
     }
 
     /// @notice Submit vote with EIP-712 signature - proposal must exist & voting period must not have ended.
@@ -545,10 +551,10 @@ contract Baal is Module, EIP712, ReentrancyGuard {
         Proposal storage prop = proposals[id];
         require(state(id) == ProposalState.Voting, "!voting");
         require(
-            msg.sender == prop.sponsor ||
+            _msgSender() == prop.sponsor ||
                 sharesToken.getPriorVotes(prop.sponsor, block.timestamp - 1) <
                 sponsorThreshold ||
-                isGovernor(msg.sender),
+                isGovernor(_msgSender()),
             "!cancellable"
         );
         prop.status[0] = true;
@@ -609,12 +615,12 @@ contract Baal is Module, EIP712, ReentrancyGuard {
 
         if (lootToBurn != 0) {
             /*gas optimization*/
-            _burnLoot(msg.sender, lootToBurn); /*subtract `loot` from user account & Baal totals*/
+            _burnLoot(_msgSender(), lootToBurn); /*subtract `loot` from user account & Baal totals*/
         }
 
         if (sharesToBurn != 0) {
             /*gas optimization*/
-            _burnShares(msg.sender, sharesToBurn); /*subtract `shares` from user account & Baal totals with erc20 accounting*/
+            _burnShares(_msgSender(), sharesToBurn); /*subtract `shares` from user account & Baal totals with erc20 accounting*/
         }
 
         for (uint256 i = 0; i < tokens.length; i++) {
@@ -636,7 +642,7 @@ contract Baal is Module, EIP712, ReentrancyGuard {
             }
         }
 
-        emit Ragequit(msg.sender, to, lootToBurn, sharesToBurn, tokens); /*event reflects claims made against Baal*/
+        emit Ragequit(_msgSender(), to, lootToBurn, sharesToBurn, tokens); /*event reflects claims made against Baal*/
     }
 
     /*******************
@@ -835,6 +841,15 @@ contract Baal is Module, EIP712, ReentrancyGuard {
         );
     }
 
+    /// @notice Baal-or-governance only function to set trusted forwarder for meta-transactions.
+    /// @param _trustedForwarderAddress Trusted forwarder's address
+    function setTrustedForwarder(address _trustedForwarderAddress)
+        external
+        baalOrGovernorOnly
+    { 
+        _setTrustedForwarder(_trustedForwarderAddress);
+    }
+
     /***************
     GETTER FUNCTIONS
     ***************/
@@ -976,5 +991,17 @@ contract Baal is Module, EIP712, ReentrancyGuard {
             success && (data.length == 0 || abi.decode(data, (bool))),
             "transfer failed"
         ); /*checks success & allows non-conforming transfers*/
+    }
+
+    /// @notice Provides access to message sender of a meta transaction (EIP-2771)
+    function _msgSender() internal view override(ContextUpgradeable, BaseRelayRecipient)
+        returns (address sender) {
+        sender = BaseRelayRecipient._msgSender();
+    }
+
+    /// @notice Provides access to message data of a meta transaction (EIP-2771)
+    function _msgData() internal view override(ContextUpgradeable, BaseRelayRecipient)
+        returns (bytes calldata) {
+        return BaseRelayRecipient._msgData();
     }
 }
