@@ -2,28 +2,20 @@
 pragma solidity 0.8.7;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20SnapshotUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/draft-ERC20PermitUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
-import "./interfaces/IBaal.sol";
-
 contract Loot is
     ERC20SnapshotUpgradeable,
     ERC20PermitUpgradeable,
+    PausableUpgradeable,
     OwnableUpgradeable,
     UUPSUpgradeable
 {
-    // Baal Config
-    IBaal public baal;
-
-    modifier baalOnly() {
-        require(msg.sender == address(baal), "!auth");
-        _;
-    }
-
     constructor() {
         _disableInitializers();
     }
@@ -36,28 +28,38 @@ contract Loot is
         external
         initializer
     {
-        baal = IBaal(msg.sender); /*Configure Baal to setup sender*/
         __ERC20_init(name_, symbol_);
         __ERC20Permit_init(name_);
+        __Pausable_init();
         __Ownable_init();
     }
 
     /// @notice Allows baal to create a snapshot
-    function snapshot() external baalOnly {
+    function snapshot() external onlyOwner {
         _snapshot();
+    }
+
+    /// @notice Baal-only function to pause shares.
+    function pause() public onlyOwner {
+        _pause();
+    }
+
+    /// @notice Baal-only function to pause shares.
+    function unpause() public onlyOwner {
+        _unpause();
     }
 
     /// @notice Baal-only function to mint loot.
     /// @param recipient Address to receive loot
     /// @param amount Amount to mint
-    function mint(address recipient, uint256 amount) external baalOnly {
+    function mint(address recipient, uint256 amount) external onlyOwner {
         _mint(recipient, amount);
     }
 
     /// @notice Baal-only function to burn loot.
     /// @param account Address to lose loot
     /// @param amount Amount to burn
-    function burn(address account, uint256 amount) external baalOnly {
+    function burn(address account, uint256 amount) external onlyOwner {
         _burn(account, amount);
     }
 
@@ -74,8 +76,8 @@ contract Loot is
         super._beforeTokenTransfer(from, to, amount);
         require(
             from == address(0) || /*Minting allowed*/
-                (msg.sender == address(baal) && to == address(0)) || /*Burning by Baal allowed*/
-                !baal.lootPaused(),
+                (msg.sender == owner() && to == address(0)) || /*Burning by Baal allowed*/
+                !paused(),
             "!transferable"
         );
     }

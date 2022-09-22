@@ -4,11 +4,23 @@ pragma solidity 0.8.7;
 interface IBaalToken {
     function name() external view returns (string memory);
 
+    function symbol() external view returns (string memory);
+
     function setUp(string memory _name, string memory _symbol) external;
 
     function mint(address recipient, uint256 amount) external;
 
     function burn(address account, uint256 amount) external;
+
+    function pause() external;
+
+    function unpause() external;
+
+    function paused() external view returns (bool);
+    
+    function transferOwnership(address newOwner) external;
+
+    function owner() external view returns (address);
 
     function balanceOf(address account) external view returns (uint256);
 

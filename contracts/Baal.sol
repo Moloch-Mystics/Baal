@@ -15,7 +15,6 @@ import "@gnosis.pm/zodiac/contracts/core/Module.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
-import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 import "./interfaces/IBaalToken.sol";
@@ -31,12 +30,6 @@ contract Baal is Module, EIP712, ReentrancyGuard {
     IBaalToken public sharesToken; /*Sub ERC20 for loot mgmt*/
 
     address private constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE; /*ETH reference for redemptions*/
-
-    // ADMIN PARAMETERS
-    bool public lootPaused; /*tracks transferability of `loot` economic weight - amendable through 'period'[2] proposal*/
-    bool public sharesPaused; /*tracks transferability of erc20 `shares` - amendable through 'period'[2] proposal*/
-
-    // MANAGER PARAMS
 
     // GOVERNANCE PARAMS
     uint32 public votingPeriod; /* voting period in seconds - amendable through 'period'[2] proposal*/
@@ -234,16 +227,14 @@ contract Baal is Module, EIP712, ReentrancyGuard {
         nonReentrant
     {
         (
-            string memory _name, /*_name Name for erc20 `shares` accounting*/
-            string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
-            address _lootSingleton, /*template contract to clone for loot ERC20 token*/
-            address _sharesSingleton, /*template contract to clone for loot ERC20 token*/
+            address _lootToken, /*loot ERC20 token*/
+            address _sharesToken, /*shares ERC20 token*/
             address _multisendLibrary, /*address of multisend library*/
             address _avatar, /*Safe contract address*/
             bytes memory _initializationMultisendData /*here you call BaalOnly functions to set up initial shares, loot, shamans, periods, etc.*/
         ) = abi.decode(
                 _initializationParams,
-                (string, string, address, address, address, address, bytes)
+                (address, address, address, address, bytes)
             );
 
         __Ownable_init();
@@ -253,25 +244,8 @@ contract Baal is Module, EIP712, ReentrancyGuard {
         avatar = _avatar;
         target = _avatar; /*Set target to same address as avatar on setup - can be changed later via setTarget, though probably not a good idea*/
 
-        require(_lootSingleton != address(0), "!lootSingleton");
-
-        lootToken = IBaalToken(address(new ERC1967Proxy(
-            _lootSingleton,
-            abi.encodeWithSelector(
-                IBaalToken(_lootSingleton).setUp.selector, 
-                string(abi.encodePacked(_name, " LOOT")), 
-                string(abi.encodePacked(_symbol, "-LOOT")))
-        )));
-
-        require(_sharesSingleton != address(0), "!sharesSingleton");
-
-        sharesToken = IBaalToken(address(new ERC1967Proxy(
-            _sharesSingleton,
-            abi.encodeWithSelector(
-                IBaalToken(_sharesSingleton).setUp.selector, 
-                _name, 
-                _symbol)
-        )));
+        lootToken = IBaalToken(_lootToken);
+        sharesToken = IBaalToken(_sharesToken);
 
         /*Set address of Gnosis multisend library to use for all execution*/
         multisendLibrary = _multisendLibrary;
@@ -292,16 +266,16 @@ contract Baal is Module, EIP712, ReentrancyGuard {
         );
 
         emit SetupComplete(
-            lootPaused,
-            sharesPaused,
+            lootToken.paused(),
+            sharesToken.paused(),
             gracePeriod,
             votingPeriod,
             proposalOffering,
             quorumPercent,
             sponsorThreshold,
             minRetentionPercent,
-            _name,
-            _symbol,
+            sharesToken.name(),
+            sharesToken.symbol(),
             totalShares(),
             totalLoot()
         );
@@ -725,15 +699,25 @@ contract Baal is Module, EIP712, ReentrancyGuard {
     // ****************
     // SHAMAN FUNCTIONS
     // ****************
-    /// @notice Baal-or-admin-only function to set admin config (pause/unpause shares/loot)
+    /// @notice Baal-or-admin-only function to set admin config (pause/unpause shares/loot) and call function on token 
     /// @param pauseShares Turn share transfers on or off
     /// @param pauseLoot Turn loot transfers on or off
     function setAdminConfig(bool pauseShares, bool pauseLoot)
         external
         baalOrAdminOnly
     {
-        sharesPaused = pauseShares; /*set pause `shares`*/
-        lootPaused = pauseLoot; /*set pause `loot`*/
+
+        if(pauseShares && !sharesToken.paused()){
+            sharesToken.pause();
+        } else if(!pauseShares && sharesToken.paused()){
+            sharesToken.unpause();
+        }
+        if(pauseLoot && !lootToken.paused()){
+            lootToken.pause();
+        } else if(!pauseLoot && lootToken.paused()){
+            lootToken.unpause();
+        }
+
         emit SharesPaused(pauseShares);
         emit LootPaused(pauseLoot);
     }

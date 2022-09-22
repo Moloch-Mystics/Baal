@@ -23,6 +23,11 @@ contract MockBaal {
     }
 
     function setLootPaused(bool paused) external {
+        if(!lootToken.paused() && paused){
+            lootToken.pause();
+        } else if(lootToken.paused() && !paused){
+            lootToken.unpause();
+        }
         lootPaused = paused;
     }
 

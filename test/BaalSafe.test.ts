@@ -496,9 +496,6 @@ describe("Baal contract", function () {
     it("verify deployment parameters", async function () {
       const now = await blockTime();
 
-      // const decimals = await baal.decimals()
-      // expect(decimals).to.equal(18)
-
       const gracePeriod = await baal.gracePeriod();
       expect(gracePeriod).to.equal(deploymentConfig.GRACE_PERIOD_IN_SECONDS);
 
@@ -511,11 +508,8 @@ describe("Baal contract", function () {
       // const symbol = await baal.symbol()
       // expect(symbol).to.equal(deploymentConfig.TOKEN_SYMBOL)
 
-      const lootPaused = await baal.lootPaused();
-      expect(lootPaused).to.be.false;
-
-      const sharesPaused = await baal.sharesPaused();
-      expect(sharesPaused).to.be.false;
+      expect(await sharesToken.paused()).to.equal(false);
+      expect(await lootToken.paused()).to.equal(false);
 
       const shamans = await baal.shamans(shaman.address);
       expect(shamans).to.be.equal(7);
@@ -696,8 +690,8 @@ describe("Baal contract", function () {
   describe("shaman actions - permission level 7 (full)", function () {
     it("setAdminConfig", async function () {
       await shamanBaal.setAdminConfig(true, true);
-      expect(await shamanBaal.sharesPaused()).to.equal(true);
-      expect(await shamanBaal.lootPaused()).to.equal(true);
+      expect(await sharesToken.paused()).to.equal(true);
+      expect(await lootToken.paused()).to.equal(true);
     });
 
     it("mint shares - recipient has shares", async function () {
@@ -1137,8 +1131,8 @@ describe("Baal contract", function () {
     it("permission = 1 - admin actions succeed", async function () {
       // admin - success
       await s1Baal.setAdminConfig(true, true);
-      expect(await s1Baal.sharesPaused()).to.equal(true);
-      expect(await s1Baal.lootPaused()).to.equal(true);
+      expect(await sharesToken.paused()).to.equal(true);
+      expect(await lootToken.paused()).to.equal(true);
 
       // manager - fail
       expect(s1Baal.mintShares([s1.address], [69])).to.be.revertedWith(
@@ -1207,8 +1201,8 @@ describe("Baal contract", function () {
     it("permission = 3 - admin + manager actions succeed", async function () {
       // admin - success
       await s3Baal.setAdminConfig(true, true);
-      expect(await s3Baal.sharesPaused()).to.equal(true);
-      expect(await s3Baal.lootPaused()).to.equal(true);
+      expect(await sharesToken.paused()).to.equal(true);
+      expect(await lootToken.paused()).to.equal(true);
 
       // manager - success
       await s3Baal.mintShares([s3.address], [69]);
@@ -1285,8 +1279,8 @@ describe("Baal contract", function () {
     it("permission = 5 - admin + governor actions succeed", async function () {
       // admin - success
       await s5Baal.setAdminConfig(true, true);
-      expect(await s5Baal.sharesPaused()).to.equal(true);
-      expect(await s5Baal.lootPaused()).to.equal(true);
+      expect(await sharesToken.paused()).to.equal(true);
+      expect(await lootToken.paused()).to.equal(true);
 
       // manager - fail
       expect(s5Baal.mintShares([s5.address], [69])).to.be.revertedWith(

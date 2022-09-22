@@ -17,7 +17,7 @@ const revertMessages = {
   lootAlreadyInitialized: 'Initializable: contract is already initialized',
   permitNotAuthorized: 'ERC20Permit: invalid signature',
   permitExpired: 'expired',
-  lootNotBaal: '!auth',
+  lootNotBaal: 'Ownable: caller is not the owner',
   notTransferable: '!transferable',
   transferToZero: 'ERC20: transfer to the zero address'
 }
@@ -74,15 +74,17 @@ describe('Loot ERC20 contract', async function () {
 
   describe('constructor', async function () {
     it('creates an unusable template', async function () {
-      expect(await lootSingleton.baal()).to.equal(zeroAddress)
+      const owner = await lootSingleton.owner();
+      // console.log("owner from tests", owner);
+      expect(await lootSingleton.owner()).to.equal(zeroAddress)
     })
 
     it('require fail - initializer (setup) cant be called twice on loot', async function () {
-      expect(lootToken.setUp('NAME', 'SYMBOL')).to.be.revertedWith(revertMessages.lootAlreadyInitialized)
+      await expect(lootToken.setUp('NAME', 'SYMBOL')).to.be.revertedWith(revertMessages.lootAlreadyInitialized)
     })
 
     it('require fail - initializer (setup) cant be called on singleton', async function () {
-      expect(lootSingleton.setUp('NAME', 'SYMBOL')).to.be.revertedWith(revertMessages.lootAlreadyInitialized)
+      await expect(lootSingleton.setUp('NAME', 'SYMBOL')).to.be.revertedWith(revertMessages.lootAlreadyInitialized)
     })
   })
 
@@ -103,7 +105,7 @@ describe('Loot ERC20 contract', async function () {
     })
 
     it('require fail - non baal tries to mint', async function () {
-      expect(s1Loot.mint(s1.address, 100)).to.be.revertedWith(revertMessages.lootNotBaal)
+      await expect(s1Loot.mint(s1.address, 100)).to.be.revertedWith(revertMessages.lootNotBaal)
     })
 
     it('happy case - allows baal to burn when loot not paused', async function () {
@@ -123,12 +125,12 @@ describe('Loot ERC20 contract', async function () {
 
     it('require fail - non baal tries to burn', async function () {
       await mockBaal.mintLoot(s2.address, 100)
-      expect(s1Loot.burn(s2.address, 50)).to.be.revertedWith(revertMessages.lootNotBaal)
+      await expect(s1Loot.burn(s2.address, 50)).to.be.revertedWith(revertMessages.lootNotBaal)
     })
 
     it('require fail - non baal tries to send to 0', async function () {
       await mockBaal.mintLoot(s2.address, 100)
-      expect(s1Loot.transfer(zeroAddress, 50)).to.be.revertedWith(revertMessages.transferToZero)
+      await expect(s1Loot.transfer(zeroAddress, 50)).to.be.revertedWith(revertMessages.transferToZero)
     })
   })
 
@@ -145,7 +147,7 @@ describe('Loot ERC20 contract', async function () {
     it('require fail - tries to transfer loot when paused', async function () {
       await mockBaal.setLootPaused(true)
       expect(await mockBaal.lootPaused()).to.equal(true)
-      expect(lootToken.transfer(s1.address, 100)).to.be.revertedWith(revertMessages.notTransferable)
+      await expect(lootToken.transfer(s1.address, 100)).to.be.revertedWith(revertMessages.notTransferable)
     })
 
     it('happy case - allows loot to be transfered with approval when enabled', async function () {
@@ -161,7 +163,7 @@ describe('Loot ERC20 contract', async function () {
     it('require fail - tries to transfer with approval loot when paused', async function () {
       await mockBaal.setLootPaused(true)
       await lootToken.approve(s2.address, 100)
-      expect(s2Loot.transferFrom(summoner.address, s1.address, 100)).to.be.revertedWith(revertMessages.notTransferable)
+      await expect(s2Loot.transferFrom(summoner.address, s1.address, 100)).to.be.revertedWith(revertMessages.notTransferable)
     })
 
   })
@@ -205,7 +207,7 @@ describe('Loot ERC20 contract', async function () {
       )
 
       const {v,r,s} = await ethers.utils.splitSignature(permitSignature)
-      expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+      await expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
     })
 
     it('Require fail - invalid chain Id', async function () {
@@ -224,7 +226,7 @@ describe('Loot ERC20 contract', async function () {
       )
 
       const {v,r,s} = await ethers.utils.splitSignature(permitSignature)
-      expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+      await expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
     })
 
     it('Require fail - invalid name', async function () {
@@ -232,7 +234,7 @@ describe('Loot ERC20 contract', async function () {
       const nonce = await lootToken.nonces(summoner.address)
       const permitSignature = await signPermit(chainId, lootToken.address, summoner, 'invalid', summoner.address, s1.address, 500, nonce, deadline)
       const {v,r,s} = await ethers.utils.splitSignature(permitSignature)
-      expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+      await expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
     })
 
     it('Require fail - invalid address', async function () {
@@ -251,7 +253,7 @@ describe('Loot ERC20 contract', async function () {
       )
 
       const {v,r,s} = await ethers.utils.splitSignature(permitSignature)
-      expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+      await expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
     })
 
     it('Require fail - invalid owner', async function () {
@@ -270,7 +272,7 @@ describe('Loot ERC20 contract', async function () {
       )
 
       const {v,r,s} = await ethers.utils.splitSignature(permitSignature)
-      expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+      await expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
     })
 
     it('Require fail - invalid spender', async function () {
@@ -289,7 +291,7 @@ describe('Loot ERC20 contract', async function () {
       )
 
       const {v,r,s} = await ethers.utils.splitSignature(permitSignature)
-      expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+      await expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
     })
 
     it('Require fail - invalid amount', async function () {
@@ -308,7 +310,7 @@ describe('Loot ERC20 contract', async function () {
       )
 
       const {v,r,s} = await ethers.utils.splitSignature(permitSignature)
-      expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+      await expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
     })
 
     it('Require fail - invalid deadline', async function () {
@@ -327,7 +329,7 @@ describe('Loot ERC20 contract', async function () {
       )
 
       const {v,r,s} = await ethers.utils.splitSignature(permitSignature)
-      expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
+      await expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitNotAuthorized)
     })
 
     it('Require fail - expired deadline', async function () {
@@ -346,7 +348,7 @@ describe('Loot ERC20 contract', async function () {
       )
 
       const {v,r,s} = await ethers.utils.splitSignature(permitSignature)
-      expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitExpired)
+      await expect(lootToken.permit(summoner.address, s1.address, 500, deadline, v, r, s)).to.be.revertedWith(revertMessages.permitExpired)
     })
   })
 })

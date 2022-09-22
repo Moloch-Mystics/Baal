@@ -3,6 +3,7 @@ pragma solidity 0.8.7;
 
 import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
 import "@gnosis.pm/safe-contracts/contracts/proxies/GnosisSafeProxyFactory.sol";
+import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 import "./Baal.sol";
 
@@ -143,6 +144,25 @@ contract BaalSummoner is ModuleProxyFactory {
         return daoAddress;
     }
 
+    function deployTokens(string memory _name, string memory _symbol) internal returns (address lootToken, address sharesToken) {
+        lootToken = address(new ERC1967Proxy(
+            lootSingleton,
+            abi.encodeWithSelector(
+                IBaalToken(lootSingleton).setUp.selector, 
+                string(abi.encodePacked(_name, " LOOT")), 
+                string(abi.encodePacked(_symbol, "-LOOT")))
+        ));
+
+        sharesToken = address(new ERC1967Proxy(
+            sharesSingleton,
+            abi.encodeWithSelector(
+                IBaalToken(sharesSingleton).setUp.selector, 
+                _name, 
+                _symbol)
+        ));
+
+    }
+
     function deployAndSetupSafe(address _moduleAddr, uint256 _saltNonce)
         internal
         returns (address)
@@ -209,15 +229,21 @@ contract BaalSummoner is ModuleProxyFactory {
             moduleProxyFactory.deployModule(template, _anyCall, _saltNonce)
         );
 
+        (address _lootToken, address _sharesToken) = deployTokens(_name, _symbol);
+
+        IBaalToken(_lootToken).pause();
+        IBaalToken(_sharesToken).pause();
+
+        IBaalToken(_lootToken).transferOwnership(address(_baal));
+        IBaalToken(_sharesToken).transferOwnership(address(_baal));
+
         bytes memory _initializationMultisendData = encodeMultisend(
             initializationActions,
             address(_baal)
         );
         bytes memory _initializer = abi.encode(
-            _name,
-            _symbol,
-            lootSingleton,
-            sharesSingleton,
+            _lootToken,
+            _sharesToken,
             gnosisMultisendLibrary,
             _safeAddr,
             _initializationMultisendData
@@ -250,8 +276,15 @@ contract BaalSummoner is ModuleProxyFactory {
         Baal _baal = Baal(
             moduleProxyFactory.deployModule(template, _anyCall, _saltNonce)
         );
-
         address _safe = deployAndSetupSafe(address(_baal), _saltNonce);
+        
+        (address _lootToken, address _sharesToken) = deployTokens(_name, _symbol);
+
+        IBaalToken(_lootToken).pause();
+        IBaalToken(_sharesToken).pause();
+
+        IBaalToken(_lootToken).transferOwnership(address(_baal));
+        IBaalToken(_sharesToken).transferOwnership(address(_baal));
 
         bytes memory _initializationMultisendData = encodeMultisend(
             initializationActions,
@@ -259,10 +292,8 @@ contract BaalSummoner is ModuleProxyFactory {
         );
 
         bytes memory _initializer = abi.encode(
-            _name,
-            _symbol,
-            lootSingleton,
-            sharesSingleton,
+            _lootToken,
+            _sharesToken,
             gnosisMultisendLibrary,
             _safe,
             _initializationMultisendData

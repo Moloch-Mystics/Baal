@@ -3,6 +3,7 @@ pragma solidity 0.8.7;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
@@ -13,14 +14,8 @@ import "./interfaces/IBaal.sol";
 
 /// @title Shares
 /// @notice Accounting for Baal non voting shares
-contract Shares is BaalVotes, OwnableUpgradeable, UUPSUpgradeable {
-    // Baal Config
-    IBaal public baal;
+contract Shares is BaalVotes, OwnableUpgradeable, PausableUpgradeable, UUPSUpgradeable {
 
-    modifier baalOnly() {
-        require(msg.sender == address(baal), "!auth");
-        _;
-    }
     constructor() {
         _disableInitializers();
     }
@@ -33,17 +28,27 @@ contract Shares is BaalVotes, OwnableUpgradeable, UUPSUpgradeable {
         external
         initializer
     {
-        baal = IBaal(msg.sender); /*Configure Baal to setup sender*/
         __ERC20_init(name_, symbol_);
         __ERC20Permit_init(name_);
+        __Pausable_init();
         __Ownable_init();
 
+    }
+
+    /// @notice Baal-only function to pause shares.
+    function pause() public onlyOwner {
+        _pause();
+    }
+
+    /// @notice Baal-only function to unpause shares.
+    function unpause() public onlyOwner {
+        _unpause();
     }
 
     /// @notice Baal-only function to mint shares.
     /// @param recipient Address to receive shares
     /// @param amount Amount to mint
-    function mint(address recipient, uint256 amount) external baalOnly {
+    function mint(address recipient, uint256 amount) external onlyOwner {
         unchecked {
             if (totalSupply() + amount <= type(uint256).max / 2) {
                 _mint(recipient, amount);
@@ -54,7 +59,7 @@ contract Shares is BaalVotes, OwnableUpgradeable, UUPSUpgradeable {
     /// @notice Baal-only function to burn shares.
     /// @param account Address to lose shares
     /// @param amount Amount to burn
-    function burn(address account, uint256 amount) external baalOnly {
+    function burn(address account, uint256 amount) external onlyOwner {
         _burn(account, amount);
     }
 
@@ -71,8 +76,8 @@ contract Shares is BaalVotes, OwnableUpgradeable, UUPSUpgradeable {
         super._beforeTokenTransfer(from, to, amount);
         require(
             from == address(0) || /*Minting allowed*/
-                (msg.sender == address(baal) && to == address(0)) || /*Burning by Baal allowed*/
-                !baal.sharesPaused(),
+                (msg.sender == owner() && to == address(0)) || /*Burning by Baal allowed*/
+                !paused(),
             "!transferable"
         );
     }
