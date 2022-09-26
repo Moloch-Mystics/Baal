@@ -327,27 +327,25 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
 
         bytes32 proposalDataHash = hashOperation(proposalData); /*Store only hash of proposal data*/
 
-        unchecked {
-            proposalCount++; /*increment proposal counter*/
-            proposals[proposalCount] = Proposal( /*push params into proposal struct - start voting period timer if member submission*/
-                proposalCount,
-                selfSponsor ? latestSponsoredProposalId : 0, /* prevProposalId */
-                selfSponsor ? uint32(block.timestamp) : 0, /* votingStarts */
-                selfSponsor ? uint32(block.timestamp) + votingPeriod : 0, /* votingEnds */
-                selfSponsor
-                    ? uint32(block.timestamp) + votingPeriod + gracePeriod
-                    : 0, /* graceEnds */
-                expiration,
-                baalGas,
-                0, /* yes votes */
-                0, /* no votes */
-                0, /* highestMaxSharesAndLootAtYesVote */
-                [false, false, false, false], /* [cancelled, processed, passed, actionFailed] */
-                selfSponsor ? _msgSender() : address(0),
-                proposalDataHash,
-                details
-            );
-        }
+        proposalCount++; /*increment proposal counter*/
+        proposals[proposalCount] = Proposal( /*push params into proposal struct - start voting period timer if member submission*/
+            proposalCount,
+            selfSponsor ? latestSponsoredProposalId : 0, /* prevProposalId */
+            selfSponsor ? uint32(block.timestamp) : 0, /* votingStarts */
+            selfSponsor ? uint32(block.timestamp) + votingPeriod : 0, /* votingEnds */
+            selfSponsor
+                ? uint32(block.timestamp) + votingPeriod + gracePeriod
+                : 0, /* graceEnds */
+            expiration,
+            baalGas,
+            0, /* yes votes */
+            0, /* no votes */
+            0, /* highestMaxSharesAndLootAtYesVote */
+            [false, false, false, false], /* [cancelled, processed, passed, actionFailed] */
+            selfSponsor ? _msgSender() : address(0),
+            proposalDataHash,
+            details
+        );
 
         if (selfSponsor) {
             latestSponsoredProposalId = proposalCount;
