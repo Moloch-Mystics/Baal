@@ -15,14 +15,14 @@ import "@gnosis.pm/zodiac/contracts/core/Module.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@opengsn/contracts/src/BaseRelayRecipient.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/utils/cryptography/draft-EIP712Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
 import "./interfaces/IBaalToken.sol";
 
 /// @title Baal ';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
-contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
+contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRelayRecipient {
     using ECDSA for bytes32;
 
     // ERC20 SHARES + LOOT
@@ -63,7 +63,7 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
     // MISCELLANEOUS PARAMS
     uint32 public latestSponsoredProposalId; /* the id of the last proposal to be sponsored */
     address public multisendLibrary; /*address of multisend library*/
-    string public override versionRecipient = "2.2.5"; /* version recipient for OpenGSN */
+    string public override versionRecipient; /* version recipient for OpenGSN */
 
     // SIGNATURE HELPERS
     bytes32 constant VOTE_TYPEHASH = keccak256("Vote(string name,address voter,uint32 proposalId,bool support)");
@@ -218,8 +218,6 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
         );
     }
 
-    constructor() EIP712("Vote", "4") initializer {} /*Configure template to be unusable*/
-
     /// @notice Summon Baal with voting configuration & initial array of `members` accounts with `shares` & `loot` weights.
     /// @param _initializationParams Encoded setup information.
     function setUp(bytes memory _initializationParams)
@@ -240,7 +238,16 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
                 (address, address, address, address, address, bytes)
             );
 
+        require(_lootToken != address(0), '!lootToken');
+        require(_sharesToken != address(0), '!sharesToken');
+        require(_multisendLibrary != address(0), '!multisendLibrary');
+        require(_avatar != address(0), '!avatar');
+        // no need to check _forwarder address exists, the default is address(0) for no forwarder
+
+        versionRecipient = "2.2.5";
         __Ownable_init();
+        __ReentrancyGuard_init();
+        __EIP712_init("Vote", "4");
         transferOwnership(_avatar);
 
         // Set the Gnosis safe address
@@ -707,7 +714,7 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
     // ****************
     // SHAMAN FUNCTIONS
     // ****************
-    /// @notice Baal-or-admin-only function to set admin config (pause/unpause shares/loot) and call function on token 
+    /// @notice Baal-or-admin-only function to set admin config (pause/unpause shares/loot) and call function on token
     /// @param pauseShares Turn share transfers on or off
     /// @param pauseLoot Turn loot transfers on or off
     function setAdminConfig(bool pauseShares, bool pauseLoot)
@@ -848,7 +855,7 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
     function setTrustedForwarder(address _trustedForwarderAddress)
         external
         baalOrGovernorOnly
-    { 
+    {
         _setTrustedForwarder(_trustedForwarderAddress);
     }
 
