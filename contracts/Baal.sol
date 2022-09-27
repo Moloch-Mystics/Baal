@@ -275,7 +275,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
                 _initializationMultisendData,
                 Enum.Operation.DelegateCall
             ),
-            "call failure"
+            "call failure setup"
         );
 
         emit SetupComplete(
@@ -580,7 +580,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
         bytes calldata _data
     ) external baalOnly {
         (bool success, ) = _to.call{value: _value}(_data);
-        require(success, "call failure");
+        require(success, "call failure execute");
     }
 
     // ****************
@@ -832,12 +832,22 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
                 _governanceConfig,
                 (uint32, uint32, uint256, uint256, uint256, uint256)
             );
+        require(quorum >= 0 && minRetention <= 100, 'bad quorum');
+        require(minRetention >= 0 && minRetention <= 100, 'bad minRetention');
+        
+        // on initialization of governance config, there is no shares token
+        // skip this check on initialization of governance config.
+        if (sponsorThreshold > 0 && address(sharesToken) != address(0)) {
+            require(sponsor <= totalShares(), 'sponsor > sharesSupply');
+        }
+
         if (voting != 0) votingPeriod = voting; /*if positive, reset min. voting periods to first `value`*/
         if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to second `value`*/
         proposalOffering = newOffering; /*set new proposal offering amount */
         quorumPercent = quorum;
         sponsorThreshold = sponsor;
         minRetentionPercent = minRetention;
+
         emit GovernanceConfigSet(
             voting,
             grace,

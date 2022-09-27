@@ -57,13 +57,16 @@ contract BaalSummoner is ModuleProxyFactory {
         require(_lootSingleton != address(0), "!lootSingleton");
         require(_sharesSingleton != address(0), "!sharesSingleton");
         require(_gnosisSingleton != address(0), "!gnosisSingleton");
+        require(_gnosisFallbackLibrary != address(0), '!gnosisFallbackLibrary');
+        require(_gnosisMultisendLibrary != address(0), '!gnosisMultisendLibrary');
+        require(_gnosisSafeProxyFactory != address(0), '!gnosisSafeProxyFactory');
+        require(_moduleProxyFactory != address(0), '!moduleProxyFactory');
+
         template = _template;
         gnosisSingleton = _gnosisSingleton;
         gnosisFallbackLibrary = _gnosisFallbackLibrary;
         gnosisMultisendLibrary = _gnosisMultisendLibrary;
-        gnosisSafeProxyFactory = GnosisSafeProxyFactory(
-            _gnosisSafeProxyFactory
-        );
+        gnosisSafeProxyFactory = GnosisSafeProxyFactory(_gnosisSafeProxyFactory);
         moduleProxyFactory = ModuleProxyFactory(_moduleProxyFactory);
         lootSingleton = _lootSingleton;
         sharesSingleton = _sharesSingleton;

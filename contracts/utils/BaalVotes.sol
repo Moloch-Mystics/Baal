@@ -94,6 +94,7 @@ abstract contract BaalVotes is ERC20PermitUpgradeable {
             r,
             s
         );
+        require(signer != address(0), "ERC20Votes: invalid signer (0x0)");
         require(nonce == _useNonce(signer), "ERC20Votes: invalid nonce");
         _delegate(signer, delegatee);
     }

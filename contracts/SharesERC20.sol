@@ -28,6 +28,9 @@ contract Shares is BaalVotes, OwnableUpgradeable, PausableUpgradeable, UUPSUpgra
         external
         initializer
     {
+        require(bytes(name_).length != 0, "Sname empty");
+        require(bytes(symbol_).length != 0, "Ssymbol empty");
+
         __ERC20_init(name_, symbol_);
         __ERC20Permit_init(name_);
         __Pausable_init();
