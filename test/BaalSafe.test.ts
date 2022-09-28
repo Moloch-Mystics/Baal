@@ -25,15 +25,10 @@ import {
   hashOperation,
 } from "../src/util";
 import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
-import { buildContractCall } from "@gnosis.pm/safe-contracts";
 import { ContractFactory, ContractTransaction, utils } from "ethers";
-import { Test } from "mocha";
 import signVote from "../src/signVote";
 import signDelegation from "../src/signDelegation";
-import signPermit from "../src/signPermit";
-import { string } from "hardhat/internal/core/params/argumentTypes";
 import { calculateProxyAddress } from "@gnosis.pm/zodiac";
-import { Address } from "cluster";
 
 use(solidity);
 
@@ -2508,17 +2503,19 @@ describe("Baal contract", function () {
     });
 
     it("happy case - yes vote", async function () {
+      const expiry = await blockTime() + 1200;
       const signature = await signVote(
         chainId,
         baal.address,
         summoner,
         deploymentConfig.TOKEN_NAME,
+        expiry,
         1,
         true
       );
 
       const {v,r,s} = await ethers.utils.splitSignature(signature);
-      await baal.submitVoteWithSig(summoner.address, 1, true, v, r, s);
+      await baal.submitVoteWithSig(summoner.address, expiry, 1, true, v, r, s);
       const prop = await baal.proposals(1);
       const nCheckpoints = await sharesToken.numCheckpoints(summoner.address);
       const votes = (
@@ -2532,37 +2529,42 @@ describe("Baal contract", function () {
       expect(prop.yesVotes).to.equal(votes);
     });
 
+
     it("fail case - fails with different voter", async function () {
+      const expiry = await blockTime() + 1200;
       const signature = await signVote(
         chainId,
         baal.address,
         summoner,
         deploymentConfig.TOKEN_NAME,
+        expiry,
         1,
         true
       );
 
       const {v,r,s} = await ethers.utils.splitSignature(signature);
       expect(
-        baal.submitVoteWithSig(applicant.address, 1, true, v, r, s)
+        baal.submitVoteWithSig(applicant.address, expiry, 1, true, v, r, s)
       ).to.be.revertedWith("invalid signature");
     });
 
     it("fail case - cant vote twice", async function () {
+      const expiry = await blockTime() + 1200;
       const signature = await signVote(
         chainId,
         baal.address,
         summoner,
         deploymentConfig.TOKEN_NAME,
+        expiry,
         1,
         true
       );
 
       const {v,r,s} = await ethers.utils.splitSignature(signature);
-      await baal.submitVoteWithSig(summoner.address, 1, true, v, r, s);
+      await baal.submitVoteWithSig(summoner.address, expiry, 1, true, v, r, s);
 
       expect(
-        baal.submitVoteWithSig(summoner.address, 1, true, v, r, s)
+        baal.submitVoteWithSig(summoner.address, expiry, 1, true, v, r, s)
       ).to.be.revertedWith("voted");
     });
   });

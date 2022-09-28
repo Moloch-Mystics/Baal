@@ -14,7 +14,6 @@ import "@gnosis.pm/safe-contracts/contracts/GnosisSafe.sol";
 import "@gnosis.pm/zodiac/contracts/core/Module.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@opengsn/contracts/src/BaseRelayRecipient.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts-upgradeable/utils/cryptography/draft-EIP712Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
@@ -23,7 +22,7 @@ import "./interfaces/IBaalToken.sol";
 /// @title Baal ';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
 contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRelayRecipient {
-    using ECDSA for bytes32;
+    using ECDSAUpgradeable for bytes32;
 
     // ERC20 SHARES + LOOT
 
@@ -66,7 +65,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
     string public override versionRecipient; /* version recipient for OpenGSN */
 
     // SIGNATURE HELPERS
-    bytes32 constant VOTE_TYPEHASH = keccak256("Vote(string name,address voter,uint32 proposalId,bool support)");
+    bytes32 constant VOTE_TYPEHASH = keccak256("Vote(string name,address voter,uint256 expiry,uint32 proposalId,bool support)");
 
     // DATA STRUCTURES
     struct Proposal {
@@ -408,6 +407,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
 
     /// @notice Submit vote with EIP-712 signature - proposal must exist & voting period must not have ended.
     /// @param voter Address of member who submitted vote.
+    /// @param expiry Expiration of signature.
     /// @param id Number of proposal in `proposals` mapping to cast vote on.
     /// @param approved If 'true', member will cast `yesVotes` onto proposal - if 'false', `noVotes` will be counted.
     /// @param v v in signature
@@ -415,24 +415,27 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
     /// @param s s in signature
     function submitVoteWithSig(
         address voter,
+        uint256 expiry,
         uint32 id,
         bool approved,
         uint8 v,
         bytes32 r,
         bytes32 s
     ) external nonReentrant {
+        require(block.timestamp <= expiry, "ERC20Votes: signature expired");
         /*calculate EIP-712 struct hash*/
         bytes32 structHash = keccak256(
             abi.encode(
                 VOTE_TYPEHASH,
                 keccak256(abi.encodePacked(sharesToken.name())),
                 voter,
+                expiry,
                 id,
                 approved
             )
         );
         bytes32 hash = _hashTypedDataV4(structHash);
-        address signer = ECDSA.recover(hash, v, r, s);
+        address signer = ECDSAUpgradeable.recover(hash, v, r, s);
 
         require(signer == voter, "invalid signature");
         require(signer != address(0), "!signer");
