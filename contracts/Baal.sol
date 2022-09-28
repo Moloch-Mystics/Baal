@@ -734,17 +734,19 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
 
         if(pauseShares && !sharesToken.paused()){
             sharesToken.pause();
+            emit SharesPaused(true);
         } else if(!pauseShares && sharesToken.paused()){
             sharesToken.unpause();
-        }
-        if(pauseLoot && !lootToken.paused()){
-            lootToken.pause();
-        } else if(!pauseLoot && lootToken.paused()){
-            lootToken.unpause();
+            emit SharesPaused(false);
         }
 
-        emit SharesPaused(pauseShares);
-        emit LootPaused(pauseLoot);
+        if(pauseLoot && !lootToken.paused()){
+            lootToken.pause();
+            emit LootPaused(true);
+        } else if(!pauseLoot && lootToken.paused()){
+            lootToken.unpause();
+            emit LootPaused(false);
+        }
     }
 
     /// @notice Baal-or-manager-only function to mint shares.
