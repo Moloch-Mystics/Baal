@@ -195,6 +195,9 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
     ); /*emits when gov config changes*/
     event SharesPaused(bool paused); /*emits when shares are paused or unpaused*/
     event LootPaused(bool paused); /*emits when loot is paused or unpaused*/
+    event LockAdmin(bool adminLock); /*emits when admin is locked*/
+    event LockManager(bool managerLock); /*emits when admin is locked*/
+    event LockGovernor(bool governorLock); /*emits when admin is locked*/
 
     function encodeMultisend(bytes[] memory _calls, address _target)
         external
@@ -697,16 +700,22 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
     /// @notice Lock admin so setShamans cannot be called with admin changes
     function lockAdmin() external baalOnly {
         adminLock = true;
+
+        emit LockAdmin(adminLock);
     }
 
     /// @notice Lock manager so setShamans cannot be called with manager changes
     function lockManager() external baalOnly {
         managerLock = true;
+
+        emit LockManager(managerLock);
     }
 
     /// @notice Lock governor so setShamans cannot be called with governor changes
     function lockGovernor() external baalOnly {
         governorLock = true;
+
+        emit LockGovernor(governorLock);
     }
 
     // ****************
@@ -834,7 +843,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
             );
         require(quorum >= 0 && minRetention <= 100, 'bad quorum');
         require(minRetention >= 0 && minRetention <= 100, 'bad minRetention');
-        
+
         // on initialization of governance config, there is no shares token
         // skip this check on initialization of governance config.
         if (sponsorThreshold > 0 && address(sharesToken) != address(0)) {
