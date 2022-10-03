@@ -488,7 +488,8 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
     {
         Proposal storage prop = proposals[id]; /*alias `proposal` storage pointers*/
 
-        require(state(id) == ProposalState.Ready, "!ready");
+        require(prop.sponsor != address(0), "!sponsor"); /*check proposal has been sponsored*/
+        require(state(id) == ProposalState.Ready, "!ready"); /* check proposal is Ready to process */
 
         ProposalState prevProposalState = state(prop.prevProposalId);
         require(

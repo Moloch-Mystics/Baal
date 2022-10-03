@@ -44,7 +44,7 @@ const revertMessages = {
   submitProposalOffering: "Baal requires an offering",
   submitVoteTimeEnded: "ended",
   sponsorProposalExpired: "expired",
-  sponsorProposalSponsor: "!sponsor",
+  proposalNotSponsored: "!sponsor",
   sponsorProposalNotSubmitted: "!submitted",
   submitVoteNotSponsored: "!sponsored",
   submitVoteNotVoting: "!voting",
@@ -54,6 +54,7 @@ const revertMessages = {
   submitVoteWithSigVoted: "voted",
   submitVoteWithSigMember: "!member",
   processProposalNotReady: "!ready",
+  proposalNotSponsored: '!sponsor',
   ragequitUnordered: "!order",
   // unsetGuildTokensLastToken: 'reverted with panic code 0x32 (Array accessed at an out-of-bounds or negative index)',
   sharesTransferPaused: "!transferable",
@@ -2300,7 +2301,7 @@ describe("Baal contract", function () {
       );
 
       await expect(shamanBaal.sponsorProposal(1)).to.be.revertedWith(
-        revertMessages.sponsorProposalSponsor
+        revertMessages.proposalNotSponsored
       );
     });
 
@@ -2725,8 +2726,21 @@ describe("Baal contract", function () {
       await baal.submitVote(1, yes);
       const state = await baal.state(2);
       expect(state).to.equal(STATES.UNBORN);
+    });
+
+    it("require fail - no sponser", async function () {
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        proposal.baalGas,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      const state = await baal.state(2);
+      expect(state).to.equal(STATES.UNBORN);
+      proposal.sponsor = null;
       await expect(baal.processProposal(2, proposal.data)).to.be.revertedWith(
-        revertMessages.processProposalNotReady
+        revertMessages.proposalNotSponsored
       );
     });
 
@@ -2780,7 +2794,7 @@ describe("Baal contract", function () {
         ethers.utils.id(proposal.details)
       );
       await expect(baal.processProposal(1, proposal.data)).to.be.revertedWith(
-        revertMessages.processProposalNotReady
+        revertMessages.proposalNotSponsored
       ); // fail at submitted
       await baal.sponsorProposal(1);
       await expect(baal.processProposal(1, proposal.data)).to.be.revertedWith(
