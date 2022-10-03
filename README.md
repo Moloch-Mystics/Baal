@@ -93,6 +93,38 @@ the dao contracts and the Safe treasury and one to use an existing Safe treasury
 - ./tests - test files
 
 ----
+
+## Coverage
+
+currently, coverage is turned off for test efficiency purposes. In order to switch coverage on, add `yul` to the hardhat config:
+
+```
+{
+  ...
+  compilers: [
+    {
+      version: "0.8.7",
+      settings: {
+        optimizer: {
+          enabled: true,
+          runs: 200,
+          details: {
+            yul: true
+          }
+        },
+      },
+    }
+  ]
+}
+```
+
+then run the coverage command:
+
+```
+npx hardhat coverage
+```
+
+----
 ## Privileged roles
 - Shamans - are specific addresses that have more granular control
 outside the standard governance proposal flow. These addresses should
