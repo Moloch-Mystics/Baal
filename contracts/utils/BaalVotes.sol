@@ -164,10 +164,9 @@ abstract contract BaalVotes is ERC20PermitUpgradeable {
         unchecked {
             if (
                 nCheckpoints != 0 &&
-                getCheckpoint(delegatee, nCheckpoints - 1).fromTimeStamp ==
-                timeStamp
+                checkpoints[delegatee][nCheckpoints - 1].fromTimeStamp == timeStamp
             ) {
-                getCheckpoint(delegatee, nCheckpoints - 1).votes = newVotes;
+                checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
             } else {
                 checkpoints[delegatee][nCheckpoints] = Checkpoint(
                     timeStamp,
