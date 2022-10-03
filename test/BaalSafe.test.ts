@@ -54,7 +54,6 @@ const revertMessages = {
   submitVoteWithSigVoted: "voted",
   submitVoteWithSigMember: "!member",
   processProposalNotReady: "!ready",
-  proposalNotSponsored: '!sponsor',
   ragequitUnordered: "!order",
   // unsetGuildTokensLastToken: 'reverted with panic code 0x32 (Array accessed at an out-of-bounds or negative index)',
   sharesTransferPaused: "!transferable",
@@ -2511,12 +2510,13 @@ describe("Baal contract", function () {
         summoner,
         deploymentConfig.TOKEN_NAME,
         expiry,
+        0,
         1,
         true
       );
 
       const {v,r,s} = await ethers.utils.splitSignature(signature);
-      await baal.submitVoteWithSig(summoner.address, expiry, 1, true, v, r, s);
+      await baal.submitVoteWithSig(summoner.address, expiry, 0, 1, true, v, r, s);
       const prop = await baal.proposals(1);
       const nCheckpoints = await sharesToken.numCheckpoints(summoner.address);
       const votes = (
@@ -2526,6 +2526,7 @@ describe("Baal contract", function () {
         summoner.address,
         prop.votingStarts
       );
+      expect(await baal.votingNonces(summoner.address)).to.equal(1);
       expect(priorVotes).to.equal(votes);
       expect(prop.yesVotes).to.equal(votes);
     });
@@ -2539,14 +2540,16 @@ describe("Baal contract", function () {
         summoner,
         deploymentConfig.TOKEN_NAME,
         expiry,
+        0,
         1,
         true
       );
 
       const {v,r,s} = await ethers.utils.splitSignature(signature);
       expect(
-        baal.submitVoteWithSig(applicant.address, expiry, 1, true, v, r, s)
+        baal.submitVoteWithSig(applicant.address, expiry, 0, 1, true, v, r, s)
       ).to.be.revertedWith("invalid signature");
+      expect(await baal.votingNonces(applicant.address)).to.equal(0);
     });
 
     it("fail case - cant vote twice", async function () {
@@ -2557,16 +2560,29 @@ describe("Baal contract", function () {
         summoner,
         deploymentConfig.TOKEN_NAME,
         expiry,
+        0,
         1,
         true
       );
 
       const {v,r,s} = await ethers.utils.splitSignature(signature);
-      await baal.submitVoteWithSig(summoner.address, expiry, 1, true, v, r, s);
+      await baal.submitVoteWithSig(summoner.address, expiry, 0, 1, true, v, r, s);
 
+      const signatureTwo = await signVote(
+        chainId,
+        baal.address,
+        summoner,
+        deploymentConfig.TOKEN_NAME,
+        expiry,
+        1,
+        1,
+        true
+      );
+      const sigTwo = await ethers.utils.splitSignature(signatureTwo);
       expect(
-        baal.submitVoteWithSig(summoner.address, expiry, 1, true, v, r, s)
+        baal.submitVoteWithSig(summoner.address, expiry, 1, 1, true, sigTwo.v, sigTwo.r, sigTwo.s)
       ).to.be.revertedWith("voted");
+      expect(await baal.votingNonces(summoner.address)).to.equal(1);
     });
   });
 

@@ -57,6 +57,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
 
     // PROPOSAL TRACKING
     mapping(address => mapping(uint32 => bool)) public memberVoted; /*maps members to their proposal votes (true = voted) */
+    mapping(address => uint256) public votingNonces; /*maps members to their voting nonce*/
     mapping(uint256 => Proposal) public proposals; /*maps `proposal id` to struct details*/
 
     // MISCELLANEOUS PARAMS
@@ -65,7 +66,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
     string public override versionRecipient; /* version recipient for OpenGSN */
 
     // SIGNATURE HELPERS
-    bytes32 constant VOTE_TYPEHASH = keccak256("Vote(string name,address voter,uint256 expiry,uint32 proposalId,bool support)");
+    bytes32 constant VOTE_TYPEHASH = keccak256("Vote(string name,address voter,uint256 expiry,uint256 nonce,uint32 proposalId,bool support)");
 
     // DATA STRUCTURES
     struct Proposal {
@@ -416,6 +417,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
     function submitVoteWithSig(
         address voter,
         uint256 expiry,
+        uint256 nonce,
         uint32 id,
         bool approved,
         uint8 v,
@@ -423,6 +425,8 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
         bytes32 s
     ) external nonReentrant {
         require(block.timestamp <= expiry, "ERC20Votes: signature expired");
+        require(nonce == votingNonces[voter], "!nonce");
+
         /*calculate EIP-712 struct hash*/
         bytes32 structHash = keccak256(
             abi.encode(
@@ -430,6 +434,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
                 keccak256(abi.encodePacked(sharesToken.name())),
                 voter,
                 expiry,
+                nonce,
                 id,
                 approved
             )
@@ -439,6 +444,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
 
         require(signer == voter, "invalid signature");
         require(signer != address(0), "!signer");
+        votingNonces[voter] += 1;
 
         _submitVote(signer, id, approved);
     }
