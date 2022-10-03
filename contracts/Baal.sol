@@ -246,7 +246,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
         require(_avatar != address(0), '!avatar');
         // no need to check _forwarder address exists, the default is address(0) for no forwarder
 
-        versionRecipient = "2.2.5";
+        versionRecipient = "2.2.5+opengsn.payablewithbaal.irelayrecipient";
         __Ownable_init();
         __ReentrancyGuard_init();
         __EIP712_init("Vote", "4");
