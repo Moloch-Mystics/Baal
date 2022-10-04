@@ -14,16 +14,15 @@ import "@gnosis.pm/safe-contracts/contracts/GnosisSafe.sol";
 import "@gnosis.pm/zodiac/contracts/core/Module.sol";
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "@opengsn/contracts/src/BaseRelayRecipient.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/utils/cryptography/draft-EIP712Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
 import "./interfaces/IBaalToken.sol";
 
 /// @title Baal ';_;'.
 /// @notice Flexible guild contract inspired by Moloch DAO framework.
-contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
-    using ECDSA for bytes32;
+contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRelayRecipient {
+    using ECDSAUpgradeable for bytes32;
 
     // ERC20 SHARES + LOOT
 
@@ -58,15 +57,16 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
 
     // PROPOSAL TRACKING
     mapping(address => mapping(uint32 => bool)) public memberVoted; /*maps members to their proposal votes (true = voted) */
+    mapping(address => uint256) public votingNonces; /*maps members to their voting nonce*/
     mapping(uint256 => Proposal) public proposals; /*maps `proposal id` to struct details*/
 
     // MISCELLANEOUS PARAMS
     uint32 public latestSponsoredProposalId; /* the id of the last proposal to be sponsored */
     address public multisendLibrary; /*address of multisend library*/
-    string public override versionRecipient = "2.2.5"; /* version recipient for OpenGSN */
+    string public override versionRecipient; /* version recipient for OpenGSN */
 
     // SIGNATURE HELPERS
-    bytes32 constant VOTE_TYPEHASH = keccak256("Vote(string name,address voter,uint32 proposalId,bool support)");
+    bytes32 constant VOTE_TYPEHASH = keccak256("Vote(string name,address voter,uint256 expiry,uint256 nonce,uint32 proposalId,bool support)");
 
     // DATA STRUCTURES
     struct Proposal {
@@ -195,6 +195,9 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
     ); /*emits when gov config changes*/
     event SharesPaused(bool paused); /*emits when shares are paused or unpaused*/
     event LootPaused(bool paused); /*emits when loot is paused or unpaused*/
+    event LockAdmin(bool adminLock); /*emits when admin is locked*/
+    event LockManager(bool managerLock); /*emits when admin is locked*/
+    event LockGovernor(bool governorLock); /*emits when admin is locked*/
 
     function encodeMultisend(bytes[] memory _calls, address _target)
         external
@@ -218,8 +221,6 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
         );
     }
 
-    constructor() EIP712("Vote", "4") initializer {} /*Configure template to be unusable*/
-
     /// @notice Summon Baal with voting configuration & initial array of `members` accounts with `shares` & `loot` weights.
     /// @param _initializationParams Encoded setup information.
     function setUp(bytes memory _initializationParams)
@@ -240,7 +241,16 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
                 (address, address, address, address, address, bytes)
             );
 
+        require(_lootToken != address(0), '!lootToken');
+        require(_sharesToken != address(0), '!sharesToken');
+        require(_multisendLibrary != address(0), '!multisendLibrary');
+        require(_avatar != address(0), '!avatar');
+        // no need to check _forwarder address exists, the default is address(0) for no forwarder
+
+        versionRecipient = "2.2.5+opengsn.payablewithbaal.irelayrecipient";
         __Ownable_init();
+        __ReentrancyGuard_init();
+        __EIP712_init("Vote", "4");
         transferOwnership(_avatar);
 
         // Set the Gnosis safe address
@@ -268,7 +278,7 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
                 _initializationMultisendData,
                 Enum.Operation.DelegateCall
             ),
-            "call failure"
+            "call failure setup"
         );
 
         emit SetupComplete(
@@ -320,27 +330,25 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
 
         bytes32 proposalDataHash = hashOperation(proposalData); /*Store only hash of proposal data*/
 
-        unchecked {
-            proposalCount++; /*increment proposal counter*/
-            proposals[proposalCount] = Proposal( /*push params into proposal struct - start voting period timer if member submission*/
-                proposalCount,
-                selfSponsor ? latestSponsoredProposalId : 0, /* prevProposalId */
-                selfSponsor ? uint32(block.timestamp) : 0, /* votingStarts */
-                selfSponsor ? uint32(block.timestamp) + votingPeriod : 0, /* votingEnds */
-                selfSponsor
-                    ? uint32(block.timestamp) + votingPeriod + gracePeriod
-                    : 0, /* graceEnds */
-                expiration,
-                baalGas,
-                0, /* yes votes */
-                0, /* no votes */
-                0, /* highestMaxSharesAndLootAtYesVote */
-                [false, false, false, false], /* [cancelled, processed, passed, actionFailed] */
-                selfSponsor ? _msgSender() : address(0),
-                proposalDataHash,
-                details
-            );
-        }
+        proposalCount++; /*increment proposal counter*/
+        proposals[proposalCount] = Proposal( /*push params into proposal struct - start voting period timer if member submission*/
+            proposalCount,
+            selfSponsor ? latestSponsoredProposalId : 0, /* prevProposalId */
+            selfSponsor ? uint32(block.timestamp) : 0, /* votingStarts */
+            selfSponsor ? uint32(block.timestamp) + votingPeriod : 0, /* votingEnds */
+            selfSponsor
+                ? uint32(block.timestamp) + votingPeriod + gracePeriod
+                : 0, /* graceEnds */
+            expiration,
+            baalGas,
+            0, /* yes votes */
+            0, /* no votes */
+            0, /* highestMaxSharesAndLootAtYesVote */
+            [false, false, false, false], /* [cancelled, processed, passed, actionFailed] */
+            selfSponsor ? _msgSender() : address(0),
+            proposalDataHash,
+            details
+        );
 
         if (selfSponsor) {
             latestSponsoredProposalId = proposalCount;
@@ -400,6 +408,7 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
 
     /// @notice Submit vote with EIP-712 signature - proposal must exist & voting period must not have ended.
     /// @param voter Address of member who submitted vote.
+    /// @param expiry Expiration of signature.
     /// @param id Number of proposal in `proposals` mapping to cast vote on.
     /// @param approved If 'true', member will cast `yesVotes` onto proposal - if 'false', `noVotes` will be counted.
     /// @param v v in signature
@@ -407,27 +416,35 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
     /// @param s s in signature
     function submitVoteWithSig(
         address voter,
+        uint256 expiry,
+        uint256 nonce,
         uint32 id,
         bool approved,
         uint8 v,
         bytes32 r,
         bytes32 s
     ) external nonReentrant {
+        require(block.timestamp <= expiry, "ERC20Votes: signature expired");
+        require(nonce == votingNonces[voter], "!nonce");
+
         /*calculate EIP-712 struct hash*/
         bytes32 structHash = keccak256(
             abi.encode(
                 VOTE_TYPEHASH,
                 keccak256(abi.encodePacked(sharesToken.name())),
                 voter,
+                expiry,
+                nonce,
                 id,
                 approved
             )
         );
         bytes32 hash = _hashTypedDataV4(structHash);
-        address signer = ECDSA.recover(hash, v, r, s);
+        address signer = ECDSAUpgradeable.recover(hash, v, r, s);
 
         require(signer == voter, "invalid signature");
         require(signer != address(0), "!signer");
+        votingNonces[voter] += 1;
 
         _submitVote(signer, id, approved);
     }
@@ -477,7 +494,8 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
     {
         Proposal storage prop = proposals[id]; /*alias `proposal` storage pointers*/
 
-        require(state(id) == ProposalState.Ready, "!ready");
+        require(prop.sponsor != address(0), "!sponsor"); /*check proposal has been sponsored*/
+        require(state(id) == ProposalState.Ready, "!ready"); /* check proposal is Ready to process */
 
         ProposalState prevProposalState = state(prop.prevProposalId);
         require(
@@ -575,7 +593,7 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
         bytes calldata _data
     ) external baalOnly {
         (bool success, ) = _to.call{value: _value}(_data);
-        require(success, "call failure");
+        require(success, "call failure execute");
     }
 
     // ****************
@@ -692,22 +710,28 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
     /// @notice Lock admin so setShamans cannot be called with admin changes
     function lockAdmin() external baalOnly {
         adminLock = true;
+
+        emit LockAdmin(adminLock);
     }
 
     /// @notice Lock manager so setShamans cannot be called with manager changes
     function lockManager() external baalOnly {
         managerLock = true;
+
+        emit LockManager(managerLock);
     }
 
     /// @notice Lock governor so setShamans cannot be called with governor changes
     function lockGovernor() external baalOnly {
         governorLock = true;
+
+        emit LockGovernor(governorLock);
     }
 
     // ****************
     // SHAMAN FUNCTIONS
     // ****************
-    /// @notice Baal-or-admin-only function to set admin config (pause/unpause shares/loot) and call function on token 
+    /// @notice Baal-or-admin-only function to set admin config (pause/unpause shares/loot) and call function on token
     /// @param pauseShares Turn share transfers on or off
     /// @param pauseLoot Turn loot transfers on or off
     function setAdminConfig(bool pauseShares, bool pauseLoot)
@@ -717,17 +741,19 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
 
         if(pauseShares && !sharesToken.paused()){
             sharesToken.pause();
+            emit SharesPaused(true);
         } else if(!pauseShares && sharesToken.paused()){
             sharesToken.unpause();
-        }
-        if(pauseLoot && !lootToken.paused()){
-            lootToken.pause();
-        } else if(!pauseLoot && lootToken.paused()){
-            lootToken.unpause();
+            emit SharesPaused(false);
         }
 
-        emit SharesPaused(pauseShares);
-        emit LootPaused(pauseLoot);
+        if(pauseLoot && !lootToken.paused()){
+            lootToken.pause();
+            emit LootPaused(true);
+        } else if(!pauseLoot && lootToken.paused()){
+            lootToken.unpause();
+            emit LootPaused(false);
+        }
     }
 
     /// @notice Baal-or-manager-only function to mint shares.
@@ -827,12 +853,22 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
                 _governanceConfig,
                 (uint32, uint32, uint256, uint256, uint256, uint256)
             );
+        require(quorum >= 0 && minRetention <= 100, 'bad quorum');
+        require(minRetention >= 0 && minRetention <= 100, 'bad minRetention');
+
+        // on initialization of governance config, there is no shares token
+        // skip this check on initialization of governance config.
+        if (sponsorThreshold > 0 && address(sharesToken) != address(0)) {
+            require(sponsor <= totalShares(), 'sponsor > sharesSupply');
+        }
+
         if (voting != 0) votingPeriod = voting; /*if positive, reset min. voting periods to first `value`*/
         if (grace != 0) gracePeriod = grace; /*if positive, reset grace period to second `value`*/
         proposalOffering = newOffering; /*set new proposal offering amount */
         quorumPercent = quorum;
         sponsorThreshold = sponsor;
         minRetentionPercent = minRetention;
+
         emit GovernanceConfigSet(
             voting,
             grace,
@@ -848,7 +884,7 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
     function setTrustedForwarder(address _trustedForwarderAddress)
         external
         baalOrGovernorOnly
-    { 
+    {
         _setTrustedForwarder(_trustedForwarderAddress);
     }
 

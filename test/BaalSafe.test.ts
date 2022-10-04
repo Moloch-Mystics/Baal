@@ -25,15 +25,10 @@ import {
   hashOperation,
 } from "../src/util";
 import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
-import { buildContractCall } from "@gnosis.pm/safe-contracts";
 import { ContractFactory, ContractTransaction, utils } from "ethers";
-import { Test } from "mocha";
 import signVote from "../src/signVote";
 import signDelegation from "../src/signDelegation";
-import signPermit from "../src/signPermit";
-import { string } from "hardhat/internal/core/params/argumentTypes";
 import { calculateProxyAddress } from "@gnosis.pm/zodiac";
-import { Address } from "cluster";
 
 use(solidity);
 
@@ -49,7 +44,7 @@ const revertMessages = {
   submitProposalOffering: "Baal requires an offering",
   submitVoteTimeEnded: "ended",
   sponsorProposalExpired: "expired",
-  sponsorProposalSponsor: "!sponsor",
+  proposalNotSponsored: "!sponsor",
   sponsorProposalNotSubmitted: "!submitted",
   submitVoteNotSponsored: "!sponsored",
   submitVoteNotVoting: "!voting",
@@ -157,7 +152,7 @@ const getBaalParams = async function (
   shamans: [string[], number[]],
   shares: [string[], number[]],
   loots: [string[], number[]],
-  trustedForwarder: string, 
+  trustedForwarder: string,
 ) {
   const governanceConfig = abiCoder.encode(
     ["uint32", "uint32", "uint256", "uint256", "uint256", "uint256"],
@@ -197,7 +192,7 @@ const getBaalParams = async function (
   const posterFromBaal = await baal.interface.encodeFunctionData(
     "executeAsBaal",
     [poster.address, 0, postMetaData]
-  ); 
+  );
 
   const initalizationActions = [
     setAdminConfig,
@@ -644,11 +639,11 @@ describe("Baal contract", function () {
     it("can eject and upgrade token with eoa", async function () {
       // upgrade token contracts to remove baal deps
       // call from safe
-      // remove baal module 
+      // remove baal module
 
       // owner should be baal
       expect(await sharesToken.owner()).to.equal(baal.address);
-      
+
       const transferOwnershipAction = await sharesToken.interface.encodeFunctionData(
         "transferOwnership",
         [summoner.address]
@@ -665,7 +660,7 @@ describe("Baal contract", function () {
         .withArgs(1, true, false);
 
       expect(await sharesToken.owner()).to.equal(summoner.address);
-  
+
       let BaalLessSharesFactory: ContractFactory;
 
       BaalLessSharesFactory = await ethers.getContractFactory("BaalLessShares");
@@ -674,9 +669,9 @@ describe("Baal contract", function () {
       const sharesTokenAsOwnerEoa = await sharesToken.connect(summoner);
       expect(await baalLessSharesSingleton.version()).to.equal(0);
       console.log('upgrade');
-      
+
       await sharesTokenAsOwnerEoa.upgradeToAndCall(
-        baalLessSharesSingleton.address, 
+        baalLessSharesSingleton.address,
         baalLessSharesSingleton.interface.encodeFunctionData("setUp", [
           2
       ]))
@@ -692,7 +687,7 @@ describe("Baal contract", function () {
 
       expect(await sharesToken.balanceOf(summoner.address)).to.equal(200);
 
-      
+
     });
   });
   describe("shaman actions - permission level 7 (full)", function () {
@@ -2305,7 +2300,7 @@ describe("Baal contract", function () {
       );
 
       await expect(shamanBaal.sponsorProposal(1)).to.be.revertedWith(
-        revertMessages.sponsorProposalSponsor
+        revertMessages.proposalNotSponsored
       );
     });
 
@@ -2508,17 +2503,20 @@ describe("Baal contract", function () {
     });
 
     it("happy case - yes vote", async function () {
+      const expiry = await blockTime() + 1200;
       const signature = await signVote(
         chainId,
         baal.address,
         summoner,
         deploymentConfig.TOKEN_NAME,
+        expiry,
+        0,
         1,
         true
       );
 
       const {v,r,s} = await ethers.utils.splitSignature(signature);
-      await baal.submitVoteWithSig(summoner.address, 1, true, v, r, s);
+      await baal.submitVoteWithSig(summoner.address, expiry, 0, 1, true, v, r, s);
       const prop = await baal.proposals(1);
       const nCheckpoints = await sharesToken.numCheckpoints(summoner.address);
       const votes = (
@@ -2528,42 +2526,63 @@ describe("Baal contract", function () {
         summoner.address,
         prop.votingStarts
       );
+      expect(await baal.votingNonces(summoner.address)).to.equal(1);
       expect(priorVotes).to.equal(votes);
       expect(prop.yesVotes).to.equal(votes);
     });
 
+
     it("fail case - fails with different voter", async function () {
+      const expiry = await blockTime() + 1200;
       const signature = await signVote(
         chainId,
         baal.address,
         summoner,
         deploymentConfig.TOKEN_NAME,
+        expiry,
+        0,
         1,
         true
       );
 
       const {v,r,s} = await ethers.utils.splitSignature(signature);
       expect(
-        baal.submitVoteWithSig(applicant.address, 1, true, v, r, s)
+        baal.submitVoteWithSig(applicant.address, expiry, 0, 1, true, v, r, s)
       ).to.be.revertedWith("invalid signature");
+      expect(await baal.votingNonces(applicant.address)).to.equal(0);
     });
 
     it("fail case - cant vote twice", async function () {
+      const expiry = await blockTime() + 1200;
       const signature = await signVote(
         chainId,
         baal.address,
         summoner,
         deploymentConfig.TOKEN_NAME,
+        expiry,
+        0,
         1,
         true
       );
 
       const {v,r,s} = await ethers.utils.splitSignature(signature);
-      await baal.submitVoteWithSig(summoner.address, 1, true, v, r, s);
+      await baal.submitVoteWithSig(summoner.address, expiry, 0, 1, true, v, r, s);
 
+      const signatureTwo = await signVote(
+        chainId,
+        baal.address,
+        summoner,
+        deploymentConfig.TOKEN_NAME,
+        expiry,
+        1,
+        1,
+        true
+      );
+      const sigTwo = await ethers.utils.splitSignature(signatureTwo);
       expect(
-        baal.submitVoteWithSig(summoner.address, 1, true, v, r, s)
+        baal.submitVoteWithSig(summoner.address, expiry, 1, 1, true, sigTwo.v, sigTwo.r, sigTwo.s)
       ).to.be.revertedWith("voted");
+      expect(await baal.votingNonces(summoner.address)).to.equal(1);
     });
   });
 
@@ -2723,8 +2742,21 @@ describe("Baal contract", function () {
       await baal.submitVote(1, yes);
       const state = await baal.state(2);
       expect(state).to.equal(STATES.UNBORN);
+    });
+
+    it("require fail - no sponser", async function () {
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        proposal.baalGas,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      const state = await baal.state(2);
+      expect(state).to.equal(STATES.UNBORN);
+      proposal.sponsor = null;
       await expect(baal.processProposal(2, proposal.data)).to.be.revertedWith(
-        revertMessages.processProposalNotReady
+        revertMessages.proposalNotSponsored
       );
     });
 
@@ -2778,7 +2810,7 @@ describe("Baal contract", function () {
         ethers.utils.id(proposal.details)
       );
       await expect(baal.processProposal(1, proposal.data)).to.be.revertedWith(
-        revertMessages.processProposalNotReady
+        revertMessages.proposalNotSponsored
       ); // fail at submitted
       await baal.sponsorProposal(1);
       await expect(baal.processProposal(1, proposal.data)).to.be.revertedWith(

@@ -5,6 +5,8 @@ export default async function signVote(
   contractAddress: string,
   signer: SignerWithAddress,
   name: string,
+  expiry: number,
+  nonce: number,
   proposalId: number,
   support: boolean
 
@@ -20,6 +22,8 @@ export default async function signVote(
     Vote: [
       { name: 'name', type: 'string' },
       { name: 'voter', type: 'address' },
+      { name: 'expiry', type: 'uint256' },
+      { name: 'nonce', type: 'uint256' },
       { name: 'proposalId', type: 'uint32' },
       { name: 'support', type: 'bool' },
     ],
@@ -28,6 +32,8 @@ export default async function signVote(
   const values = {
     name,
     voter: signer.address,
+    expiry,
+    nonce,
     proposalId,
     support
   }

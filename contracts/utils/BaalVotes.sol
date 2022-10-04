@@ -94,6 +94,7 @@ abstract contract BaalVotes is ERC20PermitUpgradeable {
             r,
             s
         );
+        require(signer != address(0), "ERC20Votes: invalid signer (0x0)");
         require(nonce == _useNonce(signer), "ERC20Votes: invalid nonce");
         _delegate(signer, delegatee);
     }
@@ -163,10 +164,9 @@ abstract contract BaalVotes is ERC20PermitUpgradeable {
         unchecked {
             if (
                 nCheckpoints != 0 &&
-                getCheckpoint(delegatee, nCheckpoints - 1).fromTimeStamp ==
-                timeStamp
+                checkpoints[delegatee][nCheckpoints - 1].fromTimeStamp == timeStamp
             ) {
-                getCheckpoint(delegatee, nCheckpoints - 1).votes = newVotes;
+                checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
             } else {
                 checkpoints[delegatee][nCheckpoints] = Checkpoint(
                     timeStamp,
