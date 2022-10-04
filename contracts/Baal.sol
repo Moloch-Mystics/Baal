@@ -308,7 +308,9 @@ contract Baal is Module, EIP712, ReentrancyGuard, BaseRelayRecipient {
         );
 
         bool selfSponsor = false; /*plant sponsor flag*/
-        if (sharesToken.getCurrentVotes(_msgSender()) >= sponsorThreshold) {
+        if (sharesToken.getCurrentVotes(_msgSender()) >= sponsorThreshold ||
+            sharesToken.getCurrentVotes(tx.origin) >= sponsorThreshold /*if called by a middleware contract (e.g. minion) & above sponsor threshold*/
+        ) {
             selfSponsor = true; /*if above sponsor threshold, self-sponsor*/
         } else {
             require(msg.value == proposalOffering, "Baal requires an offering"); /*Optional anti-spam gas token tribute*/

@@ -98,8 +98,9 @@ contract TributeMinion {
         uint256 shares,
         uint256 loot,
         uint32 expiration,
+        uint256 baalgas,
         string memory details
-    ) external {
+    ) external payable {
         uint32 proposalId = baal.proposalCount() + 1;
         bytes memory encodedProposal = encodeTributeProposal(
             address(baal),
@@ -116,7 +117,7 @@ contract TributeMinion {
             false,
             baal.target()
         );
-        baal.submitProposal(encodedProposal, expiration, 0, details);
+        baal.submitProposal{value:msg.value}(encodedProposal, expiration, baalgas, details);
         emit TributeProposal(address(baal), token, amount, msg.sender, proposalId);
     }
 

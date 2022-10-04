@@ -67,11 +67,12 @@ async function blockNumber() {
 async function moveForwardPeriods(periods: number, extra?: number) {
   const goToTime =
     (await blockTime()) +
-    deploymentConfig.VOTING_PERIOD_IN_SECONDS * periods +
+    defaultDAOSettings.VOTING_PERIOD_IN_SECONDS * periods +
     (extra ? extra : 0);
   await ethers.provider.send("evm_mine", [goToTime]);
   return true;
 }
+
 const getNewBaalAddresses = async (
   tx: ContractTransaction
 ): Promise<{ baal: string; loot: string; safe: string }> => {
@@ -86,10 +87,10 @@ const getNewBaalAddresses = async (
   return { baal, loot, safe };
 };
 
-const deploymentConfig = {
+const defaultDAOSettings = {
   GRACE_PERIOD_IN_SECONDS: 43200,
   VOTING_PERIOD_IN_SECONDS: 432000,
-  PROPOSAL_OFFERING: 0,
+  PROPOSAL_OFFERING: 69,
   SPONSOR_THRESHOLD: 1,
   MIN_RETENTION_PERCENT: 0,
   MIN_STAKING_PERCENT: 0,
@@ -105,20 +106,22 @@ const metadataConfig = {
 
 const abiCoder = ethers.utils.defaultAbiCoder;
 
+type DAOSettings = {
+  PROPOSAL_OFFERING: any;
+  GRACE_PERIOD_IN_SECONDS: any;
+  VOTING_PERIOD_IN_SECONDS: any;
+  QUORUM_PERCENT: any;
+  SPONSOR_THRESHOLD: any;
+  MIN_RETENTION_PERCENT: any;
+  MIN_STAKING_PERCENT: any;
+  TOKEN_NAME: any;
+  TOKEN_SYMBOL: any;
+};
+
 const getBaalParams = async function (
   baal: Baal,
   poster: Poster,
-  config: {
-    PROPOSAL_OFFERING: any;
-    GRACE_PERIOD_IN_SECONDS: any;
-    VOTING_PERIOD_IN_SECONDS: any;
-    QUORUM_PERCENT: any;
-    SPONSOR_THRESHOLD: any;
-    MIN_RETENTION_PERCENT: any;
-    MIN_STAKING_PERCENT: any;
-    TOKEN_NAME: any;
-    TOKEN_SYMBOL: any;
-  },
+  config: DAOSettings,
   adminConfig: [boolean, boolean],
   shamans: [string[], number[]],
   shares: [string[], number[]],
@@ -228,8 +231,6 @@ describe("Tribute proposal type", function () {
 
   let proposal: { [key: string]: any };
 
-  let encodedInitParams: any;
-
   const loot = 500;
   const shares = 100;
   const sharesPaused = false;
@@ -237,6 +238,33 @@ describe("Tribute proposal type", function () {
 
   const yes = true;
   const no = false;
+
+  const setupBaal = async (
+    baal: Baal,
+    poster: Poster,
+    config: DAOSettings,
+    adminConfig: [boolean, boolean],
+    shamans: [string[], number[]],
+    shares: [string[], number[]],
+    loots: [string[], number[]]
+  ) => {
+    const saltNonce = (Math.random() * 1000).toFixed(0);
+    const encodedInitParams = await getBaalParams(
+      baal,
+      poster,
+      config,
+      adminConfig,
+      shamans,
+      shares,
+      loots,
+    );
+    const tx = await baalSummoner.summonBaalAndSafe(
+      encodedInitParams.initParams,
+      encodedInitParams.initalizationActions,
+      saltNonce,
+    );
+    return await getNewBaalAddresses(tx);
+  };
 
   this.beforeAll(async function () {
     LootFactory = await ethers.getContractFactory("Loot");
@@ -290,10 +318,10 @@ describe("Tribute proposal type", function () {
       sharesSingleton.address,
     )) as BaalSummoner;
 
-    encodedInitParams = await getBaalParams(
+    const addresses = await setupBaal(
       baalSingleton,
       poster,
-      deploymentConfig,
+      defaultDAOSettings,
       [sharesPaused, lootPaused],
       [[shaman.address], [7]],
       [
@@ -305,12 +333,6 @@ describe("Tribute proposal type", function () {
         [loot, loot],
       ]
     );
-    const tx = await baalSummoner.summonBaalAndSafe(
-      encodedInitParams.initParams,
-      encodedInitParams.initalizationActions,
-      101
-    );
-    const addresses = await getNewBaalAddresses(tx);
 
     baal = BaalFactory.attach(addresses.baal) as Baal;
     gnosisSafe = BaalFactory.attach(addresses.safe) as GnosisSafe;
@@ -347,6 +369,7 @@ describe("Tribute proposal type", function () {
       data: selfTransferAction,
       details: "all hail baal",
       expiration: 0,
+      baalGas: 0,
     };
   });
 
@@ -378,7 +401,8 @@ describe("Tribute proposal type", function () {
         encodedProposal,
         proposal.expiration,
         0,
-        ethers.utils.id(proposal.details)
+        ethers.utils.id(proposal.details),
+        {value: defaultDAOSettings.PROPOSAL_OFFERING}
       );
       await baal.submitVote(1, yes);
       await moveForwardPeriods(2);
@@ -421,13 +445,15 @@ describe("Tribute proposal type", function () {
         encodedProposal,
         proposal.expiration,
         0,
-        ethers.utils.id(proposal.details)
+        ethers.utils.id(proposal.details),
+        {value: defaultDAOSettings.PROPOSAL_OFFERING}
       );
       await baal.submitProposal(
         maliciousProposal,
         proposal.expiration,
         0,
-        ethers.utils.id(proposal.details)
+        ethers.utils.id(proposal.details),
+        {value: defaultDAOSettings.PROPOSAL_OFFERING}
       );
       await baal.submitVote(1, no);
       await baal.submitVote(2, yes);
@@ -439,62 +465,252 @@ describe("Tribute proposal type", function () {
     });
   });
 
-  describe("safe tribute", function () {
+  const baalOverride = async (daoSettings: DAOSettings) => {
+    const addresses = await setupBaal(
+      baalSingleton,
+      poster,
+      daoSettings,
+      [sharesPaused, lootPaused],
+      [[shaman.address], [7]],
+      [
+        [summoner.address, applicant.address],
+        [shares + 1, shares],
+      ],
+      [
+        [summoner.address, applicant.address],
+        [loot, loot],
+      ]
+    );
+    baal = BaalFactory.attach(addresses.baal) as Baal;
+    gnosisSafe = BaalFactory.attach(addresses.safe) as GnosisSafe;
+    const sharesTokenAddress = await baal.sharesToken();
+    sharesToken = SharesFactory.attach(sharesTokenAddress) as Shares;
+  };
+
+  const submitAndProcessTributeProposal = async (
+    tributeMinion: TributeMinion,
+    baal: Baal,
+    applicantAddress: string,
+    tributeToken: string,
+    tribute: number,
+    requestedShares: number,
+    requestedLoot: number,
+    sponsor: boolean = true,
+    proposalId: number = 1,
+    proposalOffering: number = 0,
+  ) => {
+    await tributeMinion.submitTributeProposal(
+      baal.address,
+      tributeToken,
+      tribute,
+      requestedShares,
+      requestedLoot,
+      proposal.expiration,
+      proposal.baalGas,
+      "tribute",
+      {value: proposalOffering},
+    );
+    if (sponsor) {
+      await baal.sponsorProposal(proposalId);
+    }
+    await baal.submitVote(proposalId, yes);
+    await moveForwardPeriods(2);
+
+    const encodedProposal = await tributeMinion.encodeTributeProposal(
+      baal.address,
+      requestedShares,
+      requestedLoot,
+      applicantAddress,
+      proposalId,
+      tributeMinion.address,
+    );
+
+    await baal.processProposal(proposalId, encodedProposal);
+
+    const state = await baal.state(proposalId);
+    const propStatus = await baal.getProposalStatus(proposalId);
+    console.log({ state, propStatus });
+  };
+
+  describe("Baal with NO proposal offering - Safe Tribute Proposal", function () {
+    let daoConfig: DAOSettings;
     let tributeMinion: TributeMinion;
     this.beforeEach(async function () {
+      daoConfig = {
+        ...defaultDAOSettings,
+        PROPOSAL_OFFERING: 0,
+        SPONSOR_THRESHOLD: 0,
+      };
       const TributeMinionContract = await ethers.getContractFactory(
         "TributeMinion"
       );
       tributeMinion = (await TributeMinionContract.deploy()) as TributeMinion;
     });
+
     it("allows external tribute minion to submit share proposal in exchange for tokens", async function () {
       const applicantTributeMinion = tributeMinion.connect(applicant);
 
       expect(await applicantWeth.balanceOf(gnosisSafe.address)).to.equal(0);
       expect(await applicantWeth.balanceOf(applicant.address)).to.equal(1000);
 
-      const cuurentShares = await sharesToken.balanceOf(applicant.address);
+      const currentShares = await sharesToken.balanceOf(applicant.address);
 
       await applicantWeth.approve(tributeMinion.address, 10000);
 
-      await applicantTributeMinion.submitTributeProposal(
+      const tribute = 100;
+      const requestedShares = 1234;
+      const requestedLoot = 1007;
+      await submitAndProcessTributeProposal(
+        applicantTributeMinion,
+        baal,
+        applicant.address,
+        applicantWeth.address,
+        tribute,
+        requestedShares,
+        requestedLoot,
+        false,
+      );
+
+      expect(await sharesToken.balanceOf(applicant.address)).to.equal(
+        requestedShares + parseInt(currentShares.toString())
+      );
+      expect(await applicantWeth.balanceOf(gnosisSafe.address)).to.equal(tribute);
+    });
+
+    it("tribute without proposal offering", async function () {
+      const currentShares = await sharesToken.balanceOf(applicant.address);
+
+      const applicantTributeMinion = tributeMinion.connect(applicant);
+
+      expect(await applicantWeth.balanceOf(gnosisSafe.address)).to.equal(0);
+      expect(await applicantWeth.balanceOf(applicant.address)).to.equal(1000);
+
+      await applicantWeth.approve(tributeMinion.address, 10000);
+
+      const tribute = 100;
+      const requestedShares = 1234;
+      const requestedLoot = 1007;
+      await submitAndProcessTributeProposal(
+        applicantTributeMinion,
+        baal,
+        applicant.address,
+        applicantWeth.address,
+        tribute,
+        requestedShares,
+        requestedLoot,
+        false,
+      );
+      expect(await sharesToken.balanceOf(applicant.address)).to.equal(
+        requestedShares + parseInt(currentShares.toString())
+      );
+      expect(await applicantWeth.balanceOf(gnosisSafe.address)).to.equal(tribute);
+    });
+  });
+
+  describe("Baal with proposal offering - Safe Tribute Proposal", function () {
+    let daoConfig: DAOSettings;
+    let tributeMinion: TributeMinion;
+    this.beforeEach(async function () {
+      daoConfig = {
+        ...defaultDAOSettings,
+        PROPOSAL_OFFERING: 69,
+        SPONSOR_THRESHOLD: 101,
+      };
+      const TributeMinionContract = await ethers.getContractFactory(
+        "TributeMinion"
+      );
+      tributeMinion = (await TributeMinionContract.deploy()) as TributeMinion;
+      await baalOverride(daoConfig);
+    });
+
+    it("allows external tribute minion to submit share proposal in exchange for tokens", async function () {
+      const applicantTributeMinion = tributeMinion.connect(applicant);
+
+      expect(await applicantWeth.balanceOf(gnosisSafe.address)).to.equal(0);
+      expect(await applicantWeth.balanceOf(applicant.address)).to.equal(1000);
+
+      const currentShares = await sharesToken.balanceOf(applicant.address);
+
+      await applicantWeth.approve(tributeMinion.address, 10000);
+
+      const tribute = 100;
+      const requestedShares = 1234;
+      const requestedLoot = 1007;
+      const proposalId = 1;
+      const proposalOffering = daoConfig.PROPOSAL_OFFERING;
+      await submitAndProcessTributeProposal(
+        applicantTributeMinion,
+        baal,
+        applicant.address,
+        applicantWeth.address,
+        tribute,
+        requestedShares,
+        requestedLoot,
+        true,
+        proposalId,
+        proposalOffering,
+      );
+
+      expect(await sharesToken.balanceOf(applicant.address)).to.equal(
+        requestedShares + parseInt(currentShares.toString())
+      );
+      expect(await applicantWeth.balanceOf(gnosisSafe.address)).to.equal(tribute);
+    });
+
+    it("should not fail to tribute without offering", async function () {
+      const currentShares = await sharesToken.balanceOf(summoner.address);
+      // CONDITION: Member should be able to self-sponsor if shares >= SPONSOR_THRESHOLD
+      expect(currentShares.gte(BigNumber.from(daoConfig.SPONSOR_THRESHOLD)));
+
+      const summonerTributeMinion = tributeMinion.connect(summoner);
+      const requestedShares = 1234;
+      const tribute = 1000;
+      const tributeToken = weth.connect(summoner);
+
+      expect(await tributeToken.balanceOf(gnosisSafe.address)).to.equal(0);
+      expect(await tributeToken.balanceOf(summoner.address)).to.gte(tribute);
+
+      await tributeToken.approve(tributeMinion.address, tribute);
+
+      await submitAndProcessTributeProposal(
+        summonerTributeMinion,
+        baal,
+        summoner.address,
+        tributeToken.address,
+        tribute,
+        requestedShares,
+        0,
+        false,
+      );
+
+      expect(await sharesToken.balanceOf(summoner.address))
+        .to.eq(
+          currentShares.add(BigNumber.from(requestedShares)),
+        );
+    });
+
+    it("fails to tribute without offering", async function () {
+      const currentShares = await sharesToken.balanceOf(applicant.address);
+      // CONDITION: Member should send tribute if shares < SPONSOR_THRESHOLD
+      expect(currentShares.lt(BigNumber.from(daoConfig.SPONSOR_THRESHOLD)));
+
+      const applicantTributeMinion = tributeMinion.connect(applicant);
+
+      expect(await applicantWeth.balanceOf(gnosisSafe.address)).to.equal(0);
+      expect(await applicantWeth.balanceOf(applicant.address)).to.equal(1000);
+
+      await applicantWeth.approve(tributeMinion.address, 10000);
+
+      await expect(applicantTributeMinion.submitTributeProposal(
         baal.address,
         applicantWeth.address,
         100,
         1234,
         1007,
         proposal.expiration,
+        proposal.baalGas,
         "tribute"
-      );
-      await baal.sponsorProposal(1);
-      await baal.submitVote(1, yes);
-      await moveForwardPeriods(2);
-
-      const encodedProposal = await tributeMinion.encodeTributeProposal(
-        baal.address,
-        1234,
-        1007,
-        applicant.address,
-        1,
-        tributeMinion.address
-      );
-
-      const decoded = decodeMultiAction(multisend, encodedProposal);
-
-      // TODO: why is this commented out
-      // await tributeMinion.releaseEscrow(baal.address,1)
-
-      await baal.processProposal(1, encodedProposal);
-
-      const state = await baal.state(1);
-      // const propData = await baal.proposals(1)
-      const propStatus = await baal.getProposalStatus(1);
-      console.log({ state, propStatus });
-
-      expect(await sharesToken.balanceOf(applicant.address)).to.equal(
-        1234 + parseInt(cuurentShares.toString())
-      );
-      expect(await applicantWeth.balanceOf(gnosisSafe.address)).to.equal(100);
+      )).to.be.revertedWith(revertMessages.submitProposalOffering);   
     });
   });
 });

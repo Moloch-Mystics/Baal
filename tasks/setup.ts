@@ -95,7 +95,8 @@ task("tributeprop", "Approve token and make a tribute proposal")
   .addParam("amount", "Tribute token amount")
   .addParam("shares", "Tribute shares requested")
   .addParam("loot", "Tribute loot requested")
-  .addParam("expiration", "Tribute expiration date. 0 for none")
+  .addParam("baalGas", "Tribute baal gas date. 0 for none")
+  .addParam("expiration", "Tribute expiration date. 0 for ignore")
   .setAction(async (taskArgs, hre) => {
     const Baal = await hre.ethers.getContractFactory("Baal");
     const baal = (await Baal.attach(taskArgs.dao));
@@ -128,6 +129,7 @@ task("tributeprop", "Approve token and make a tribute proposal")
       taskArgs.shares,
       taskArgs.loot,
       taskArgs.expiration,
+      taskArgs.baalGas,
       "tribute from cli"
     );
     console.log("Tribute proposal submitted txhash:", tributeProposal.hash);
