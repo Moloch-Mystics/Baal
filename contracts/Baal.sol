@@ -241,10 +241,13 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
                 (address, address, address, address, address, bytes)
             );
 
-        require(_lootToken != address(0), '!lootToken');
-        require(_sharesToken != address(0), '!sharesToken');
-        require(_multisendLibrary != address(0), '!multisendLibrary');
-        require(_avatar != address(0), '!avatar');
+        require(
+            _lootToken != address(0) &&
+                _sharesToken != address(0) &&
+                _multisendLibrary != address(0) &&
+                _avatar != address(0),
+            "0 addr used"
+        );
         // no need to check _forwarder address exists, the default is address(0) for no forwarder
 
         versionRecipient = "2.2.5+opengsn.payablewithbaal.irelayrecipient";
