@@ -2179,7 +2179,6 @@ describe("Baal contract", function () {
       expect(proposalData.yesVotes).to.equal(0);
       expect(proposalData.noVotes).to.equal(0);
       expect(proposalData.expiration).to.equal(proposal.expiration);
-      expect(proposalData.details).to.equal(ethers.utils.id(proposal.details));
       expect(hashOperation(proposal.data)).to.equal(
         proposalData.proposalDataHash
       );
