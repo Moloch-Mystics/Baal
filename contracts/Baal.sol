@@ -84,7 +84,6 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
         bool[4] status; /* [cancelled, processed, passed, actionFailed] */
         address sponsor; /* address of the sponsor - set at sponsor proposal - relevant for cancellation */
         bytes32 proposalDataHash; /*hash of raw data associated with state updates*/
-        string details; /*human-readable context for proposal*/
     }
 
     /* Unborn -> Submitted -> Voting -> Grace -> Ready -> Processed
@@ -349,8 +348,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
             0, /* highestMaxSharesAndLootAtYesVote */
             [false, false, false, false], /* [cancelled, processed, passed, actionFailed] */
             selfSponsor ? _msgSender() : address(0),
-            proposalDataHash,
-            details
+            proposalDataHash
         );
 
         if (selfSponsor) {
