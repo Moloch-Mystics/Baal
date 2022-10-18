@@ -11,7 +11,18 @@ import * as fs from "fs";
 import "@typechain/hardhat";
 import '@nomiclabs/hardhat-ethers'
 
-import "./tasks/setup";
+/*
+  when compiled contracts do not exist,
+  importing "tasks/setup" will fail the compile task itself.
+
+  this is a circular dependency that exists on the tasks themselves.
+
+  conditionally loading tasks if the artifacts folder exists
+  allows the config to skip the first compile.
+*/
+if (fs.existsSync("./artifacts")) {
+  import("./tasks/setup");
+}
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
