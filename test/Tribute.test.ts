@@ -79,7 +79,7 @@ const getNewBaalAddresses = async (
   const receipt = await ethers.provider.getTransactionReceipt(tx.hash);
   // console.log({logs: receipt.logs})
   let baalSummonAbi = [
-    "event SummonBaal(address indexed baal, address indexed loot, address indexed shares, address safe, bool existingSafe)",
+    "event SummonBaal(address indexed baal, address indexed loot, address indexed shares, address safe, address forwarder, bool existingSafe)",
   ];
   let iface = new ethers.utils.Interface(baalSummonAbi);
   let log = iface.parseLog(receipt.logs[receipt.logs.length - 1]);
