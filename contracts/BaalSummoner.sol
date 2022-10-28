@@ -4,6 +4,8 @@ pragma solidity 0.8.7;
 import "@gnosis.pm/zodiac/contracts/factory/ModuleProxyFactory.sol";
 import "@gnosis.pm/safe-contracts/contracts/proxies/GnosisSafeProxyFactory.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 import "./Baal.sol";
 
@@ -36,12 +38,12 @@ contract BaalSummoner is ModuleProxyFactory {
         address indexed shares,
         address safe,
         address forwarder,
-        bool existingSafe
+        bool existingSafe,
+        bool existingTokens
     );
 
     event DaoReferral(
         bytes32 referrer,
-        bool daoHadExistingSafe,
         address daoAddress
     );
 
@@ -108,43 +110,21 @@ contract BaalSummoner is ModuleProxyFactory {
             );
     }
 
-    function summonBaalAndSafe(
-        bytes calldata initializationParams,
-        bytes[] calldata initializationActions,
-        uint256 _saltNonce
-    ) external returns (address) {
-        return
-            _summonBaalAndSafe(
-                initializationParams,
-                initializationActions,
-                _saltNonce
-            );
-    }
-
     function summonBaalFromReferrer(
         bytes calldata initializationParams,
         bytes[] calldata initializationActions,
         uint256 _saltNonce,
-        bool existingSafe,
         bytes32 referrer
     ) external payable returns (address) {
         address daoAddress;
 
-        if (existingSafe) {
-            daoAddress = _summonBaal(
-                initializationParams,
-                initializationActions,
-                _saltNonce
-            );
-        } else {
-            daoAddress = _summonBaalAndSafe(
-                initializationParams,
-                initializationActions,
-                _saltNonce
-            );
-        }
+        daoAddress = _summonBaal(
+            initializationParams,
+            initializationActions,
+            _saltNonce
+        );
 
-        emit DaoReferral(referrer, existingSafe, daoAddress);
+        emit DaoReferral(referrer, daoAddress);
         return daoAddress;
     }
 
@@ -222,11 +202,15 @@ contract BaalSummoner is ModuleProxyFactory {
         bytes[] calldata initializationActions,
         uint256 _saltNonce
     ) internal returns (address) {
+        bool existingSafe;
+        bool existingTokens;
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
             string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
             address _safeAddr, /*address of safe*/
-            address _forwarder /*Trusted forwarder address for meta-transactions (EIP 2771)*/
+            address _forwarder, /*Trusted forwarder address for meta-transactions (EIP 2771)*/
+            address _lootToken, /*predeployed loot token*/
+            address _sharesToken /*predeployed shares token*/
         ) = abi.decode(initializationParams, (string, string, address, address));
 
         bytes memory _anyCall = abi.encodeWithSignature("avatar()"); /*This call can be anything, it just needs to return successfully*/
@@ -234,7 +218,16 @@ contract BaalSummoner is ModuleProxyFactory {
             moduleProxyFactory.deployModule(template, _anyCall, _saltNonce)
         );
 
-        (address _lootToken, address _sharesToken) = deployTokens(_name, _symbol);
+        if(_lootToken == address(0) || _sharesToken == address(0)){
+            (_lootToken, _sharesToken) = deployTokens(_name, _symbol);
+        } else {
+            existingTokens = true;
+        }
+        if(_safeAddr == address(0)){
+            _safeAddr = deployAndSetupSafe(address(_baal), _saltNonce);
+        } else {
+            existingSafe = true;
+        }
 
         IBaalToken(_lootToken).pause();
         IBaalToken(_sharesToken).pause();
@@ -263,60 +256,8 @@ contract BaalSummoner is ModuleProxyFactory {
             address(_baal.sharesToken()),
             _safeAddr,
             _forwarder,
-            true
-        );
-
-        return (address(_baal));
-    }
-
-    function _summonBaalAndSafe(
-        bytes calldata initializationParams,
-        bytes[] calldata initializationActions,
-        uint256 _saltNonce
-    ) internal returns (address) {
-        (
-            string memory _name, /*_name Name for erc20 `shares` accounting*/
-            string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
-            address _forwarder /*Trusted forwarder address for meta-transactions (EIP 2771)*/
-        ) = abi.decode(initializationParams, (string, string, address));
-
-        bytes memory _anyCall = abi.encodeWithSignature("avatar()"); /*This call can be anything, it just needs to return successfully*/
-        Baal _baal = Baal(
-            moduleProxyFactory.deployModule(template, _anyCall, _saltNonce)
-        );
-        address _safe = deployAndSetupSafe(address(_baal), _saltNonce);
-        
-        (address _lootToken, address _sharesToken) = deployTokens(_name, _symbol);
-
-        IBaalToken(_lootToken).pause();
-        IBaalToken(_sharesToken).pause();
-
-        IBaalToken(_lootToken).transferOwnership(address(_baal));
-        IBaalToken(_sharesToken).transferOwnership(address(_baal));
-
-        bytes memory _initializationMultisendData = encodeMultisend(
-            initializationActions,
-            address(_baal)
-        );
-
-        bytes memory _initializer = abi.encode(
-            _lootToken,
-            _sharesToken,
-            gnosisMultisendLibrary,
-            _safe,
-            _forwarder,
-            _initializationMultisendData
-        );
-
-        _baal.setUp(_initializer);
-
-        emit SummonBaal(
-            address(_baal),
-            address(_baal.lootToken()),
-            address(_baal.sharesToken()),
-            _safe,
-            _forwarder,
-            false
+            existingSafe,
+            existingTokens
         );
 
         return (address(_baal));
