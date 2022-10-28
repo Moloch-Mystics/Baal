@@ -35,6 +35,7 @@ contract BaalSummoner is ModuleProxyFactory {
         address indexed loot,
         address indexed shares,
         address safe,
+        address forwarder,
         bool existingSafe
     );
 
@@ -261,6 +262,7 @@ contract BaalSummoner is ModuleProxyFactory {
             address(_baal.lootToken()),
             address(_baal.sharesToken()),
             _safeAddr,
+            _forwarder,
             true
         );
 
@@ -313,6 +315,7 @@ contract BaalSummoner is ModuleProxyFactory {
             address(_baal.lootToken()),
             address(_baal.sharesToken()),
             _safe,
+            _forwarder,
             false
         );
 
