@@ -321,6 +321,7 @@ task("summon", "Summons a new DAO")
   .addParam("name", "share token symbol")
   .addOptionalParam("meta", "updated meta data")
   .setAction(async (taskArgs, hre) => {
+    const zeroAddress = "0x0000000000000000000000000000000000000000";
     const network = await hre.ethers.provider.getNetwork();
     const chainId = network.chainId;
     const metadataConfig = {
@@ -433,10 +434,14 @@ task("summon", "Summons a new DAO")
       // )
       return {
         initParams: abiCoder.encode(
-          ["string", "string"],
+          ["string", "string", "address", "address", "address", "address"],
           [
             config.TOKEN_NAME,
-            config.TOKEN_SYMBOL
+            config.TOKEN_SYMBOL,
+            zeroAddress,
+            zeroAddress,
+            zeroAddress,
+            zeroAddress
           ]
         ),
         initalizationActions,
@@ -494,7 +499,7 @@ task("summon", "Summons a new DAO")
 
     const randomSeed = Math.floor(Math.random() * 10000000);
 
-    const tx = await contract.summonBaalAndSafe(
+    const tx = await contract.summonBaal(
       encodedInitParams.initParams,
       encodedInitParams.initalizationActions,
       randomSeed

@@ -245,8 +245,6 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
             );
 
         require(
-            _lootToken != address(0) &&
-                _sharesToken != address(0) &&
                 _multisendLibrary != address(0) &&
                 _avatar != address(0),
             "0 addr used"

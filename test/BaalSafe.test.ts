@@ -153,6 +153,8 @@ const getBaalParams = async function (
   shares: [string[], number[]],
   loots: [string[], number[]],
   trustedForwarder: string,
+  lootAddr: string,
+  sharesAddr: string,
 ) {
   const governanceConfig = abiCoder.encode(
     ["uint32", "uint32", "uint256", "uint256", "uint256", "uint256"],
@@ -212,11 +214,14 @@ const getBaalParams = async function (
   // )
   return {
     initParams: abiCoder.encode(
-      ["string", "string", "address"],
+      ["string", "string", "address", "address", "address", "address"],
       [
         config.TOKEN_NAME,
         config.TOKEN_SYMBOL,
-        trustedForwarder
+        zeroAddress,
+        trustedForwarder,
+        lootAddr,
+        sharesAddr
       ]
     ),
     initalizationActions,
@@ -228,7 +233,7 @@ const getNewBaalAddresses = async (
 ): Promise<{ baal: string; loot: string; shares: string; safe: string }> => {
   const receipt = await ethers.provider.getTransactionReceipt(tx.hash);
   let baalSummonAbi = [
-    "event SummonBaal(address indexed baal, address indexed loot, address indexed shares, address safe, address forwarder, bool existingSafe)",
+    "event SummonBaal(address indexed baal, address indexed loot, address indexed shares, address safe, address forwarder, uint256 existingAddrs)",
   ];
   let iface = new ethers.utils.Interface(baalSummonAbi);
   let log = iface.parseLog(receipt.logs[receipt.logs.length - 1]);
@@ -301,6 +306,8 @@ describe("Baal contract", function () {
   let applicantWeth: TestERC20;
   let multisend: MultiSend;
   let forwarder: string;
+  let lootAddr: string;
+  let sharesAddr: string;
 
   let GnosisSafe: ContractFactory;
   let gnosisSafeSingleton: GnosisSafe;
@@ -384,6 +391,8 @@ describe("Baal contract", function () {
     const network = await ethers.provider.getNetwork();
     chainId = network.chainId;
     forwarder = "0x0000000000000000000000000000000000000420";
+    lootAddr = "0x000000000000000000000000000000000000069";
+    sharesAddr = "0x000000000000000000000000000000000000033";
   });
 
   beforeEach(async function () {
@@ -440,9 +449,11 @@ describe("Baal contract", function () {
       [[summoner.address], [shares]],
       [[summoner.address], [loot]],
       forwarder,
+      zeroAddress, 
+      zeroAddress
     );
 
-    const tx = await baalSummoner.summonBaalAndSafe(
+    const tx = await baalSummoner.summonBaal(
       encodedInitParams.initParams,
       encodedInitParams.initalizationActions,
       101
@@ -3598,9 +3609,11 @@ describe("Baal contract - offering required", function () {
       [[summoner.address], [shares]],
       [[summoner.address], [loot]],
       zeroAddress,
+      zeroAddress,
+      zeroAddress
     );
 
-    const tx = await baalSummoner.summonBaalAndSafe(
+    const tx = await baalSummoner.summonBaal(
       encodedInitParams.initParams,
       encodedInitParams.initalizationActions,
       101 // nonce
@@ -3785,11 +3798,14 @@ const getBaalParamsWithAvatar = async function (
   // )
   return {
     initParams: abiCoder.encode(
-      ["string", "string", "address"],
+      ["string", "string", "address", "address", "address", "address"],
       [
         config.TOKEN_NAME,
         config.TOKEN_SYMBOL,
         safeAddr,
+        zeroAddress,
+        zeroAddress,
+        zeroAddress
       ]
     ),
     initalizationActions,
@@ -3911,7 +3927,7 @@ describe("Baal contract - summon baal with current safe", function () {
           [[shaman.address], [7]],
           [[summoner.address], [shares]],
           [[summoner.address], [loot]],
-          avatar.address,
+          avatar.address
         );
 
         // view function used as placeholder in deployment

@@ -79,7 +79,7 @@ const getNewBaalAddresses = async (
   const receipt = await ethers.provider.getTransactionReceipt(tx.hash);
   // console.log({logs: receipt.logs})
   let baalSummonAbi = [
-    "event SummonBaal(address indexed baal, address indexed loot, address indexed shares, address safe, address forwarder, bool existingSafe)",
+    "event SummonBaal(address indexed baal, address indexed loot, address indexed shares, address safe, address forwarder, uint256 existingAddrs)",
   ];
   let iface = new ethers.utils.Interface(baalSummonAbi);
   let log = iface.parseLog(receipt.logs[receipt.logs.length - 1]);
@@ -176,10 +176,14 @@ const getBaalParams = async function (
 
   return {
     initParams: abiCoder.encode(
-      ["string", "string"],
+      ["string", "string", "address", "address", "address", "address"],
       [
         config.TOKEN_NAME,
-        config.TOKEN_SYMBOL
+        config.TOKEN_SYMBOL,
+        zeroAddress,
+        zeroAddress,
+        zeroAddress,
+        zeroAddress
       ]
     ),
     initalizationActions,
@@ -258,7 +262,7 @@ describe("Tribute proposal type", function () {
       shares,
       loots,
     );
-    const tx = await baalSummoner.summonBaalAndSafe(
+    const tx = await baalSummoner.summonBaal(
       encodedInitParams.initParams,
       encodedInitParams.initalizationActions,
       saltNonce,

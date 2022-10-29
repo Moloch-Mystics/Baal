@@ -38,8 +38,7 @@ contract BaalSummoner is ModuleProxyFactory {
         address indexed shares,
         address safe,
         address forwarder,
-        bool existingSafe,
-        bool existingTokens
+        uint256 existingAddrs
     );
 
     event DaoReferral(
@@ -102,6 +101,7 @@ contract BaalSummoner is ModuleProxyFactory {
         bytes[] calldata initializationActions,
         uint256 _saltNonce
     ) external returns (address) {
+        
         return
             _summonBaal(
                 initializationParams,
@@ -202,8 +202,7 @@ contract BaalSummoner is ModuleProxyFactory {
         bytes[] calldata initializationActions,
         uint256 _saltNonce
     ) internal returns (address) {
-        bool existingSafe;
-        bool existingTokens;
+        uint256 existingAddrs; // 1 tokens, 2 safe, 3 both
         (
             string memory _name, /*_name Name for erc20 `shares` accounting*/
             string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting*/
@@ -211,22 +210,21 @@ contract BaalSummoner is ModuleProxyFactory {
             address _forwarder, /*Trusted forwarder address for meta-transactions (EIP 2771)*/
             address _lootToken, /*predeployed loot token*/
             address _sharesToken /*predeployed shares token*/
-        ) = abi.decode(initializationParams, (string, string, address, address));
+        ) = abi.decode(initializationParams, (string, string, address, address, address, address));
 
-        bytes memory _anyCall = abi.encodeWithSignature("avatar()"); /*This call can be anything, it just needs to return successfully*/
         Baal _baal = Baal(
-            moduleProxyFactory.deployModule(template, _anyCall, _saltNonce)
+            moduleProxyFactory.deployModule(template, abi.encodeWithSignature("avatar()"), _saltNonce)
         );
 
         if(_lootToken == address(0) || _sharesToken == address(0)){
             (_lootToken, _sharesToken) = deployTokens(_name, _symbol);
         } else {
-            existingTokens = true;
+            existingAddrs += 1;
         }
         if(_safeAddr == address(0)){
             _safeAddr = deployAndSetupSafe(address(_baal), _saltNonce);
         } else {
-            existingSafe = true;
+            existingAddrs += 2;
         }
 
         IBaalToken(_lootToken).pause();
@@ -256,8 +254,7 @@ contract BaalSummoner is ModuleProxyFactory {
             address(_baal.sharesToken()),
             _safeAddr,
             _forwarder,
-            existingSafe,
-            existingTokens
+            existingAddrs
         );
 
         return (address(_baal));
