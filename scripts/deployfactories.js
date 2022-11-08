@@ -101,8 +101,8 @@ async function main() {
 		_addresses.gnosisMultisendLibrary,
 		_addresses.gnosisSafeProxyFactory,
 		_addresses.moduleProxyFactory,
-		lootSingleton.address,
-		sharesSingleton.address))
+		"0xacD725Cf8906dAD85Fda40a0D621DCE2C1F99563",
+		"0xADC05EFd6fC78028901deF7C2AC6f61AF0E4C8fb"))
     
 	await baalSummoner.deployed();
 
@@ -118,8 +118,8 @@ async function main() {
 	_addresses.gnosisMultisendLibrary,
 	_addresses.gnosisSafeProxyFactory,
 	_addresses.moduleProxyFactory,
-	lootSingleton.address,
-	sharesSingleton.address);
+	"0xacD725Cf8906dAD85Fda40a0D621DCE2C1F99563",
+	"0xADC05EFd6fC78028901deF7C2AC6f61AF0E4C8fb");
 	}
 
 

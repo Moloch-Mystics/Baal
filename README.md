@@ -155,18 +155,4 @@ See audit notes in ./audits
 ## Addresses Beta Factories and Templates
 beta release of the factories. These factories may change until we get to final stable release.
 
-**Goerli**
-- lootSingleton: 0xd867ACaaDB7B8930EcA709c470B872185698F0EA
-- sharesSingleton: 0x25D6d13fD0a8071E1AA0f4b8978c706e715fDd3A
-- baalSingleton: 0xB70A2cd3f672cB06e577378578a7AcbF1b68Df56
-- Transaction Hash: 0xd0ae2a78716ded1febbf6d37ce98865a20e4233b733ee7aa41097ecd8e79cbaa
-- Factory Contract Address: **0xEd6AA9879Ed6ba07411C3224F748Dc65D3f8e685**
-- Tribute Minion: 0x9C6f6e6E461FB1dB9761c960900A0Ae05B9786A7
-
-**Gnosis Chain**
-- lootSingleton: 0x39bDc48E7b15C63FE54779E93b2ce46555A37609
-- sharesSingleton: 0x678f62F2d9dE2e196B79ca853f811E6D0A47460B
-- baalSingleton: 0xDb3e9Ded9843358fbbe758c4e73cCfEb9061d4Ed
-- Transaction Hash: 0x703acad6f005fa793e9041acc711a3d1ac4c8b632898c08598552d024687bc06
-- Factory Contract Address: **0x3Bd3fDf6db732F8548638Cd35B98d624c77FB351**
-- Tribute Minion: 0x9391b6A7c55832a6802484dE054d81496D56545A
+src/addresses/deployed.js

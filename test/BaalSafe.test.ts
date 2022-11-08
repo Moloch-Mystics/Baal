@@ -3967,5 +3967,10 @@ describe("Baal contract - summon baal with current safe", function () {
       expect(expectedAddress).to.equal(addresses.baal);
       });
     });
+
+    
   });
+
+  
+
 });

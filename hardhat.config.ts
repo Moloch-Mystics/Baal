@@ -109,6 +109,14 @@ const config: HardhatUserConfig = {
         mnemonic: mnemonic(),
       },
     },
+    gnosis: {
+      url: "https://rpc.gnosischain.com/",
+      gas: 5000000,
+      gasPrice: 8000000000,
+      accounts: {
+        mnemonic: mnemonic(),
+      },
+    },
     matic: {
       // url: 'https://rpc-mainnet.maticvigil.com/v1/036f1ba8516f0eee2204a574a960b68437ac8661',
       url: "https://polygon-mainnet.infura.io/v3/cc7ca25d68f246f393d7630842360c47",
@@ -129,7 +137,31 @@ const config: HardhatUserConfig = {
     // Your API key for Etherscan
     // Obtain one at https://etherscan.io/
     // apiKey: "61ED96HQAY6PASTEWRXN6AMYQEKM8SYTRY" // etherscan
-    apiKey: etherscan(),
+    apiKey: {
+      gnosis: "SN711KA5TEDG6JRJ2XGD8AITT7Q3VE58XG",
+      xdai: etherscan(),
+      goerli: etherscan(),
+      mainnet: etherscan(),
+    },
+    customChains: [
+      {
+        network: "gnosis",
+        chainId: 100,
+        urls: {
+          apiURL: "https://api.gnosisscan.io/api",
+          browserURL: "https://gnosisscan.io/",
+        }
+      },
+      // can only have one chainId 100 at a time
+      // {
+      //   network: "xdai",
+      //   chainId: 100,
+      //   urls: {
+      //     apiURL: "https://blockscout.com/xdai/mainnet/api",
+      //     browserURL: "https://blockscout.com/xdai/mainnet/",
+      //   }
+      // }
+    ]
   },
   solidity: {
     compilers: [
@@ -138,7 +170,7 @@ const config: HardhatUserConfig = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 100,
+            runs: 200,
           },
         },
       }
