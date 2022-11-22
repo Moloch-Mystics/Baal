@@ -1,4 +1,4 @@
-import { ethers } from "hardhat";
+import { ethers, upgrades } from "hardhat";
 import { solidity } from "ethereum-waffle";
 import { use, expect } from "chai";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
@@ -79,6 +79,7 @@ const revertMessages = {
   permitNotAuthorized: "!authorized",
   permitExpired: "expired",
   notEnoughGas: "not enough gas",
+  baalGasToHigh: "baalGas to high",
   OwnableCallerIsNotTheOwner: "Ownable: caller is not the owner",
 };
 
@@ -153,6 +154,8 @@ const getBaalParams = async function (
   shares: [string[], number[]],
   loots: [string[], number[]],
   trustedForwarder: string,
+  lootAddr: string,
+  sharesAddr: string,
 ) {
   const governanceConfig = abiCoder.encode(
     ["uint32", "uint32", "uint256", "uint256", "uint256", "uint256"],
@@ -212,11 +215,14 @@ const getBaalParams = async function (
   // )
   return {
     initParams: abiCoder.encode(
-      ["string", "string", "address"],
+      ["string", "string", "address", "address", "address", "address"],
       [
         config.TOKEN_NAME,
         config.TOKEN_SYMBOL,
-        trustedForwarder
+        zeroAddress, // safe addr
+        trustedForwarder,
+        lootAddr,
+        sharesAddr
       ]
     ),
     initalizationActions,
@@ -228,7 +234,7 @@ const getNewBaalAddresses = async (
 ): Promise<{ baal: string; loot: string; shares: string; safe: string }> => {
   const receipt = await ethers.provider.getTransactionReceipt(tx.hash);
   let baalSummonAbi = [
-    "event SummonBaal(address indexed baal, address indexed loot, address indexed shares, address safe, bool existingSafe)",
+    "event SummonBaal(address indexed baal, address indexed loot, address indexed shares, address safe, address forwarder, uint256 existingAddrs)",
   ];
   let iface = new ethers.utils.Interface(baalSummonAbi);
   let log = iface.parseLog(receipt.logs[receipt.logs.length - 1]);
@@ -301,6 +307,8 @@ describe("Baal contract", function () {
   let applicantWeth: TestERC20;
   let multisend: MultiSend;
   let forwarder: string;
+  let lootAddr: string;
+  let sharesAddr: string;
 
   let GnosisSafe: ContractFactory;
   let gnosisSafeSingleton: GnosisSafe;
@@ -384,6 +392,8 @@ describe("Baal contract", function () {
     const network = await ethers.provider.getNetwork();
     chainId = network.chainId;
     forwarder = "0x0000000000000000000000000000000000000420";
+    lootAddr = "0x000000000000000000000000000000000000069";
+    sharesAddr = "0x000000000000000000000000000000000000033";
   });
 
   beforeEach(async function () {
@@ -419,7 +429,11 @@ describe("Baal contract", function () {
     moduleProxyFactory =
       (await ModuleProxyFactory.deploy()) as ModuleProxyFactory;
 
-    baalSummoner = (await BaalSummoner.deploy(
+    // deploy proxy upgrades
+    baalSummoner = await upgrades.deployProxy(BaalSummoner) as BaalSummoner;
+    await baalSummoner.deployed();
+    // set addresses of templates and libraries
+    await baalSummoner.setAddrs(
       baalSingleton.address,
       gnosisSafeSingleton.address,
       handler.address,
@@ -428,7 +442,7 @@ describe("Baal contract", function () {
       moduleProxyFactory.address,
       lootSingleton.address,
       sharesSingleton.address,
-    )) as BaalSummoner;
+    );
 
     encodedInitParams = await getBaalParams(
       baalSingleton,
@@ -440,9 +454,11 @@ describe("Baal contract", function () {
       [[summoner.address], [shares]],
       [[summoner.address], [loot]],
       forwarder,
+      zeroAddress, 
+      zeroAddress
     );
 
-    const tx = await baalSummoner.summonBaalAndSafe(
+    const tx = await baalSummoner.summonBaal(
       encodedInitParams.initParams,
       encodedInitParams.initalizationActions,
       101
@@ -517,7 +533,7 @@ describe("Baal contract", function () {
       const summonerLoot = await lootToken.balanceOf(summoner.address);
       expect(summonerLoot).to.equal(loot);
 
-      const summonerVotes = await sharesToken.getCurrentVotes(summoner.address);
+      const summonerVotes = await sharesToken.getVotes(summoner.address);
       expect(summonerVotes).to.equal(shares); // shares = 100
 
       const summonerSelfDelegates = await sharesToken.delegates(
@@ -668,7 +684,6 @@ describe("Baal contract", function () {
 
       const sharesTokenAsOwnerEoa = await sharesToken.connect(summoner);
       expect(await baalLessSharesSingleton.version()).to.equal(0);
-      console.log('upgrade');
 
       await sharesTokenAsOwnerEoa.upgradeToAndCall(
         baalLessSharesSingleton.address,
@@ -701,7 +716,7 @@ describe("Baal contract", function () {
       await shamanBaal.mintShares([summoner.address], [69]);
       // expect(await shamansharesToken.balanceOf(summoner.address)).to.equal(169)
       expect(await sharesToken.balanceOf(summoner.address)).to.equal(169);
-      const votes = await sharesToken.getCurrentVotes(summoner.address);
+      const votes = await sharesToken.getVotes(summoner.address);
       expect(votes).to.equal(169);
       // const totalShares = await baal.totalSupply()
       const totalShares = await baal.totalShares();
@@ -713,7 +728,7 @@ describe("Baal contract", function () {
       const now = await blockTime();
       expect(await sharesToken.balanceOf(shaman.address)).to.equal(69);
 
-      const votes = await sharesToken.getCurrentVotes(shaman.address);
+      const votes = await sharesToken.getVotes(shaman.address);
       expect(votes).to.equal(69);
 
       const shamanDelegate = await sharesToken.delegates(shaman.address);
@@ -727,10 +742,10 @@ describe("Baal contract", function () {
 
       expect(await sharesToken.balanceOf(summoner.address)).to.equal(169);
 
-      const summonerVotes = await sharesToken.getCurrentVotes(summoner.address);
+      const summonerVotes = await sharesToken.getVotes(summoner.address);
       expect(summonerVotes).to.equal(0);
 
-      const shamanVotes = await sharesToken.getCurrentVotes(shaman.address);
+      const shamanVotes = await sharesToken.getVotes(shaman.address);
       expect(shamanVotes).to.equal(169);
 
       const summonerDelegate = await sharesToken.delegates(summoner.address);
@@ -741,12 +756,12 @@ describe("Baal contract", function () {
       await shamanBaal.mintShares([shaman.address], [0]);
       const now = await blockTime();
       expect(await sharesToken.balanceOf(shaman.address)).to.equal(0);
-      const votes = await sharesToken.getCurrentVotes(shaman.address);
+      const votes = await sharesToken.getVotes(shaman.address);
       expect(votes).to.equal(0);
       const totalShares = await sharesToken.totalSupply();
       expect(totalShares).to.equal(100);
 
-      const shamanVotes = await sharesToken.getCurrentVotes(shaman.address);
+      const shamanVotes = await sharesToken.getVotes(shaman.address);
       expect(shamanVotes).to.equal(0);
 
       const shamanDelegate = await sharesToken.delegates(shaman.address);
@@ -824,8 +839,8 @@ describe("Baal contract", function () {
       expect(await sharesToken.delegates(applicant.address)).to.equal(
         applicant.address
       );
-      expect(await sharesToken.getCurrentVotes(applicant.address)).to.equal(minting);
-      expect(await sharesToken.getCurrentVotes(summoner.address)).to.equal(shares);
+      expect(await sharesToken.getVotes(applicant.address)).to.equal(minting);
+      expect(await sharesToken.getVotes(summoner.address)).to.equal(shares);
 
       // delegate shares from applicant to the summoner
       const baalAsApplicant = sharesToken.connect(applicant);
@@ -840,8 +855,8 @@ describe("Baal contract", function () {
       expect(await sharesToken.delegates(applicant.address)).to.equal(
         summoner.address
       );
-      expect(await sharesToken.getCurrentVotes(applicant.address)).to.equal(0);
-      expect(await sharesToken.getCurrentVotes(summoner.address)).to.equal(
+      expect(await sharesToken.getVotes(applicant.address)).to.equal(0);
+      expect(await sharesToken.getVotes(summoner.address)).to.equal(
         shares + minting
       );
 
@@ -856,8 +871,8 @@ describe("Baal contract", function () {
       expect(await sharesToken.delegates(applicant.address)).to.equal(
         summoner.address
       );
-      expect(await sharesToken.getCurrentVotes(applicant.address)).to.equal(0);
-      expect(await sharesToken.getCurrentVotes(summoner.address)).to.equal(
+      expect(await sharesToken.getVotes(applicant.address)).to.equal(0);
+      expect(await sharesToken.getVotes(summoner.address)).to.equal(
         shares + 2 * minting
       );
 
@@ -868,8 +883,8 @@ describe("Baal contract", function () {
       expect(await sharesToken.delegates(applicant.address)).to.equal(
         summoner.address
       );
-      expect(await sharesToken.getCurrentVotes(applicant.address)).to.equal(0);
-      expect(await sharesToken.getCurrentVotes(summoner.address)).to.equal(
+      expect(await sharesToken.getVotes(applicant.address)).to.equal(0);
+      expect(await sharesToken.getVotes(summoner.address)).to.equal(
         shares + minting
       );
     });
@@ -1838,9 +1853,9 @@ describe("Baal contract", function () {
 
       const afterTransferTimestamp = await blockTime();
       const summonerBalance = await sharesToken.balanceOf(summoner.address);
-      const summonerVotes = await sharesToken.getCurrentVotes(summoner.address);
+      const summonerVotes = await sharesToken.getVotes(summoner.address);
       const shamanBalance = await sharesToken.balanceOf(shaman.address);
-      const shamanVotes = await sharesToken.getCurrentVotes(shaman.address);
+      const shamanVotes = await sharesToken.getVotes(shaman.address);
       expect(summonerBalance).to.equal(99);
       expect(summonerVotes).to.equal(99);
       expect(shamanBalance).to.equal(1);
@@ -1861,7 +1876,7 @@ describe("Baal contract", function () {
       expect(summonerCP0.votes).to.equal(100);
       expect(summonerCP1.votes).to.equal(99);
       expect(shamanCP0.votes).to.equal(1);
-      expect(shamanCP1.fromTimeStamp).to.equal(0); // checkpoint DNE
+      expect(shamanCP1.fromTimePoint).to.equal(0); // checkpoint DNE
 
       const delegate = await sharesToken.delegates(shaman.address);
       expect(delegate).to.equal(shaman.address);
@@ -1884,9 +1899,9 @@ describe("Baal contract", function () {
       const beforeTransferTimestamp = await blockTime();
       await sharesToken.transfer(shaman.address, 0);
       const summonerBalance = await sharesToken.balanceOf(summoner.address);
-      const summonerVotes = await sharesToken.getCurrentVotes(summoner.address);
+      const summonerVotes = await sharesToken.getVotes(summoner.address);
       const shamanBalance = await sharesToken.balanceOf(shaman.address);
-      const shamanVotes = await sharesToken.getCurrentVotes(shaman.address);
+      const shamanVotes = await sharesToken.getVotes(shaman.address);
       expect(summonerBalance).to.equal(100);
       expect(summonerVotes).to.equal(100);
       expect(shamanBalance).to.equal(0);
@@ -1903,14 +1918,14 @@ describe("Baal contract", function () {
       expect(summonerCheckpoints).to.equal(1);
       expect(shamanCheckpoints).to.equal(0);
       expect(summonerCP0.votes).to.equal(100);
-      expect(shamanCP0.fromTimeStamp).to.equal(0); // checkpoint DNE
+      expect(shamanCP0.fromTimePoint).to.equal(0); // checkpoint DNE
     });
 
     it("self transfer - doesnt update delegates", async function () {
       const beforeTransferTimestamp = await blockTime();
       await sharesToken.transfer(summoner.address, 10);
       const summonerBalance = await sharesToken.balanceOf(summoner.address);
-      const summonerVotes = await sharesToken.getCurrentVotes(summoner.address);
+      const summonerVotes = await sharesToken.getVotes(summoner.address);
       expect(summonerBalance).to.equal(100);
       expect(summonerVotes).to.equal(100);
 
@@ -1937,10 +1952,10 @@ describe("Baal contract", function () {
       );
 
       const summonerBalance = await sharesToken.balanceOf(summoner.address);
-      const summonerVotes = await sharesToken.getCurrentVotes(summoner.address);
+      const summonerVotes = await sharesToken.getVotes(summoner.address);
       const shamanBalance = await sharesToken.balanceOf(shaman.address);
-      const shamanVotes = await sharesToken.getCurrentVotes(shaman.address);
-      const applicantVotes = await sharesToken.getCurrentVotes(applicant.address);
+      const shamanVotes = await sharesToken.getVotes(shaman.address);
+      const applicantVotes = await sharesToken.getVotes(applicant.address);
       expect(summonerBalance).to.equal(98);
       expect(summonerVotes).to.equal(98);
       expect(shamanBalance).to.equal(2);
@@ -2007,9 +2022,9 @@ describe("Baal contract", function () {
 
       const afterTransferTimestamp = await blockTime();
       const summonerBalance = await sharesToken.balanceOf(summoner.address);
-      const summonerVotes = await sharesToken.getCurrentVotes(summoner.address);
+      const summonerVotes = await sharesToken.getVotes(summoner.address);
       const shamanBalance = await sharesToken.balanceOf(shaman.address);
-      const shamanVotes = await sharesToken.getCurrentVotes(shaman.address);
+      const shamanVotes = await sharesToken.getVotes(shaman.address);
       expect(summonerBalance).to.equal(99);
       expect(summonerVotes).to.equal(99);
       expect(shamanBalance).to.equal(1);
@@ -2030,7 +2045,7 @@ describe("Baal contract", function () {
       expect(summonerCP0.votes).to.equal(100);
       expect(summonerCP1.votes).to.equal(99);
       expect(shamanCP0.votes).to.equal(1);
-      expect(shamanCP1.fromTimeStamp).to.equal(0); // checkpoint DNE
+      expect(shamanCP1.fromTimePoint).to.equal(0); // checkpoint DNE
     });
 
     it("require fails - shares paused", async function () {
@@ -2088,9 +2103,9 @@ describe("Baal contract", function () {
     it("sends tokens, not votes", async function () {
       await lootToken.transfer(shaman.address, 500);
       const summonerBalance = await lootToken.balanceOf(summoner.address);
-      const summonerVotes = await sharesToken.getCurrentVotes(summoner.address);
+      const summonerVotes = await sharesToken.getVotes(summoner.address);
       const shamanBalance = await lootToken.balanceOf(shaman.address);
-      const shamanVotes = await sharesToken.getCurrentVotes(shaman.address);
+      const shamanVotes = await sharesToken.getVotes(shaman.address);
       expect(summonerBalance).to.equal(0);
       expect(summonerVotes).to.equal(100);
       expect(shamanBalance).to.equal(500);
@@ -2116,9 +2131,9 @@ describe("Baal contract", function () {
       await lootToken.approve(shaman.address, 500);
       await shamanLootToken.transferFrom(summoner.address, shaman.address, 500);
       const summonerBalance = await lootToken.balanceOf(summoner.address);
-      const summonerVotes = await sharesToken.getCurrentVotes(summoner.address);
+      const summonerVotes = await sharesToken.getVotes(summoner.address);
       const shamanBalance = await lootToken.balanceOf(shaman.address);
-      const shamanVotes = await sharesToken.getCurrentVotes(shaman.address);
+      const shamanVotes = await sharesToken.getVotes(shaman.address);
       expect(summonerBalance).to.equal(0);
       expect(summonerVotes).to.equal(100);
       expect(shamanBalance).to.equal(500);
@@ -2369,13 +2384,13 @@ describe("Baal contract", function () {
       const votes = (
         await sharesToken.checkpoints(summoner.address, nCheckpoints.sub(1))
       ).votes;
-      const priorVotes = await sharesToken.getPriorVotes(
+      const priorVotes = await sharesToken.getPastVotes(
         summoner.address,
         prop.votingStarts
       );
       expect(priorVotes).to.equal(votes);
       expect(prop.yesVotes).to.equal(votes);
-      expect(prop.maxTotalSharesAndLootAtYesVote).to.equal(shares + loot);
+      expect(prop.maxTotalSharesAndLootAtVote).to.equal(shares + loot);
     });
 
     it("happy case - no vote", async function () {
@@ -2420,14 +2435,14 @@ describe("Baal contract", function () {
       await baal.submitVote(1, yes);
       await baal.submitVote(2, yes);
       const prop1 = await baal.proposals(1);
-      const votes1 = await sharesToken.getPriorVotes(
+      const votes1 = await sharesToken.getPastVotes(
         summoner.address,
         prop1.votingStarts
       );
       expect(prop1.yesVotes).to.equal(votes1);
 
       const prop2 = await baal.proposals(2);
-      const votes2 = await sharesToken.getPriorVotes(
+      const votes2 = await sharesToken.getPastVotes(
         summoner.address,
         prop2.votingStarts
       );
@@ -2460,14 +2475,14 @@ describe("Baal contract", function () {
       );
       await baal.submitVote(1, yes);
       const prop1 = await baal.proposals(1);
-      expect(prop1.maxTotalSharesAndLootAtYesVote).to.equal(
+      expect(prop1.maxTotalSharesAndLootAtVote).to.equal(
         shares + loot + 100
       );
       await shamanBaal.mintShares([shaman.address], [100]); // add another 100 shares for shaman
       await shamanBaal.submitVote(1, yes);
       const prop = await baal.proposals(1);
       expect(prop.yesVotes).to.equal(200); // 100 summoner and 1st 100 from shaman are counted
-      expect(prop.maxTotalSharesAndLootAtYesVote).to.equal(shares + loot + 200);
+      expect(prop.maxTotalSharesAndLootAtVote).to.equal(shares + loot + 200);
     });
 
     it("scenario - decrease shares during voting", async function () {
@@ -2480,14 +2495,14 @@ describe("Baal contract", function () {
       );
       await baal.submitVote(1, yes);
       const prop1 = await baal.proposals(1);
-      expect(prop1.maxTotalSharesAndLootAtYesVote).to.equal(
+      expect(prop1.maxTotalSharesAndLootAtVote).to.equal(
         shares + loot + 100
       );
       await shamanBaal.ragequit(shaman.address, 50, 0, [weth.address]);
       await shamanBaal.submitVote(1, yes);
       const prop = await baal.proposals(1);
       expect(prop.yesVotes).to.equal(200); // 100 summoner and 1st 100 from shaman are counted (not affected by rq)
-      expect(prop.maxTotalSharesAndLootAtYesVote).to.equal(shares + loot + 100); // unchanged
+      expect(prop.maxTotalSharesAndLootAtVote).to.equal(shares + loot + 100); // unchanged
     });
   });
 
@@ -2521,7 +2536,7 @@ describe("Baal contract", function () {
       const votes = (
         await sharesToken.checkpoints(summoner.address, nCheckpoints.sub(1))
       ).votes;
-      const priorVotes = await sharesToken.getPriorVotes(
+      const priorVotes = await sharesToken.getPastVotes(
         summoner.address,
         prop.votingStarts
       );
@@ -2675,7 +2690,7 @@ describe("Baal contract", function () {
     it("require fail - not enough gas", async function () {
       const proposalCount = await baal.proposalCount();
 
-      const baalGas = 100000000;
+      const baalGas = 10000000;
       await baal.submitProposal(
         proposal.data,
         proposal.expiration,
@@ -2686,13 +2701,26 @@ describe("Baal contract", function () {
       await baal.submitVote(1, yes);
       await moveForwardPeriods(3);
 
-      const procprop = baal.processProposal(1, proposal.data);
-      // const procprop =  baal.processProposal(1, proposal.data, {gasPrice: ethers.utils.parseUnits('1', 'gwei'), gasLimit: 10000000})
+      // const procprop = baal.processProposal(1, proposal.data);
+      const procprop =  baal.processProposal(1, proposal.data, {gasPrice: ethers.utils.parseUnits('1', 'gwei'), gasLimit: 10000000})
 
       expect(procprop).to.be.revertedWith(revertMessages.notEnoughGas);
 
       const state = await baal.state(1);
       expect(state).to.equal(STATES.READY);
+    });
+
+    it("require fail - baalGas to high", async function () {
+      const proposalCount = await baal.proposalCount();
+
+      const baalGas = 20000001;
+      await expect(baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        baalGas,
+        ethers.utils.id(proposal.details)
+      )).to.be.revertedWith(revertMessages.baalGasToHigh);
+
     });
 
     it("has enough baalGas", async function () {
@@ -2891,8 +2919,9 @@ describe("Baal contract", function () {
         ]
       );
 
-      await shamanBaal.mintShares([shaman.address], [900]); // mint 900 shares so summoner has exectly 10% w/ 100 shares
-
+      await shamanBaal.mintShares([shaman.address], [400]); // mint 400 shares to make total supply 1000 so summoner has exectly 10% w/ 100 shares
+      const totalSupply = await shamanBaal.totalSupply();
+      expect(totalSupply).to.equal(1000);
       await baal.submitProposal(
         proposal.data,
         proposal.expiration,
@@ -2907,10 +2936,12 @@ describe("Baal contract", function () {
       const beforeProcessed = await baal.proposals(1);
       await baal.processProposal(1, proposal.data);
       const afterProcessed = await baal.proposals(1);
+      
       verifyProposal(afterProcessed, beforeProcessed);
       const state2 = await baal.state(1);
       expect(state2).to.equal(STATES.PROCESSED);
       const propStatus = await baal.getProposalStatus(1);
+      console.log('[false, true, true, false]', propStatus);
       expect(propStatus).to.eql([false, true, true, false]); // passed [3] is true
     });
 
@@ -3435,9 +3466,9 @@ describe("Baal contract", function () {
     });
   });
 
-  describe("getCurrentVotes", function () {
+  describe("getVotes", function () {
     it("happy case - account with votes", async function () {
-      const currentVotes = await sharesToken.getCurrentVotes(summoner.address);
+      const currentVotes = await sharesToken.getVotes(summoner.address);
       const nCheckpoints = await sharesToken.numCheckpoints(summoner.address);
       const checkpoints = await sharesToken.checkpoints(
         summoner.address,
@@ -3448,12 +3479,12 @@ describe("Baal contract", function () {
     });
 
     it("happy case - account without votes", async function () {
-      const currentVotes = await sharesToken.getCurrentVotes(shaman.address);
+      const currentVotes = await sharesToken.getVotes(shaman.address);
       expect(currentVotes).to.equal(0);
     });
   });
 
-  describe("getPriorVotes", function () {
+  describe("getPastVotes", function () {
     beforeEach(async function () {
       await baal.submitProposal(
         proposal.data,
@@ -3466,7 +3497,7 @@ describe("Baal contract", function () {
     it("happy case - yes vote", async function () {
       const blockT = await blockTime();
       await baal.submitVote(1, yes);
-      const priorVote = await sharesToken.getPriorVotes(summoner.address, blockT);
+      const priorVote = await sharesToken.getPastVotes(summoner.address, blockT);
       const nCheckpoints = await sharesToken.numCheckpoints(summoner.address);
       const votes = (
         await sharesToken.checkpoints(summoner.address, nCheckpoints.sub(1))
@@ -3477,7 +3508,7 @@ describe("Baal contract", function () {
     it("happy case - no vote", async function () {
       const blockT = await blockTime();
       await baal.submitVote(1, no);
-      const priorVote = await sharesToken.getPriorVotes(summoner.address, blockT);
+      const priorVote = await sharesToken.getPastVotes(summoner.address, blockT);
       const nCheckpoints = await sharesToken.numCheckpoints(summoner.address);
       const votes = (
         await sharesToken.checkpoints(summoner.address, nCheckpoints.sub(1))
@@ -3488,7 +3519,7 @@ describe("Baal contract", function () {
     it("require fail - timestamp not determined", async function () {
       const blockT = await blockTime();
       await expect(
-        sharesToken.getPriorVotes(summoner.address, blockT)
+        sharesToken.getPastVotes(summoner.address, blockT)
       ).to.be.revertedWith("!determined");
     });
   });
@@ -3577,7 +3608,11 @@ describe("Baal contract - offering required", function () {
     moduleProxyFactory =
       (await ModuleProxyFactory.deploy()) as ModuleProxyFactory;
 
-    baalSummoner = (await BaalSummoner.deploy(
+    // deploy proxy upgrades
+    baalSummoner = await upgrades.deployProxy(BaalSummoner) as BaalSummoner;
+    await baalSummoner.deployed();
+    // set addresses of templates and libraries
+    await baalSummoner.setAddrs(
       baalSingleton.address,
       gnosisSafeSingleton.address,
       handler.address,
@@ -3586,7 +3621,7 @@ describe("Baal contract - offering required", function () {
       moduleProxyFactory.address,
       lootSingleton.address,
       sharesSingleton.address,
-    )) as BaalSummoner;
+    );
 
     const encodedInitParams = await getBaalParams(
       baalSingleton,
@@ -3598,9 +3633,11 @@ describe("Baal contract - offering required", function () {
       [[summoner.address], [shares]],
       [[summoner.address], [loot]],
       zeroAddress,
+      zeroAddress,
+      zeroAddress
     );
 
-    const tx = await baalSummoner.summonBaalAndSafe(
+    const tx = await baalSummoner.summonBaal(
       encodedInitParams.initParams,
       encodedInitParams.initalizationActions,
       101 // nonce
@@ -3785,11 +3822,14 @@ const getBaalParamsWithAvatar = async function (
   // )
   return {
     initParams: abiCoder.encode(
-      ["string", "string", "address"],
+      ["string", "string", "address", "address", "address", "address"],
       [
         config.TOKEN_NAME,
         config.TOKEN_SYMBOL,
         safeAddr,
+        zeroAddress,
+        zeroAddress,
+        zeroAddress
       ]
     ),
     initalizationActions,
@@ -3890,8 +3930,11 @@ describe("Baal contract - summon baal with current safe", function () {
 
         const moduleFactory = await ModuleProxyFactory.deploy();
 
-
-        baalSummoner = (await BaalSummoner.deploy(
+        // deploy proxy upgrades
+        baalSummoner = await upgrades.deployProxy(BaalSummoner) as BaalSummoner;
+        await baalSummoner.deployed();
+        // set addresses of templates and libraries
+        await baalSummoner.setAddrs(
           baalSingleton.address,
           gnosisSafeSingleton.address,
           handler.address,
@@ -3900,7 +3943,7 @@ describe("Baal contract - summon baal with current safe", function () {
           moduleProxyFactory.address,
           lootSingleton.address,
           sharesSingleton.address,
-        )) as BaalSummoner;
+        );
 
         const encodedInitParams = await getBaalParamsWithAvatar(
           baalSingleton,
@@ -3911,7 +3954,7 @@ describe("Baal contract - summon baal with current safe", function () {
           [[shaman.address], [7]],
           [[summoner.address], [shares]],
           [[summoner.address], [loot]],
-          avatar.address,
+          avatar.address
         );
 
         // view function used as placeholder in deployment

@@ -14,7 +14,7 @@ const _addresses = {
   posterKovan: "0x37A2080f275E26fFEfB6E68F3005826368156C5C",
 };
 
-const DEBUG = false;
+const DEBUG = true;
 
 task(
   "generate",
@@ -383,7 +383,13 @@ task("memberprop", "Submits a new member proposal")
     console.log("tx:", submit.hash);
   });
 
-
+/* example:
+npx hardhat summon --factory 0xe2F42d9fd5C1a590F6c3d6b2A27802C0da93FEb7 
+--summoners [\"0xadc...\"] 
+--shares [\"10000000000000000000\"] --loot [\"10000000000000000000\"] 
+--sharespaused false --lootpaused false 
+--shaman 0xadc... --name gB447  --network goerli
+*/
 task("summon", "Summons a new DAO")
   .addParam("factory", "Dao factory address")
   .addParam(
@@ -403,7 +409,9 @@ task("summon", "Summons a new DAO")
   .addParam("shaman", "any initial shamans")
   .addParam("name", "share token symbol")
   .addOptionalParam("meta", "updated meta data")
+  .addOptionalParam("withsidecar", "add a vault (factory address)")
   .setAction(async (taskArgs, hre) => {
+    const zeroAddress = "0x0000000000000000000000000000000000000000";
     const network = await hre.ethers.provider.getNetwork();
     const chainId = network.chainId;
     const metadataConfig = {
@@ -516,10 +524,14 @@ task("summon", "Summons a new DAO")
       // )
       return {
         initParams: abiCoder.encode(
-          ["string", "string"],
+          ["string", "string", "address", "address", "address", "address"],
           [
             config.TOKEN_NAME,
-            config.TOKEN_SYMBOL
+            config.TOKEN_SYMBOL,
+            zeroAddress,
+            zeroAddress,
+            zeroAddress,
+            zeroAddress
           ]
         ),
         initalizationActions,
@@ -576,12 +588,29 @@ task("summon", "Summons a new DAO")
     );
 
     const randomSeed = Math.floor(Math.random() * 10000000);
+    let tx;
+    if(taskArgs.withsidecar){
+      const baalVaultSummoner = await hre.ethers.getContractFactory("BaalAndVaultSummoner");
+      const contractVault = await baalVaultSummoner.attach(taskArgs.withsidecar);
+      console.log("summon ball and vault from tasks");
 
-    const tx = await contract.summonBaalAndSafe(
-      encodedInitParams.initParams,
-      encodedInitParams.initalizationActions,
-      randomSeed
-    );
+      tx = await contractVault.summonBaalAndVault(
+        encodedInitParams.initParams,
+        encodedInitParams.initalizationActions,
+        randomSeed,
+        hre.ethers.utils.formatBytes32String("daohausCLI"),
+        "test cli vault"
+      );
+    } else {
+      console.log("summon ball from tasks");
+      
+      tx = await contract.summonBaalFromReferrer(
+        encodedInitParams.initParams,
+        encodedInitParams.initalizationActions,
+        randomSeed,
+        hre.ethers.utils.formatBytes32String("daohausCLI")
+      );
+    }
 
     console.log(taskArgs);
     console.log("tx:", tx.hash);

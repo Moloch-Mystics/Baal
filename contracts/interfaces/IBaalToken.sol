@@ -26,13 +26,19 @@ interface IBaalToken {
 
     function totalSupply() external view returns (uint256);
 
+    function snapshot() external returns(uint256);
+
+    function getCurrentSnapshotId() external returns(uint256);
+
+    function totalSupplyAt(uint256 snapshotId) external view returns (uint256);
+
     // below is shares token specific
     struct Checkpoint {
-        uint32 fromTimeStamp;
+        uint32 fromTimePoint;
         uint256 votes;
     }
 
-    function getPriorVotes(address account, uint256 timeStamp) external view returns (uint256);
+    function getPastVotes(address account, uint256 timePoint) external view returns (uint256);
 
     function numCheckpoints(address) external view returns (uint256);
 
@@ -41,5 +47,6 @@ interface IBaalToken {
         view
         returns (Checkpoint memory);
 
-    function getCurrentVotes(address account) external view returns(uint256);
+    function getVotes(address account) external view returns(uint256);
+
 }

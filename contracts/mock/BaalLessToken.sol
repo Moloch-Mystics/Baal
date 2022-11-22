@@ -4,7 +4,7 @@ pragma solidity 0.8.7;
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 import "../utils/BaalVotes.sol";
 import "../interfaces/IBaal.sol";
@@ -30,6 +30,8 @@ contract BaalLessShares is BaalVotes, OwnableUpgradeable, UUPSUpgradeable {
     {
         baal = IBaal(address(0)); /*Configure Baal to setup sender*/
         version = _version;
+        __Ownable_init();
+        __UUPSUpgradeable_init();
     }
 
 

@@ -1,10 +1,4 @@
-const { ethers } = require('hardhat');
-
-// Test Deploy Values 
-
-// deploy templates
-// deploy dao factory
-// deploy higher order factory 
+const { ethers, upgrades } = require('hardhat');
 
 const _shamans = {
     4: [''],
@@ -17,14 +11,15 @@ const _shamans = {
 // same default for all networks, but different sometimes
 // https://github.com/gnosis/zodiac/blob/master/src/factory/constants.ts#L20
 // https://github.com/safe-global/safe-deployments/tree/main/src/assets
-// moduleProxyFactory default 0x00000000062c52e29e8029dc2413172f6d619d85 goerli, optimism and arbitrum at 0x270c012B6C2A61153e8A6d82F2Cb4F88ddB7fD5E
+// moduleProxyFactory https://github.com/gnosis/zodiac/blob/master/src/factory/constants.ts#L21
 const _addresses = {
 	gnosisSingleton: "0xd9db270c1b5e3bd161e8c8503c55ceabee709552",
 	gnosisFallbackLibrary: "0xf48f2b2d2a534e402487b3ee7c18c33aec0fe5e4",
 	gnosisMultisendLibrary: "0xa238cbeb142c10ef7ad8442c6d1f9e89e07e7761",
 	poster: "0x000000000000cd17345801aa8147b8D3950260FF",
 	gnosisSafeProxyFactory: "0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2",
-	moduleProxyFactory: "0x00000000062c52e29e8029dc2413172f6d619d85",
+	moduleProxyFactory: "0x00000000000DC7F163742Eb4aBEf650037b1f588",
+	DAO: "0x0000000000000000000000000000000000000000" // Change to Daohaus protocol zodiac baal avatar
 	}
 
 
@@ -68,13 +63,19 @@ async function main() {
 		networkCurrency[chainId]
 	);
 
-	// const network = await ethers.provider.getNetwork()
-    // chainId = network.chainId
+	// const tx = await deployer.sendTransaction({
+	// 	to:_addresses.DAO,
+	// 	value: ethers.utils.parseEther("0.3")
+	// }
+	// )
+
+	// console.log('return funds', tx);
 	
 	console.log('start deploy');
 
 	const LootFactory = await ethers.getContractFactory('Loot')
     const lootSingleton = (await LootFactory.deploy())
+	console.log('loot waiting');
 	await lootSingleton.deployed();
 	console.log('loot deploy');
 	console.log('lootSingleton',lootSingleton.address)
@@ -88,38 +89,60 @@ async function main() {
     const baalSingleton = (await BaalFactory.deploy())
 	await baalSingleton.deployed();
 
-	console.log('baal deploy');
 	console.log('baalSingleton',baalSingleton.address)
+	console.log('baal deploy');
 
 	const BaalSummoner = await ethers.getContractFactory('BaalSummoner')
+	const BaalAndVaultSummoner = await ethers.getContractFactory('BaalAndVaultSummoner')
 	
 
-    const baalSummoner = (await BaalSummoner.deploy(
+	// deploy proxy upgrades
+	baalSummoner = await upgrades.deployProxy(BaalSummoner);
+	await baalSummoner.deployed();
+	console.log('Factory Contract Address:', baalSummoner.address);
+	console.log('imp:', await upgrades.erc1967.getImplementationAddress(baalSummoner.address));
+	// set addresses of templates and libraries
+	await baalSummoner.setAddrs(
 		baalSingleton.address, 
 		_addresses.gnosisSingleton, 
 		_addresses.gnosisFallbackLibrary, 
 		_addresses.gnosisMultisendLibrary,
 		_addresses.gnosisSafeProxyFactory,
 		_addresses.moduleProxyFactory,
-		"0xacD725Cf8906dAD85Fda40a0D621DCE2C1F99563",
-		"0xADC05EFd6fC78028901deF7C2AC6f61AF0E4C8fb"))
-    
-	await baalSummoner.deployed();
+		lootSingleton.address,
+		sharesSingleton.address
+	);
+  
+	// transfer ownership to DAO
+	if(_addresses.DAO=="0x0000000000000000000000000000000000000000"){
+		console.log("You need to transfer ownership of summoner");
+	} else {
+		console.log("transffering ownership too: ", _addresses.DAO);
+		await baalSummoner.transferOwnership(_addresses.DAO);
+	}
+
 
 	const txHash = baalSummoner.deployTransaction.hash;
 	const receipt = await deployer.provider.getTransactionReceipt(txHash);
+
+	// deploy vault factory proxy upgrades
+	baalAndVaultSummoner = await upgrades.deployProxy(BaalAndVaultSummoner);
+	await baalAndVaultSummoner.deployed();
+	console.log('Vault Factory Contract Address:', baalAndVaultSummoner.address);
+	console.log('Vault imp:', await upgrades.erc1967.getImplementationAddress(baalAndVaultSummoner.address));
+	
+	await baalAndVaultSummoner.setSummonerAddr(baalSummoner.address);
+	if(_addresses.DAO=="0x0000000000000000000000000000000000000000"){
+		console.log("You need to transfer ownership of vault registery");
+	} else {
+		console.log("transffering ownership of vault summoner too: ", _addresses.DAO);
+		await baalAndVaultSummoner.transferOwnership(_addresses.DAO);
+	}
+	
 	console.log('Transaction Hash:', txHash);
 	console.log('Factory Contract Address:', baalSummoner.address);
 	console.log('Block Number:', receipt.blockNumber);
-	console.log('full verify params:', baalSummoner.address, 
-	baalSingleton.address, 
-	_addresses.gnosisSingleton, 
-	_addresses.gnosisFallbackLibrary, 
-	_addresses.gnosisMultisendLibrary,
-	_addresses.gnosisSafeProxyFactory,
-	_addresses.moduleProxyFactory,
-	"0xacD725Cf8906dAD85Fda40a0D621DCE2C1F99563",
-	"0xADC05EFd6fC78028901deF7C2AC6f61AF0E4C8fb");
+
 	}
 
 

@@ -1,4 +1,4 @@
-import { ethers } from "hardhat";
+import { ethers, upgrades } from "hardhat";
 import { solidity } from "ethereum-waffle";
 import { use, expect } from "chai";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
@@ -79,7 +79,7 @@ const getNewBaalAddresses = async (
   const receipt = await ethers.provider.getTransactionReceipt(tx.hash);
   // console.log({logs: receipt.logs})
   let baalSummonAbi = [
-    "event SummonBaal(address indexed baal, address indexed loot, address indexed shares, address safe, bool existingSafe)",
+    "event SummonBaal(address indexed baal, address indexed loot, address indexed shares, address safe, address forwarder, uint256 existingAddrs)",
   ];
   let iface = new ethers.utils.Interface(baalSummonAbi);
   let log = iface.parseLog(receipt.logs[receipt.logs.length - 1]);
@@ -90,7 +90,7 @@ const getNewBaalAddresses = async (
 const defaultDAOSettings = {
   GRACE_PERIOD_IN_SECONDS: 43200,
   VOTING_PERIOD_IN_SECONDS: 432000,
-  PROPOSAL_OFFERING: 69,
+  PROPOSAL_OFFERING: 0,
   SPONSOR_THRESHOLD: 1,
   MIN_RETENTION_PERCENT: 0,
   MIN_STAKING_PERCENT: 0,
@@ -176,10 +176,14 @@ const getBaalParams = async function (
 
   return {
     initParams: abiCoder.encode(
-      ["string", "string"],
+      ["string", "string", "address", "address", "address", "address"],
       [
         config.TOKEN_NAME,
-        config.TOKEN_SYMBOL
+        config.TOKEN_SYMBOL,
+        zeroAddress,
+        zeroAddress,
+        zeroAddress,
+        zeroAddress
       ]
     ),
     initalizationActions,
@@ -258,7 +262,7 @@ describe("Tribute proposal type", function () {
       shares,
       loots,
     );
-    const tx = await baalSummoner.summonBaalAndSafe(
+    const tx = await baalSummoner.summonBaal(
       encodedInitParams.initParams,
       encodedInitParams.initalizationActions,
       saltNonce,
@@ -307,7 +311,11 @@ describe("Tribute proposal type", function () {
     const proxy = await GnosisSafeProxyFactory.deploy();
     const moduleProxyFactory = await ModuleProxyFactory.deploy();
 
-    baalSummoner = (await BaalSummoner.deploy(
+    // deploy proxy upgrades
+    baalSummoner = await upgrades.deployProxy(BaalSummoner) as BaalSummoner;
+    await baalSummoner.deployed();
+    // set addresses of templates and libraries
+    await baalSummoner.setAddrs(
       baalSingleton.address,
       gnosisSafeSingleton.address,
       handler.address,
@@ -316,7 +324,7 @@ describe("Tribute proposal type", function () {
       moduleProxyFactory.address,
       lootSingleton.address,
       sharesSingleton.address,
-    )) as BaalSummoner;
+    );
 
     const addresses = await setupBaal(
       baalSingleton,
@@ -499,6 +507,7 @@ describe("Tribute proposal type", function () {
     proposalId: number = 1,
     proposalOffering: number = 0,
   ) => {
+    
     await tributeMinion.submitTributeProposal(
       baal.address,
       tributeToken,
@@ -529,7 +538,6 @@ describe("Tribute proposal type", function () {
 
     const state = await baal.state(proposalId);
     const propStatus = await baal.getProposalStatus(proposalId);
-    console.log({ state, propStatus });
   };
 
   describe("Baal with NO proposal offering - Safe Tribute Proposal", function () {
@@ -568,7 +576,7 @@ describe("Tribute proposal type", function () {
         tribute,
         requestedShares,
         requestedLoot,
-        false,
+        true,
       );
 
       expect(await sharesToken.balanceOf(applicant.address)).to.equal(
@@ -598,7 +606,7 @@ describe("Tribute proposal type", function () {
         tribute,
         requestedShares,
         requestedLoot,
-        false,
+        true,
       );
       expect(await sharesToken.balanceOf(applicant.address)).to.equal(
         requestedShares + parseInt(currentShares.toString())
@@ -657,37 +665,38 @@ describe("Tribute proposal type", function () {
       expect(await applicantWeth.balanceOf(gnosisSafe.address)).to.equal(tribute);
     });
 
-    it("should not fail to tribute without offering", async function () {
-      const currentShares = await sharesToken.balanceOf(summoner.address);
-      // CONDITION: Member should be able to self-sponsor if shares >= SPONSOR_THRESHOLD
-      expect(currentShares.gte(BigNumber.from(daoConfig.SPONSOR_THRESHOLD)));
+    // tribute proposal can not self sponsor because of potential tx.origin issues
+    // it("should not fail to tribute without offering", async function () {
+    //   const currentShares = await sharesToken.balanceOf(summoner.address);
+    //   // CONDITION: Member should be able to self-sponsor if shares >= SPONSOR_THRESHOLD
+    //   expect(currentShares.gte(BigNumber.from(daoConfig.SPONSOR_THRESHOLD)));
 
-      const summonerTributeMinion = tributeMinion.connect(summoner);
-      const requestedShares = 1234;
-      const tribute = 1000;
-      const tributeToken = weth.connect(summoner);
+    //   const summonerTributeMinion = tributeMinion.connect(summoner);
+    //   const requestedShares = 1234;
+    //   const tribute = 1000;
+    //   const tributeToken = weth.connect(summoner);
 
-      expect(await tributeToken.balanceOf(gnosisSafe.address)).to.equal(0);
-      expect(await tributeToken.balanceOf(summoner.address)).to.gte(tribute);
+    //   expect(await tributeToken.balanceOf(gnosisSafe.address)).to.equal(0);
+    //   expect(await tributeToken.balanceOf(summoner.address)).to.gte(tribute);
 
-      await tributeToken.approve(tributeMinion.address, tribute);
+    //   await tributeToken.approve(tributeMinion.address, tribute);
 
-      await submitAndProcessTributeProposal(
-        summonerTributeMinion,
-        baal,
-        summoner.address,
-        tributeToken.address,
-        tribute,
-        requestedShares,
-        0,
-        false,
-      );
+    //   await submitAndProcessTributeProposal(
+    //     summonerTributeMinion,
+    //     baal,
+    //     summoner.address,
+    //     tributeToken.address,
+    //     tribute,
+    //     requestedShares,
+    //     0,
+    //     true,
+    //   );
 
-      expect(await sharesToken.balanceOf(summoner.address))
-        .to.eq(
-          currentShares.add(BigNumber.from(requestedShares)),
-        );
-    });
+    //   expect(await sharesToken.balanceOf(summoner.address))
+    //     .to.eq(
+    //       currentShares.add(BigNumber.from(requestedShares)),
+    //     );
+    // });
 
     it("fails to tribute without offering", async function () {
       const currentShares = await sharesToken.balanceOf(applicant.address);

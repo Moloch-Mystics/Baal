@@ -5,7 +5,8 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20SnapshotUpgradeable.sol";
 
 import "./utils/BaalVotes.sol";
 import "./interfaces/IBaal.sol";
@@ -14,7 +15,7 @@ import "./interfaces/IBaal.sol";
 
 /// @title Shares
 /// @notice Accounting for Baal non voting shares
-contract Shares is BaalVotes, OwnableUpgradeable, PausableUpgradeable, UUPSUpgradeable {
+contract Shares is BaalVotes, ERC20SnapshotUpgradeable, OwnableUpgradeable, PausableUpgradeable, UUPSUpgradeable {
 
     constructor() {
         _disableInitializers();
@@ -28,13 +29,17 @@ contract Shares is BaalVotes, OwnableUpgradeable, PausableUpgradeable, UUPSUpgra
         external
         initializer
     {
-        require(bytes(name_).length != 0, "Sname empty");
-        require(bytes(symbol_).length != 0, "Ssymbol empty");
+        require(bytes(name_).length != 0, "shares: name empty");
+        require(bytes(symbol_).length != 0, "shares: symbol empty");
 
         __ERC20_init(name_, symbol_);
         __ERC20Permit_init(name_);
         __Pausable_init();
+        __ERC20Snapshot_init();
         __Ownable_init();
+        __UUPSUpgradeable_init();
+        __EIP712_init_delegation("delegation", "4");
+
 
     }
 
@@ -48,15 +53,23 @@ contract Shares is BaalVotes, OwnableUpgradeable, PausableUpgradeable, UUPSUpgra
         _unpause();
     }
 
+    /// @notice Allows baal to create a snapshot
+    function snapshot() external onlyOwner returns(uint256) {
+        return _snapshot();
+    }
+
+    /// @notice get current SnapshotId
+    function getCurrentSnapshotId() external view returns (uint256) {
+        return _getCurrentSnapshotId();
+    }
+
     /// @notice Baal-only function to mint shares.
     /// @param recipient Address to receive shares
     /// @param amount Amount to mint
     function mint(address recipient, uint256 amount) external onlyOwner {
-        unchecked {
-            if (totalSupply() + amount <= type(uint256).max / 2) {
-                _mint(recipient, amount);
-            }
-        }
+        // can not be more than half the max because of totalsupply of loot and shares
+        require(totalSupply() + amount <= type(uint256).max / 2, "shares: cap exceeded");
+        _mint(recipient, amount);
     }
 
     /// @notice Baal-only function to burn shares.
@@ -75,13 +88,13 @@ contract Shares is BaalVotes, OwnableUpgradeable, PausableUpgradeable, UUPSUpgra
         address from,
         address to,
         uint256 amount
-    ) internal override(BaalVotes) {
+    ) internal override(BaalVotes, ERC20SnapshotUpgradeable) {
         super._beforeTokenTransfer(from, to, amount);
         require(
             from == address(0) || /*Minting allowed*/
                 (msg.sender == owner() && to == address(0)) || /*Burning by Baal allowed*/
                 !paused(),
-            "!transferable"
+            "shares: !transferable"
         );
     }
 
