@@ -1,4 +1,4 @@
-[
+exports.deployments = [
   {
     version: "1.0.1",
     networks: ["mainnet", "gnosischain", "goerli", "polygon"],
