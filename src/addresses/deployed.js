@@ -1,13 +1,14 @@
 [
   {
-    version: "1.0.0",
-    networks: ["mainnet", "gnosischain", "goerli"],
-    deployer: "0xef76a8298Bad65436c7D848aB76FF987Aeebe145",
+    version: "1.0.1",
+    networks: ["mainnet", "gnosischain", "goerli", "polygon"],
+    deployer: "0x0fe28D4424E2bB251CE3d463Cd60b7F4874Bc42b",
     addresses: {
-      lootSingleton: "0xacD725Cf8906dAD85Fda40a0D621DCE2C1F99563",
-      sharesSingleton: "0xADC05EFd6fC78028901deF7C2AC6f61AF0E4C8fb",
-      baalSingleton: "0xAce0A31d08671CE10a7c8232B14Dc5Ef6CD63534",
-      factory: "0xf020a55794DB5e065692F86a0Eb82197850a09b9",
+      lootSingleton: "0x0444AE984b9563C8480244693ED65F25B3C64a4E",
+      sharesSingleton: "0x8124Cbb807A7b64123F3dEc3EF64995d8B10d3Eb",
+      baalSingleton: "0x17234C0Ae25AF09fAf57B9D5ea2B93C1f220E800",
+      factory: "0x7e988A9db2F8597735fc68D21060Daed948a3e8C",
+      valutFactory: "0x594E630efbe8dbd810c168e3878817a4094bB312",
       tributeMinion: "0x5c17BFBaB751C5ddF1Ff267acF8fF919537F39Cf",
     },
   },

@@ -121,7 +121,6 @@ const config: HardhatUserConfig = {
     matic: {
       // url: 'https://rpc-mainnet.maticvigil.com/v1/036f1ba8516f0eee2204a574a960b68437ac8661',
       url: "https://polygon-mainnet.infura.io/v3/cc7ca25d68f246f393d7630842360c47",
-      gasPrice: 1000000000,
       accounts: {
         mnemonic: mnemonic(),
       },
@@ -139,10 +138,11 @@ const config: HardhatUserConfig = {
     // Obtain one at https://etherscan.io/
     // apiKey: "61ED96HQAY6PASTEWRXN6AMYQEKM8SYTRY" // etherscan
     apiKey: {
-      gnosis: "SN711KA5TEDG6JRJ2XGD8AITT7Q3VE58XG",
+      gnosis: "",
       xdai: etherscan(),
       goerli: etherscan(),
       mainnet: etherscan(),
+      polygon: ""
     },
     customChains: [
       {
