@@ -531,7 +531,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
             okToExecute = false;
 
         // Make proposal fail if it didn't pass quorum
-        if (okToExecute && prop.yesVotes * 100 < quorumPercent * prop.maxTotalSharesAndLootAtVote)
+        if (okToExecute && prop.yesVotes * 100 < quorumPercent * totalShares())
             okToExecute = false;
 
         // Make proposal fail if the minRetentionPercent is exceeded

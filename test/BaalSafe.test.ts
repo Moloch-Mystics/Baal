@@ -2945,6 +2945,43 @@ describe("Baal contract", function () {
       expect(propStatus).to.eql([false, true, true, false]); // passed [3] is true
     });
 
+    it.only("quorum should not factor loot", async function () {
+      const governanceConfig = abiCoder.encode(
+        ["uint32", "uint32", "uint256", "uint256", "uint256", "uint256"],
+        [
+          deploymentConfig.VOTING_PERIOD_IN_SECONDS,
+          deploymentConfig.GRACE_PERIOD_IN_SECONDS,
+          deploymentConfig.PROPOSAL_OFFERING,
+          10,
+          deploymentConfig.SPONSOR_THRESHOLD,
+          deploymentConfig.MIN_RETENTION_PERCENT,
+        ]
+      );
+
+      await shamanBaal.mintShares([shaman.address], [900]); // mint 900 shares so summoner has > 10% w/ 100 shares
+      await shamanBaal.mintLoot([shaman.address], [100000000000]); // mint 100000000000 loot so summoner has a ton of it
+
+      await baal.submitProposal(
+        proposal.data,
+        proposal.expiration,
+        proposal.baalGas,
+        ethers.utils.id(proposal.details)
+      );
+      await baal.submitVote(1, yes);
+      await moveForwardPeriods(2);
+      const state1 = await baal.state(1);
+      expect(state1).to.equal(STATES.READY);
+      await shamanBaal.setGovernanceConfig(governanceConfig); // set quorum to 10%
+      const beforeProcessed = await baal.proposals(1);
+      await baal.processProposal(1, proposal.data);
+      const afterProcessed = await baal.proposals(1);
+      verifyProposal(afterProcessed, beforeProcessed);
+      const state2 = await baal.state(1);
+      expect(state2).to.equal(STATES.PROCESSED);
+      const propStatus = await baal.getProposalStatus(1);
+      expect(propStatus).to.eql([false, true, true, false]); // passed [3] is true
+    });
+
     it("edge case - just under quorum", async function () {
       const governanceConfig = abiCoder.encode(
         ["uint32", "uint32", "uint256", "uint256", "uint256", "uint256"],
