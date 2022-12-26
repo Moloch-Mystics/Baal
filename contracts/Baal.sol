@@ -77,14 +77,14 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
         uint32 graceEnds; /*termination date for proposal in seconds since unix epoch - derived from `gracePeriod` set on proposal*/
         uint32 expiration; /*timestamp after which proposal should be considered invalid and skipped. */
-        uint32 baalGas; /* gas needed to process proposal */
-        bool[4] status; /* [cancelled, processed, passed, actionFailed] */
-        address sponsor; /* address of the sponsor - set at sponsor proposal - relevant for cancellation */
-        bytes32 proposalDataHash; /*hash of raw data associated with state updates*/
+        uint256 baalGas; /* gas needed to process proposal */
         uint256 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
         uint256 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
         uint256 maxTotalSharesAndLootAtVote; /* highest share+loot count during any individual yes vote*/
-        uint256 maxTotalSharesAtSponsor; /* share count at sponsor*/
+        uint256 maxTotalSharesAtSponsor; /* highest share+loot count during any individual yes vote*/
+        bool[4] status; /* [cancelled, processed, passed, actionFailed] */
+        address sponsor; /* address of the sponsor - set at sponsor proposal - relevant for cancellation */
+        bytes32 proposalDataHash; /*hash of raw data associated with state updates*/
     }
 
     /* Unborn -> Submitted -> Voting -> Grace -> Ready -> Processed
@@ -314,7 +314,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
     function submitProposal(
         bytes calldata proposalData,
         uint32 expiration,
-        uint32 baalGas,
+        uint256 baalGas,
         string calldata details
     ) external payable nonReentrant returns (uint256) {
         require(
@@ -346,13 +346,13 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
                 : 0, /* graceEnds */
             expiration,
             baalGas,
-            [false, false, false, false], /* [cancelled, processed, passed, actionFailed] */
-            selfSponsor ? _msgSender() : address(0),
-            proposalDataHash,
             0, /* yes votes */
             0, /* no votes */
             selfSponsor ? totalSupply() : 0, /* maxTotalSharesAndLootAtVote */
-            selfSponsor ? totalShares() : 0 /* maxTotalSharesAtSponsor */
+            selfSponsor ? totalShares() : 0, /* maxTotalSharesAtSponsor */
+            [false, false, false, false], /* [cancelled, processed, passed, actionFailed] */
+            selfSponsor ? _msgSender() : address(0),
+            proposalDataHash
         );
 
         if (selfSponsor) {
