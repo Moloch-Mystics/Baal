@@ -116,7 +116,7 @@ contract TributeMinion {
         uint256 shares,
         uint256 loot,
         uint32 expiration,
-        uint256 baalgas,
+        uint32 baalgas,
         string memory details
     ) external payable {
         uint32 proposalId = baal.proposalCount() + 1;

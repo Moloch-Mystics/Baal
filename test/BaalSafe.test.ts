@@ -2945,7 +2945,7 @@ describe("Baal contract", function () {
       expect(propStatus).to.eql([false, true, true, false]); // passed [3] is true
     });
 
-    it.only("quorum should not factor loot", async function () {
+    it("quorum should not factor loot", async function () {
       const governanceConfig = abiCoder.encode(
         ["uint32", "uint32", "uint256", "uint256", "uint256", "uint256"],
         [

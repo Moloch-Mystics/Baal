@@ -77,13 +77,14 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
         uint32 votingEnds; /*termination date for proposal in seconds since unix epoch - derived from `votingPeriod` set on proposal*/
         uint32 graceEnds; /*termination date for proposal in seconds since unix epoch - derived from `gracePeriod` set on proposal*/
         uint32 expiration; /*timestamp after which proposal should be considered invalid and skipped. */
-        uint256 baalGas; /* gas needed to process proposal */
-        uint256 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
-        uint256 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
-        uint256 maxTotalSharesAndLootAtVote; /* highest share+loot count during any individual yes vote*/
+        uint32 baalGas; /* gas needed to process proposal */
         bool[4] status; /* [cancelled, processed, passed, actionFailed] */
         address sponsor; /* address of the sponsor - set at sponsor proposal - relevant for cancellation */
         bytes32 proposalDataHash; /*hash of raw data associated with state updates*/
+        uint256 yesVotes; /*counter for `members` `approved` 'votes' to calculate approval on processing*/
+        uint256 noVotes; /*counter for `members` 'dis-approved' 'votes' to calculate approval on processing*/
+        uint256 maxTotalSharesAndLootAtVote; /* highest share+loot count during any individual yes vote*/
+        uint256 maxTotalSharesAtSponsor; /* share count at sponsor*/
     }
 
     /* Unborn -> Submitted -> Voting -> Grace -> Ready -> Processed
@@ -313,7 +314,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
     function submitProposal(
         bytes calldata proposalData,
         uint32 expiration,
-        uint256 baalGas,
+        uint32 baalGas,
         string calldata details
     ) external payable nonReentrant returns (uint256) {
         require(
@@ -345,12 +346,13 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
                 : 0, /* graceEnds */
             expiration,
             baalGas,
+            [false, false, false, false], /* [cancelled, processed, passed, actionFailed] */
+            selfSponsor ? _msgSender() : address(0),
+            proposalDataHash,
             0, /* yes votes */
             0, /* no votes */
             selfSponsor ? totalSupply() : 0, /* maxTotalSharesAndLootAtVote */
-            [false, false, false, false], /* [cancelled, processed, passed, actionFailed] */
-            selfSponsor ? _msgSender() : address(0),
-            proposalDataHash
+            selfSponsor ? totalShares() : 0 /* maxTotalSharesAtSponsor */
         );
 
         if (selfSponsor) {
@@ -397,7 +399,9 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
 
         prop.prevProposalId = latestSponsoredProposalId;
         prop.sponsor = _msgSender();
-        prop.maxTotalSharesAndLootAtVote = totalSupply();
+        // snapshot both total supply and total shares
+        prop.maxTotalSharesAndLootAtVote = totalSupply(); // updaed in votes for min retention
+        prop.maxTotalSharesAtSponsor = totalShares(); // for yes vote quorum
         latestSponsoredProposalId = id;
 
         emit SponsorProposal(_msgSender(), id, block.timestamp);
@@ -477,6 +481,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
         if (_totalSupply > prop.maxTotalSharesAndLootAtVote) {
             prop.maxTotalSharesAndLootAtVote = _totalSupply;
         }
+
         unchecked {
             if (approved) {
                 /*if `approved`, cast delegated balance `yesVotes` to proposal*/
@@ -531,7 +536,7 @@ contract Baal is Module, EIP712Upgradeable, ReentrancyGuardUpgradeable, BaseRela
             okToExecute = false;
 
         // Make proposal fail if it didn't pass quorum
-        if (okToExecute && prop.yesVotes * 100 < quorumPercent * totalShares())
+        if (okToExecute && prop.yesVotes * 100 < quorumPercent * prop.maxTotalSharesAtSponsor)
             okToExecute = false;
 
         // Make proposal fail if the minRetentionPercent is exceeded
