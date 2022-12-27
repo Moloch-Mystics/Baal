@@ -46,28 +46,14 @@ async function main() {
 		networkCurrency[chainId]
 	);
 
-	const factory = await ethers.getContractFactory('Baal');
-	const Baal = await factory.deploy(
-        _shamans[chainId],
-        // _guildTokens[chainId],
-        [_deployer],
-        _loot,
-        _shares,
-        _minVoting,
-        _maxVoting,
-		_proposalOffering,
-        _name,
-        _symbol,
-        false,
-        false,
-	);
+	const BaalFactory = await ethers.getContractFactory('Baal')
+	const baalSingleton = (await BaalFactory.deploy())
+	await baalSingleton.deployed();
 
-	await Baal.deployed();
-
-	const txHash = Baal.deployTransaction.hash;
+	const txHash = baalSingleton.deployTransaction.hash;
 	const receipt = await deployer.provider.getTransactionReceipt(txHash);
 	console.log('Transaction Hash:', txHash);
-	console.log('Contract Address:', Baal.address);
+	console.log('Contract Address:', baalSingleton.address);
 	console.log('Block Number:', receipt.blockNumber);
 }
 
