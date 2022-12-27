@@ -1,6 +1,6 @@
 exports.deployments = [
   {
-    version: "1.0.1",
+    version: "1.0.2",
     networks: ["mainnet", "gnosischain", "goerli", "polygon"],
     deployer: "0x0fe28D4424E2bB251CE3d463Cd60b7F4874Bc42b",
     addresses: {
