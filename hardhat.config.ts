@@ -142,7 +142,7 @@ const config: HardhatUserConfig = {
       xdai: etherscan(),
       goerli: etherscan(),
       mainnet: etherscan(),
-      polygon: "EM7G9BPWRFTG9F9GVEEJMS917NJ2WVT8ZS"
+      polygon: ""
     },
     customChains: [
       // {
