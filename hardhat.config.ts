@@ -142,26 +142,26 @@ const config: HardhatUserConfig = {
       xdai: etherscan(),
       goerli: etherscan(),
       mainnet: etherscan(),
-      polygon: ""
+      polygon: "EM7G9BPWRFTG9F9GVEEJMS917NJ2WVT8ZS"
     },
     customChains: [
-      {
-        network: "gnosis",
-        chainId: 100,
-        urls: {
-          apiURL: "https://api.gnosisscan.io/api",
-          browserURL: "https://gnosisscan.io/",
-        }
-      },
-      // can only have one chainId 100 at a time
       // {
-      //   network: "xdai",
+      //   network: "gnosis",
       //   chainId: 100,
       //   urls: {
-      //     apiURL: "https://blockscout.com/xdai/mainnet/api",
-      //     browserURL: "https://blockscout.com/xdai/mainnet/",
+      //     apiURL: "https://api.gnosisscan.io/api",
+      //     browserURL: "https://gnosisscan.io/",
       //   }
-      // }
+      // },
+      // can only have one chainId 100 at a time
+      {
+        network: "xdai",
+        chainId: 100,
+        urls: {
+          apiURL: "https://blockscout.com/xdai/mainnet/api",
+          browserURL: "https://blockscout.com/xdai/mainnet/",
+        }
+      }
     ]
   },
   solidity: {

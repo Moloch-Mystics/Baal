@@ -46,6 +46,7 @@ async function main() {
 		networkCurrency[chainId]
 	);
 
+	const BaalFactory = await ethers.getContractFactory('Baal')
 	const baalSingleton = (await BaalFactory.deploy())
 	await baalSingleton.deployed();
 
