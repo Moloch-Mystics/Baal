@@ -118,16 +118,27 @@ const config: HardhatUserConfig = {
         mnemonic: mnemonic(),
       },
     },
-    matic: {
-      // url: 'https://rpc-mainnet.maticvigil.com/v1/036f1ba8516f0eee2204a574a960b68437ac8661',
-      url: "https://polygon-mainnet.infura.io/v3/cc7ca25d68f246f393d7630842360c47",
+    polygon: {
+      url: "https://polygon-mainnet.infura.io/v3/<id>",
       accounts: {
         mnemonic: mnemonic(),
       },
     },
     mumbai: {
-      url: "https://rpc-mumbai.maticvigil.com/v1/036f1ba8516f0eee2204a574a960b68437ac8661",
+      url: "https://rpc-mumbai.maticvigil.com/v1/<id>",
       gasPrice: 1000000000,
+      accounts: {
+        mnemonic: mnemonic(),
+      },
+    },
+    arbitrumOne: {
+      url: "https://arbitrum-mainnet.infura.io/v3/<id>", //<---- YOUR INFURA ID! (or it won't work)
+      accounts: {
+        mnemonic: mnemonic(),
+      },
+    },
+    optimisticEthereum: {
+      url: "https://optimism-mainnet.infura.io/v3/<id>", //<---- YOUR INFURA ID! (or it won't work)
       accounts: {
         mnemonic: mnemonic(),
       },
@@ -142,7 +153,9 @@ const config: HardhatUserConfig = {
       xdai: etherscan(),
       goerli: etherscan(),
       mainnet: etherscan(),
-      polygon: ""
+      polygon: "",
+      arbitrumOne: "",
+      optimisticEthereum: "",
     },
     customChains: [
       // {

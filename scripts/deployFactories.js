@@ -22,6 +22,13 @@ const _addresses = {
 	DAO: "0x4A9a27d614a74Ee5524909cA27bdBcBB7eD3b315" // Change to Daohaus protocol zodiac baal avatar
 	}
 
+	// optimism
+	// Safe singleton: 0x69f4D1788e39c87893C980c06EdF4b7f686e2938 
+	// fall back: 0x017062a1dE2FE6b99BE3d9d37841FeD19F573804	
+	// multisend: 0x998739BFdAAdde7C933B942a68053933098f9EDa
+	// GnosisSafeProxyFactory: 0xC22834581EbC8527d974F8a1c97E1bEA4EF910BC
+	// DAO: "0x1aCFF11474B9C6D15966Da7A08eD23438CDE23D4"
+
 
 
 const _shares = ['1']; 
@@ -38,7 +45,9 @@ const networkName = {
 	1: 'mainnet',
 	137: 'matic',
 	42: 'kovan',
-	100: 'gnosis'
+	100: 'gnosis',
+	42161: 'arbitrum',
+	10: 'optimism'
 };
 
 const networkCurrency = {
@@ -47,7 +56,9 @@ const networkCurrency = {
 	1: 'ETH',
 	137: 'matic',
 	42: 'ETH',
-	100: 'xDai'
+	100: 'xDai',
+	42161: 'ETH',
+	10: 'ETH'
 };
 
 async function main() {

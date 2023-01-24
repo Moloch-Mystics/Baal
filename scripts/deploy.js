@@ -46,15 +46,15 @@ async function main() {
 		networkCurrency[chainId]
 	);
 
-	const BaalFactory = await ethers.getContractFactory('Baal')
-	const baalSingleton = (await BaalFactory.deploy())
-	await baalSingleton.deployed();
+	// const BaalFactory = await ethers.getContractFactory('Baal')
+	// const baalSingleton = (await BaalFactory.deploy())
+	// await baalSingleton.deployed();
 
-	const txHash = baalSingleton.deployTransaction.hash;
-	const receipt = await deployer.provider.getTransactionReceipt(txHash);
-	console.log('Transaction Hash:', txHash);
-	console.log('Contract Address:', baalSingleton.address);
-	console.log('Block Number:', receipt.blockNumber);
+	// const txHash = baalSingleton.deployTransaction.hash;
+	// const receipt = await deployer.provider.getTransactionReceipt(txHash);
+	// console.log('Transaction Hash:', txHash);
+	// console.log('Contract Address:', baalSingleton.address);
+	// console.log('Block Number:', receipt.blockNumber);
 }
 
 main()

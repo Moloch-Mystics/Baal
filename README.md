@@ -153,6 +153,6 @@ More docs for [Functions](https://baal-docs.vercel.app/functions) and [Events](h
 See audit notes in ./audits
 
 ## Addresses Beta Factories and Templates
-beta release of the factories. These factories may change until we get to final stable release.
+ Would you like to deploy to another chain? Use scripts/deployFactories and scripts/deployTribute. Please reach out for more info on deploys
 
-src/addresses/deployed.js
+see current deploys at: src/addresses/deployed.js
