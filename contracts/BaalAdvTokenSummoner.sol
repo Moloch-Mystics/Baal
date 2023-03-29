@@ -66,9 +66,7 @@ contract BaalAdvTokenSummoner is
             bytes32(bytes("DHAdvTokenSummoner"))
         );
 
-        // change token ownership to baal and pause
-        IBaalToken(_lootToken).pause();
-        IBaalToken(_sharesToken).pause();
+        // change token ownership to baal
         IBaalToken(_lootToken).transferOwnership(address(_baal));
         IBaalToken(_sharesToken).transferOwnership(address(_baal));
     }
@@ -107,11 +105,13 @@ contract BaalAdvTokenSummoner is
         bytes calldata initializationParams
     ) public returns (address lootToken, address sharesToken) {
         (
-            string memory _name /*_name Name for erc20 `shares` accounting, empty if token */,
-            string memory _symbol /*_symbol Symbol for erc20 `shares` accounting, empty if token*/,
-            string memory _lootName /* name for erc20 `loot` accounting, empty if token */,
-            string memory _lootSymbol /* symbol for erc20 `loot` accounting, empty if token*/
-        ) = abi.decode(initializationParams, (string, string, string, string));
+            string memory _name, /*_name Name for erc20 `shares` accounting, empty if token */
+            string memory _symbol, /*_symbol Symbol for erc20 `shares` accounting, empty if token*/
+            string memory _lootName, /* name for erc20 `loot` accounting, empty if token */
+            string memory _lootSymbol, /* symbol for erc20 `loot` accounting, empty if token*/
+            bool _transferableShares, /* if shares is transferable */
+            bool _transferableLoot /* if loot is transferable */
+        ) = abi.decode(initializationParams, (string, string, string, string, bool, bool));
         address lootSingleton = _baalSummoner.lootSingleton();
         address sharesSingleton = _baalSummoner.sharesSingleton();
 
@@ -136,6 +136,12 @@ contract BaalAdvTokenSummoner is
                 )
             )
         );
+        if (!_transferableShares) {
+            IBaalToken(sharesToken).pause();
+        }
+        if (!_transferableLoot) {
+            IBaalToken(lootToken).pause();
+        }
 
         emit DeployBaalTokens(lootToken, sharesToken);
     }

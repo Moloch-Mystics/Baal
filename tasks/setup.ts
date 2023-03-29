@@ -699,10 +699,9 @@ task("summonAdvToken", "Summons a new DAO from Higher order factory")
       TOKEN_SYMBOL: any;
       LOOT_TOKEN_NAME: any;
       LOOT_TOKEN_SYMBOL: any;
-    },
-    adminConfig: [boolean, boolean],
-    shares: [string[], number[]],
-    loots: [string[], number[]]
+      LOOT_TOKEN_TRANSFERABLE: any;
+      TOKEN_TRANSFERABLE: any;
+    }
   ) {
     const governanceConfig = abiCoder.encode(
       ["uint32", "uint32", "uint256", "uint256", "uint256", "uint256"],
@@ -716,42 +715,41 @@ task("summonAdvToken", "Summons a new DAO from Higher order factory")
       ]
     );
 
-    const setAdminConfig = await baal.interface.encodeFunctionData(
-      "setAdminConfig",
-      adminConfig
-    );
+    const metadataConfig = {
+      CONTENT: taskArgs.meta || '{"name":"test proposal"}',
+      TAG: "daohaus.proposal.metadata",
+    };
+
     const setGovernanceConfig = await baal.interface.encodeFunctionData(
       "setGovernanceConfig",
       [governanceConfig]
     );
 
-    console.log('shares',shares);
-    console.log('loot',shares);
-    
-
-    const mintShares = await baal.interface.encodeFunctionData(
-      "mintShares",
-      shares
-    );
-    const mintLoot = await baal.interface.encodeFunctionData(
-      "mintLoot",
-      loots
+    const postMetaData = await poster.interface.encodeFunctionData("post", [
+      metadataConfig.CONTENT,
+      metadataConfig.TAG,
+    ]);
+    const posterFromBaal = await baal.interface.encodeFunctionData(
+      "executeAsBaal",
+      [poster.address, 0, postMetaData]
     );
 
     const initalizationActions = [
-      setAdminConfig,
       setGovernanceConfig,
+      posterFromBaal
     ];
 
 
     return {
       initParams: abiCoder.encode(
-        ["string", "string", "string", "string"],
+        ["string", "string", "string", "string", "bool", "bool"],
         [
           config.TOKEN_NAME,
           config.TOKEN_SYMBOL,
           config.LOOT_TOKEN_NAME,
           config.LOOT_TOKEN_SYMBOL,
+          config.LOOT_TOKEN_TRANSFERABLE,
+          config.TOKEN_TRANSFERABLE,
         ]
       ),
       initalizationActions,
@@ -775,6 +773,8 @@ task("summonAdvToken", "Summons a new DAO from Higher order factory")
     TOKEN_SYMBOL: taskArgs.name,
     LOOT_TOKEN_NAME: "Baal CUST Loot",
     LOOT_TOKEN_SYMBOL: taskArgs.lootname,
+    LOOT_TOKEN_TRANSFERABLE: taskArgs.lootpaused,
+    TOKEN_TRANSFERABLE: taskArgs.sharespaused,
   };
   
 
@@ -798,10 +798,7 @@ task("summonAdvToken", "Summons a new DAO from Higher order factory")
 
   encodedInitParams = await getBaalParams(
     baalSingleton,
-    deploymentConfig,
-    [taskArgs.sharesPaused, taskArgs.lootPaused],
-    [summonerArr, sharesArr],
-    [summonerArr, lootArr]
+    deploymentConfig
   );
 
   const randomSeed = Math.floor(Math.random() * 10000000);
