@@ -2,6 +2,9 @@
 pragma solidity 0.8.7;
 
 interface IBaalSummoner {
+    function lootSingleton() external view returns (address);
+    function sharesSingleton() external view returns (address);
+
     function deployAndSetupSafe(address _moduleAddr)
         external
         returns (address);

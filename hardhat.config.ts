@@ -124,9 +124,8 @@ const config: HardhatUserConfig = {
         mnemonic: mnemonic(),
       },
     },
-    mumbai: {
-      url: "https://rpc-mumbai.maticvigil.com/v1/<id>",
-      gasPrice: 1000000000,
+    polygonMumbai: {
+      url: "https://polygon-mumbai.infura.io/v3/895440c3ef614d1e835c6b2f114067e8",
       accounts: {
         mnemonic: mnemonic(),
       },
@@ -156,6 +155,7 @@ const config: HardhatUserConfig = {
       polygon: "",
       arbitrumOne: "",
       optimisticEthereum: "",
+      polygonMumbai: "EM7G9BPWRFTG9F9GVEEJMS917NJ2WVT8ZS"
     },
     customChains: [
       // {
