@@ -12,6 +12,8 @@ const _addresses = {
   gnosisMultisendLibrary: "0xa238cbeb142c10ef7ad8442c6d1f9e89e07e7761",
   poster: "0x000000000000cd17345801aa8147b8D3950260FF",
   posterKovan: "0x37A2080f275E26fFEfB6E68F3005826368156C5C",
+  baalDefaultFactory: "0x7e988A9db2F8597735fc68D21060Daed948a3e8C",
+  baalDefaultSingleton: "0x5DcE1044A7E2E35D6524001796cee47252f18411"
 };
 
 const DEBUG = true;
@@ -524,14 +526,14 @@ task("summon", "Summons a new DAO")
       // )
       return {
         initParams: abiCoder.encode(
-          ["string", "string", "address", "address", "address", "address"],
+          ["string", "string", "address", "address", "address", "address","string","string"],
           [
             config.TOKEN_NAME,
             config.TOKEN_SYMBOL,
             zeroAddress,
             zeroAddress,
             zeroAddress,
-            zeroAddress
+            zeroAddress,
           ]
         ),
         initalizationActions,
@@ -620,3 +622,211 @@ task("summon", "Summons a new DAO")
     console.log("Account address:", address);
     console.log("Account balance:", hre.ethers.utils.formatEther(balance));
   });
+
+
+  /* example:
+npx hardhat summonAdvToken --factory 0x68aA3E7389AC60563dE2fBdCCa06Df79e011043A 
+--summoners [\"0xCED608Aa29bB92185D9b6340Adcbfa263DAe075b\",\"0x83ab8e31df35aa3281d630529c6f4bf5ac7f7abf\"] 
+--shares [\"10000000000000000000\", \"10000000000000000000\"] --loot [\"10000000000000000000\"] 
+--sharespaused false --lootpaused false 
+--name gB447  --lootname gb447L007 --network goerli
+*/
+task("summonAdvToken", "Summons a new DAO from Higher order factory")
+.addParam("factory", "Dao factory address")
+.addParam(
+  "summoners",
+  'the summoner addresses (array) (escape quotes) (no spaces) ex [\\"0x123...\\"]'
+)
+.addParam(
+  "shares",
+  "numnber of initial shares for summoners (string array, escape quotes)"
+)
+.addParam(
+  "loot",
+  "numnber of initial loot for summoners (string array, escape quotes)"
+)
+.addParam("sharespaused", "are shares transferable")
+.addParam("lootpaused", "is loot transferable")
+.addParam("name", "share token symbol")
+.addParam("lootname", "loot token symbol")
+.addOptionalParam("meta", "updated meta data")
+.setAction(async (taskArgs, hre) => {
+  const zeroAddress = "0x0000000000000000000000000000000000000000";
+  const network = await hre.ethers.provider.getNetwork();
+  const chainId = network.chainId;
+  const metadataConfig = {
+    CONTENT: taskArgs.meta || '{"name":"test"}',
+    TAG: "daohaus.summoner.daoProfile",
+  };
+  let summonerArr;
+  let lootArr;
+  let sharesArr;
+
+  try {
+    summonerArr = JSON.parse(taskArgs.summoners);
+    lootArr = JSON.parse(taskArgs.loot);
+    sharesArr = JSON.parse(taskArgs.shares);
+  } catch (err) {
+    throw "loot shares and summoners should be arrays";
+  }
+  if (
+    !Array.isArray(summonerArr) ||
+    !Array.isArray(lootArr) ||
+    !Array.isArray(sharesArr)
+  ) {
+    throw "loot shares and summoners should be linked arrays";
+  }
+  if (
+    summonerArr.length !== lootArr.length ||
+    lootArr.length !== sharesArr.length
+  ) {
+    throw "arrays must be of the same length";
+  }
+
+  const abiCoder = hre.ethers.utils.defaultAbiCoder;
+
+  const getBaalParams = async function (
+    baal: any,
+    config: {
+      PROPOSAL_OFFERING: any;
+      GRACE_PERIOD_IN_SECONDS: any;
+      VOTING_PERIOD_IN_SECONDS: any;
+      QUORUM_PERCENT: any;
+      SPONSOR_THRESHOLD: any;
+      MIN_RETENTION_PERCENT: any;
+      MIN_STAKING_PERCENT: any;
+      TOKEN_NAME: any;
+      TOKEN_SYMBOL: any;
+      LOOT_TOKEN_NAME: any;
+      LOOT_TOKEN_SYMBOL: any;
+      LOOT_TOKEN_TRANSFERABLE: any;
+      TOKEN_TRANSFERABLE: any;
+    }
+  ) {
+    const governanceConfig = abiCoder.encode(
+      ["uint32", "uint32", "uint256", "uint256", "uint256", "uint256"],
+      [
+        config.VOTING_PERIOD_IN_SECONDS,
+        config.GRACE_PERIOD_IN_SECONDS,
+        config.PROPOSAL_OFFERING,
+        config.QUORUM_PERCENT,
+        config.SPONSOR_THRESHOLD,
+        config.MIN_RETENTION_PERCENT,
+      ]
+    );
+
+    const metadataConfig = {
+      CONTENT: taskArgs.meta || '{"name":"test proposal"}',
+      TAG: "daohaus.proposal.metadata",
+    };
+
+    const setGovernanceConfig = await baal.interface.encodeFunctionData(
+      "setGovernanceConfig",
+      [governanceConfig]
+    );
+
+    const postMetaData = await poster.interface.encodeFunctionData("post", [
+      metadataConfig.CONTENT,
+      metadataConfig.TAG,
+    ]);
+    const posterFromBaal = await baal.interface.encodeFunctionData(
+      "executeAsBaal",
+      [poster.address, 0, postMetaData]
+    );
+
+    const initalizationActions = [
+      setGovernanceConfig,
+      posterFromBaal
+    ];
+
+
+    return {
+      initParams: abiCoder.encode(
+        ["string", "string", "string", "string", "bool", "bool"],
+        [
+          config.TOKEN_NAME,
+          config.TOKEN_SYMBOL,
+          config.LOOT_TOKEN_NAME,
+          config.LOOT_TOKEN_SYMBOL,
+          config.LOOT_TOKEN_TRANSFERABLE,
+          config.TOKEN_TRANSFERABLE,
+        ]
+      ),
+      initalizationActions,
+    };
+  };
+
+  let encodedInitParams: {
+    initParams: string;
+    initalizationActions: string[];
+  };
+
+  const deploymentConfig = {
+    GRACE_PERIOD_IN_SECONDS: 300,
+    VOTING_PERIOD_IN_SECONDS: 200,
+    PROPOSAL_OFFERING: 0,
+    SPONSOR_THRESHOLD: 1,
+    MIN_RETENTION_PERCENT: 0,
+    MIN_STAKING_PERCENT: 0,
+    QUORUM_PERCENT: 0,
+    TOKEN_NAME: "Baal Shares",
+    TOKEN_SYMBOL: taskArgs.name,
+    LOOT_TOKEN_NAME: "Baal CUST Loot",
+    LOOT_TOKEN_SYMBOL: taskArgs.lootname,
+    LOOT_TOKEN_TRANSFERABLE: taskArgs.lootpaused,
+    TOKEN_TRANSFERABLE: taskArgs.sharespaused,
+  };
+  
+
+  const baalSummoner = await hre.ethers.getContractFactory("BaalAdvTokenSummoner");
+  const contract = await baalSummoner.attach(taskArgs.factory);
+
+  const posterFactory = await hre.ethers.getContractFactory("Poster");
+  const posterAddress =
+    network.name == "kovan" ? _addresses.posterKovan : _addresses.poster;
+  console.log("posterAddress", posterAddress);
+
+  const poster = (await posterFactory.attach(posterAddress));
+  console.log("**********************");
+
+  const Baal = await hre.ethers.getContractFactory("Baal");
+  const baalSingleton = (await Baal.attach(_addresses.baalDefaultSingleton));
+  const MultisendContract = await hre.ethers.getContractFactory("MultiSend");
+  const multisend = (await MultisendContract.attach(
+    _addresses.gnosisMultisendLibrary
+  ));
+
+  encodedInitParams = await getBaalParams(
+    baalSingleton,
+    deploymentConfig
+  );
+
+  const randomSeed = Math.floor(Math.random() * 10000000);
+  let tx;
+  
+  console.log("summon ball from tasks", encodedInitParams);
+  
+  tx = await contract.summonBaalFromReferrer(
+    zeroAddress,
+    zeroAddress,
+    randomSeed,
+    abiCoder.encode(
+      ["address[]", "uint256[]", "uint256[]"],
+      [
+        summonerArr,
+        sharesArr,
+        lootArr
+      ]
+    ),
+    encodedInitParams.initParams,
+    encodedInitParams.initalizationActions
+      );
+  
+  console.log(taskArgs);
+  // console.log("tx:", tx?.hash);
+  const deployers = await hre.ethers.getSigners();
+  const address = await deployers[0].getAddress();
+  const balance = await deployers[0].getBalance();
+  console.log("Account address:", address);
+  console.log("Account balance:", hre.ethers.utils.formatEther(balance));
+});

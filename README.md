@@ -80,9 +80,17 @@ Provides contract to approve ERC-20 transfers. Provides a simple
 function/interface to make a single proposal type.
 
 ### **BaalSummoner (contracts/BaalSummoner.sol)**
-Factory to summon new dao contracts. It has 2 main functions one to deploy
-the dao contracts and the Safe treasury and one to use an existing Safe treasury.
+Factory to summon new dao contracts. 
+It can take an existing safe or exsiting tokens
 
+### **Higher Order BaalAndVaultSummoner (contracts/higherOrderFactories/BaalAndVaultSummoner.sol)**
+Factory to summon new dao contracts with an extra 'sidecar' nonragequitable vault. 
+registry to save safe addresses for use in UI
+It can also add a external safe to an existing DAO as owner
+
+### **Higher Order BaalAdvTokenSummoner (contracts/higherOrderFactories/BaalAdvTokenSummoner.sol)**
+Factory to summon new dao contracts with custom loot token name and symbol 
+Minting and pausing of token happen upfront before Baal is setup
 ----
 
 ## Folder Structure
