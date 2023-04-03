@@ -9,9 +9,7 @@
     "forceConsistentCasingInFileNames": true,
     "incremental": true,
     "composite": true,
-    "lib": [
-      "esnext"
-    ],
+    "lib": ["esnext"],
     "module": "CommonJS",
     "moduleResolution": "node",
     "noImplicitThis": true,
@@ -19,16 +17,19 @@
     "skipLibCheck": true,
     "strict": true,
     "strictNullChecks": true,
-    "target": "es6",
+    "target": "es6"
   },
-  "files": [
-    "src/index.ts"
-  ],
+  "files": ["src/index.ts"],
   "include": [
     "src/types/contracts/Baal.ts",
     "src/types/factories/contracts/Baal__factory.ts",
     "src/types/contracts/BaalSummoner.ts",
     "src/types/factories/contracts/BaalSummoner__factory.ts",
+    "src/types/factories/contracts/BaalSummoner__factory.ts",
+    "src/types/contracts/higherOrderFactories/BaalAdvTokenSummoner.ts",
+    "src/types/factories/contracts/higherOrderFactories/BaalAdvTokenSummoner__factory.ts",
+    "src/types/contracts/higherOrderFactories/BaalAndVaultSummoner.ts",
+    "src/types/factories/contracts/higherOrderFactories/BaalAndVaultSummoner__factory.ts",
     "src/types/contracts/LootERC20.sol/Loot.ts",
     "src/types/factories/contracts/LootERC20.sol/Loot__factory.ts",
     "src/types/contracts/SharesERC20.sol/Shares.ts",
