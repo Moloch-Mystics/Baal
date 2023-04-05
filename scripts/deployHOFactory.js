@@ -44,11 +44,12 @@ const networkName = {
 	4: 'Rinkeby',
 	5: 'goerli',
 	1: 'mainnet',
-	137: 'matic',
+	137: 'polygon',
+	80001: 'polygonMumbai',
 	42: 'kovan',
-	100: 'gnosis',
-	42161: 'arbitrum',
-	10: 'optimism'
+	100: 'gnosisChain',
+	42161: 'arbitrumOne',
+	10: 'optimisticEthereum'
 };
 
 const networkCurrency = {
@@ -56,6 +57,7 @@ const networkCurrency = {
 	5: 'ETH',
 	1: 'ETH',
 	137: 'matic',
+	80001: 'matic',
 	42: 'ETH',
 	100: 'xDai',
 	42161: 'ETH',
@@ -85,7 +87,7 @@ async function main() {
 	
 	console.log('start deploy');
 
-    const baalSummonerAddress = deployments[0]["v102"][networkName[chainId]].addresses.factory;
+    const baalSummonerAddress = deployments[0]["v103"][networkName[chainId]].addresses.factory;
 	console.log('Summoner Address:', baalSummonerAddress);
 	const BaalAdvTokenSummoner = await ethers.getContractFactory('BaalAdvTokenSummoner')
 	
@@ -95,6 +97,9 @@ async function main() {
 	await baalSummoner.deployed();
 	console.log('Factory Contract Address:', baalSummoner.address);
 	console.log('imp:', await upgrades.erc1967.getImplementationAddress(baalSummoner.address));
+	
+	
+	// baalSummoner = BaalAdvTokenSummoner.attach("0x8a4A9E36106Ee290811B89e06e2faFE913507965");
 	// set addresses of templates and libraries
 	await baalSummoner.setSummonerAddr(baalSummonerAddress);
   

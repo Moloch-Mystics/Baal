@@ -125,7 +125,7 @@ const config: HardhatUserConfig = {
       },
     },
     polygonMumbai: {
-      url: "https://polygon-mumbai.infura.io/v3/895440c3ef614d1e835c6b2f114067e8",
+      url: "https://polygon-mumbai.infura.io/v3/<id>",
       accounts: {
         mnemonic: mnemonic(),
       },
@@ -155,26 +155,26 @@ const config: HardhatUserConfig = {
       polygon: "",
       arbitrumOne: "",
       optimisticEthereum: "",
-      polygonMumbai: "EM7G9BPWRFTG9F9GVEEJMS917NJ2WVT8ZS"
+      polygonMumbai: ""
     },
     customChains: [
-      // {
-      //   network: "gnosis",
-      //   chainId: 100,
-      //   urls: {
-      //     apiURL: "https://api.gnosisscan.io/api",
-      //     browserURL: "https://gnosisscan.io/",
-      //   }
-      // },
-      // can only have one chainId 100 at a time
       {
-        network: "xdai",
+        network: "gnosis",
         chainId: 100,
         urls: {
-          apiURL: "https://blockscout.com/xdai/mainnet/api",
-          browserURL: "https://blockscout.com/xdai/mainnet/",
+          apiURL: "https://api.gnosisscan.io/api",
+          browserURL: "https://gnosisscan.io/",
         }
-      }
+      },
+      // can only have one chainId 100 at a time
+      // {
+      //   network: "xdai",
+      //   chainId: 100,
+      //   urls: {
+      //     apiURL: "https://blockscout.com/xdai/mainnet/api",
+      //     browserURL: "https://blockscout.com/xdai/mainnet/",
+      //   }
+      // }
     ]
   },
   solidity: {
