@@ -16,6 +16,8 @@ If you are going to just use this project feel free to clone it.  If you would l
 
 `yarn install` - to install all of the components for the project
 
+`.env.sample` containes the all required environment variables that need to be set to build, deploy & publish the smart contracts on the blockchain. These should be added to a `.env[.*]` file.
+
 ### Building
 
 This project uses the [hardhat](https://hardhat.org/) ethereum tools for solidity compiling and running a virtual ethereum environment for testing.
@@ -96,7 +98,8 @@ Minting and pausing of token happen upfront before Baal is setup
 ## Folder Structure
 - ./abi - generated abis
 - ./contracts - main solidity contracts, interfaces, tools and utils
-- ./scripts - deploy scripts and helpers
+- ./deploy - deploy scripts and helpers)
+- ./scripts - deploy scripts and helpers (**soon to be deprecated**)
 - ./tasks - hard hat cli tasks
 - ./tests - test files
 
@@ -130,6 +133,12 @@ then run the coverage command:
 
 ```
 npx hardhat coverage
+```
+
+## Verify Contracts
+
+```
+yarn hardhat etherscan-verify
 ```
 
 ----

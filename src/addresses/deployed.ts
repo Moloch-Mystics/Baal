@@ -1,4 +1,4 @@
-exports.deployments = [
+export const deployments = [
   {
     v103: {
       mainnet: {
@@ -23,7 +23,7 @@ exports.deployments = [
           tributeMinion: "0x5c17BFBaB751C5ddF1Ff267acF8fF919537F39Cf",
         },
       },
-      gnosisChain: {
+      gnosis: {
         addresses: {
           lootSingleton: "0x0444AE984b9563C8480244693ED65F25B3C64a4E",
           sharesSingleton: "0x8124Cbb807A7b64123F3dEc3EF64995d8B10d3Eb",

@@ -9,4 +9,12 @@ yarn-error.log
 dist/
 src/types/
 abi/
+export/
 .openzeppelin/
+
+.env
+.env.production
+.env.staging
+
+coverage.json
+coverage/
