@@ -1,20 +1,15 @@
-import "@nomiclabs/hardhat-ethers";
-import { task, HardhatUserConfig } from "hardhat/config";
 import * as fs from "fs";
+import { ethers } from "ethers";
+import { task } from "hardhat/config";
 
+import { BigNumber } from "@ethersproject/bignumber";
 import { encodeMultiSend, MetaTransaction } from "@gnosis.pm/safe-contracts";
 
-import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
+import { deployments as currentDeployments } from '../src/addresses/deployed';
+import { getSetupAddresses } from '../src/addresses/setup';
 
-const _addresses = {
-  gnosisSingleton: "0xd9db270c1b5e3bd161e8c8503c55ceabee709552",
-  gnosisFallbackLibrary: "0xf48f2b2d2a534e402487b3ee7c18c33aec0fe5e4",
-  gnosisMultisendLibrary: "0xa238cbeb142c10ef7ad8442c6d1f9e89e07e7761",
-  poster: "0x000000000000cd17345801aa8147b8D3950260FF",
-  posterKovan: "0x37A2080f275E26fFEfB6E68F3005826368156C5C",
-  baalDefaultFactory: "0x7e988A9db2F8597735fc68D21060Daed948a3e8C",
-  baalDefaultSingleton: "0x5DcE1044A7E2E35D6524001796cee47252f18411"
-};
+
+type SupportedNetwork = keyof typeof currentDeployments[0]['v103'];
 
 const DEBUG = true;
 
@@ -56,19 +51,19 @@ task(
 /* DAO tasks */
 /* TODO: DAO amin tasks */
 
-task("delegate", "Delegate shares")
+task("baal:delegate", "Delegate shares")
   .addParam("dao", "Dao address")
   .addParam("to", "delegate to")
   .setAction(async (taskArgs, hre) => {
     const Baal = await hre.ethers.getContractFactory("Baal");
-    const baal = (await Baal.attach(taskArgs.dao));
+    const baal = Baal.attach(taskArgs.dao);
     const Shares = await hre.ethers.getContractFactory("SharesERC20");
-    const shares = (await Shares.attach(baal.address));
+    const shares = Shares.attach(baal.address);
     const delegateVotes = await shares.delegate(taskArgs.to);
     console.log("Delegate votes txhash:", delegateVotes.hash);
   });
 
-task("ragequit", "Ragequit shares and/or loot")
+task("baal:ragequit", "Ragequit shares and/or loot")
   .addParam("dao", "Dao address")
   .addParam("to", "RQ to")
   .addParam("shares", "number of shares")
@@ -79,7 +74,7 @@ task("ragequit", "Ragequit shares and/or loot")
   )
   .setAction(async (taskArgs, hre) => {
     const Baal = await hre.ethers.getContractFactory("Baal");
-    const baal = (await Baal.attach(taskArgs.dao));
+    const baal = Baal.attach(taskArgs.dao);
     const tokens = JSON.parse(taskArgs.tokens);
     const ragequitAction = await baal.ragequit(
       taskArgs.to,
@@ -90,7 +85,7 @@ task("ragequit", "Ragequit shares and/or loot")
     console.log("Ragequit txhash:", ragequitAction.hash);
   });
 
-task("tributeprop", "Approve token and make a tribute proposal")
+task("baal:tribute-prop", "Approve token and make a tribute proposal")
   .addParam("dao", "Dao address")
   .addParam("minion", "Tribute Minion address")
   .addParam("token", "Tribute token address")
@@ -101,11 +96,11 @@ task("tributeprop", "Approve token and make a tribute proposal")
   .addParam("expiration", "Tribute expiration date. 0 for ignore")
   .setAction(async (taskArgs, hre) => {
     const Baal = await hre.ethers.getContractFactory("Baal");
-    const baal = (await Baal.attach(taskArgs.dao));
+    const baal = Baal.attach(taskArgs.dao);
     const Token = await hre.ethers.getContractFactory("TestERC20");
-    const token = (await Token.attach(taskArgs.token));
+    const token = Token.attach(taskArgs.token);
     const Minion = await hre.ethers.getContractFactory("TributeMinion");
-    const minion = (await Minion.attach(taskArgs.minion));
+    const minion = Minion.attach(taskArgs.minion);
     const countBefore = await baal.proposalCount();
     console.log("countBefore", countBefore);
     const deployers = await hre.ethers.getSigners();
@@ -137,24 +132,24 @@ task("tributeprop", "Approve token and make a tribute proposal")
     console.log("Tribute proposal submitted txhash:", tributeProposal.hash);
   });
 
-task("cancelprop", "Cancel a proposal")
+task("baal:cancel-prop", "Cancel a proposal")
   .addParam("dao", "Dao address")
   .addParam("id", "Proposal ID")
   .setAction(async (taskArgs, hre) => {
     const Baal = await hre.ethers.getContractFactory("Baal");
-    const baal = (await Baal.attach(taskArgs.dao));
+    const baal = Baal.attach(taskArgs.dao);
     // TODO: pull event data from etherscan
     const cancelProposal = await baal.cancelProposal(taskArgs.id);
     console.log("Proposal processed txhash:", cancelProposal.hash);
   });
 
-task("processprop", "Process a proposal")
+task("baal:process-prop", "Process a proposal")
   .addParam("dao", "Dao address")
   .addParam("id", "Proposal ID")
   .addParam("data", "the data, need to get this from the submit events")
   .setAction(async (taskArgs, hre) => {
     const Baal = await hre.ethers.getContractFactory("Baal");
-    const baal = (await Baal.attach(taskArgs.dao));
+    const baal = Baal.attach(taskArgs.dao);
     // TODO: pull event data from etherscan
     const processProposal = await baal.processProposal(
       taskArgs.id,
@@ -163,13 +158,13 @@ task("processprop", "Process a proposal")
     console.log("Proposal processed txhash:", processProposal.hash);
   });
 
-task("voteprop", "Vote on a proposal")
+task("baal:vote-prop", "Vote on a proposal")
   .addParam("dao", "Dao address")
   .addParam("id", "Proposal ID")
   .addParam("approve", "true is yes and false is no")
   .setAction(async (taskArgs, hre) => {
     const Baal = await hre.ethers.getContractFactory("Baal");
-    const baal = (await Baal.attach(taskArgs.dao));
+    const baal = Baal.attach(taskArgs.dao);
     const submitVote = await baal.submitVote(
       taskArgs.id,
       taskArgs.approve === "true"
@@ -177,37 +172,38 @@ task("voteprop", "Vote on a proposal")
     console.log("Proposal voted on txhash:", submitVote.hash);
   });
 
-task("sponsorprop", "Status of a proposal")
+task("baal:sponsor-prop", "Status of a proposal")
   .addParam("dao", "Dao address")
   .addParam("id", "Proposal ID")
   .setAction(async (taskArgs, hre) => {
     const Baal = await hre.ethers.getContractFactory("Baal");
-    const baal = (await Baal.attach(taskArgs.dao));
+    const baal = Baal.attach(taskArgs.dao);
     const proposal = await baal.sponsorProposal(taskArgs.id);
     console.log("Proposal sponsored txhash:", proposal.hash);
   });
 
-task("statusprop", "Status of a proposal")
+task("baal:status-prop", "Status of a proposal")
   .addParam("dao", "Dao address")
   .addParam("id", "Proposal ID")
   .setAction(async (taskArgs, hre) => {
     const Baal = await hre.ethers.getContractFactory("Baal");
-    const baal = (await Baal.attach(taskArgs.dao));
+    const baal = Baal.attach(taskArgs.dao);
     const proposal = await baal.proposals(taskArgs.id);
     console.log("Proposal status:", proposal);
   });
-task("infoprops", "Current Proposal info")
+
+task("baal:getlatest-prop", "Current Proposal info")
   .addParam("dao", "Dao address")
   .setAction(async (taskArgs, hre) => {
     const Baal = await hre.ethers.getContractFactory("Baal");
-    const baal = (await Baal.attach(taskArgs.dao));
-    const count = await baal.proposalCount();
+    const baal = Baal.attach(taskArgs.dao);
+    const count = await baal.functions.proposalCount();
     const lastSponsored = await baal.latestSponsoredProposalId();
     console.log("the current proposal count is:", count);
     console.log("the last proposal sponsored is:", lastSponsored);
   });
 
-task("memberprop", "Submits a new member proposal")
+task("baal:member-prop", "Submits a new member proposal")
   .addParam("dao", "Dao address")
   .addParam("applicant", "applicant address")
   .addParam("shares", "number shares")
@@ -218,6 +214,10 @@ task("memberprop", "Submits a new member proposal")
   )
   .addOptionalParam("meta", "updated meta data")
   .setAction(async (taskArgs, hre) => {
+    const { deployments, getChainId, network } = hre;
+    const chainId = await getChainId();
+    const _addresses = await getSetupAddresses(chainId, network, deployments);
+
     const encodeMultiAction2 = (
       multisend: any,
       actions: string[],
@@ -242,22 +242,22 @@ task("memberprop", "Submits a new member proposal")
     };
 
     const MultisendContract = await hre.ethers.getContractFactory("MultiSend");
-    const multisend = (await MultisendContract.attach(
+    const multisend = MultisendContract.attach(
       _addresses.gnosisMultisendLibrary
-    ));
+    );
 
     const block = await hre.ethers.provider.getBlock("latest");
 
     const Baal = await hre.ethers.getContractFactory("Baal");
-    const baal = (await Baal.attach(taskArgs.dao));
+    const baal = Baal.attach(taskArgs.dao);
     const countBefore = await baal.proposalCount();
     console.log("countBefore", countBefore);
 
-    const mintLootAction = await baal.interface.encodeFunctionData("mintLoot", [
+    const mintLootAction = baal.interface.encodeFunctionData("mintLoot", [
       [taskArgs.applicant],
       [taskArgs.loot],
     ]);
-    const mintSharesAction = await baal.interface.encodeFunctionData(
+    const mintSharesAction = baal.interface.encodeFunctionData(
       "mintShares",
       [[taskArgs.applicant], [taskArgs.shares]]
     );
@@ -276,7 +276,7 @@ task("memberprop", "Submits a new member proposal")
     //   [poster.address, 0, postMetaData]
     // );
 
-    const now = await block.timestamp;
+    const now = block.timestamp;
     const voting = await baal.votingPeriod();
     const grace = await baal.gracePeriod();
 
@@ -304,7 +304,7 @@ task("memberprop", "Submits a new member proposal")
   });
 
 
-  task("shamanprop", "Submits a new shman proposal")
+task("baal:shaman-prop", "Submits a new shman proposal")
   .addParam("dao", "Dao address")
   .addParam("shaman", "shaman address")
   .addParam("permissions", "permission number")
@@ -314,6 +314,10 @@ task("memberprop", "Submits a new member proposal")
   )
   .addOptionalParam("meta", "updated meta data")
   .setAction(async (taskArgs, hre) => {
+    const { deployments, getChainId, network } = hre;
+    const chainId = await getChainId();
+    const _addresses = await getSetupAddresses(chainId, network, deployments);
+
     const encodeMultiAction2 = (
       multisend: any,
       actions: string[],
@@ -338,18 +342,18 @@ task("memberprop", "Submits a new member proposal")
     };
 
     const MultisendContract = await hre.ethers.getContractFactory("MultiSend");
-    const multisend = (await MultisendContract.attach(
+    const multisend = MultisendContract.attach(
       _addresses.gnosisMultisendLibrary
-    ));
+    );
 
     const block = await hre.ethers.provider.getBlock("latest");
 
     const Baal = await hre.ethers.getContractFactory("Baal");
-    const baal = (await Baal.attach(taskArgs.dao));
+    const baal = Baal.attach(taskArgs.dao);
     const countBefore = await baal.proposalCount();
     console.log("countBefore", countBefore);
 
-    const addShamanAction = await baal.interface.encodeFunctionData("setShamans", [
+    const addShamanAction = baal.interface.encodeFunctionData("setShamans", [
       [taskArgs.shaman],
       [taskArgs.permissions],
     ]);
@@ -392,7 +396,7 @@ npx hardhat summon --factory 0xe2F42d9fd5C1a590F6c3d6b2A27802C0da93FEb7
 --sharespaused false --lootpaused false 
 --shaman 0xadc... --name gB447  --network goerli
 */
-task("summon", "Summons a new DAO")
+task("baal:summon", "Summons a new DAO")
   .addParam("factory", "Dao factory address")
   .addParam(
     "summoners",
@@ -413,9 +417,11 @@ task("summon", "Summons a new DAO")
   .addOptionalParam("meta", "updated meta data")
   .addOptionalParam("withsidecar", "add a vault (factory address)")
   .setAction(async (taskArgs, hre) => {
-    const zeroAddress = "0x0000000000000000000000000000000000000000";
-    const network = await hre.ethers.provider.getNetwork();
-    const chainId = network.chainId;
+    const { deployments, getChainId, network } = hre;
+    const chainId = await getChainId();
+    const _addresses = await getSetupAddresses(chainId, network, deployments);
+
+    const zeroAddress = ethers.constants.AddressZero;
     const metadataConfig = {
       CONTENT: taskArgs.meta || '{"name":"test"}',
       TAG: "daohaus.summoner.daoProfile",
@@ -558,25 +564,24 @@ task("summon", "Summons a new DAO")
     };
 
     const baalSummoner = await hre.ethers.getContractFactory("BaalSummoner");
-    const contract = await baalSummoner.attach(taskArgs.factory);
+    const contract = baalSummoner.attach(taskArgs.factory);
 
     const baalTemplateAddr = await contract.template();
     console.log("baalTemplateAddr", baalTemplateAddr);
 
     const posterFactory = await hre.ethers.getContractFactory("Poster");
-    const posterAddress =
-      network.name == "kovan" ? _addresses.posterKovan : _addresses.poster;
+    const posterAddress = _addresses.poster;
     console.log("posterAddress", posterAddress);
 
-    const poster = (await posterFactory.attach(posterAddress));
+    const poster = posterFactory.attach(posterAddress);
     console.log("**********************");
 
     const Baal = await hre.ethers.getContractFactory("Baal");
-    const baalSingleton = (await Baal.attach(baalTemplateAddr));
+    const baalSingleton = Baal.attach(baalTemplateAddr);
     const MultisendContract = await hre.ethers.getContractFactory("MultiSend");
-    const multisend = (await MultisendContract.attach(
+    const multisend = MultisendContract.attach(
       _addresses.gnosisMultisendLibrary
-    ));
+    );
 
     encodedInitParams = await getBaalParams(
       baalSingleton,
@@ -593,7 +598,7 @@ task("summon", "Summons a new DAO")
     let tx;
     if(taskArgs.withsidecar){
       const baalVaultSummoner = await hre.ethers.getContractFactory("BaalAndVaultSummoner");
-      const contractVault = await baalVaultSummoner.attach(taskArgs.withsidecar);
+      const contractVault = baalVaultSummoner.attach(taskArgs.withsidecar);
       console.log("summon ball and vault from tasks");
 
       tx = await contractVault.summonBaalAndVault(
@@ -631,7 +636,7 @@ npx hardhat summonAdvToken --factory 0x68aA3E7389AC60563dE2fBdCCa06Df79e011043A
 --sharespaused false --lootpaused false 
 --name gB447  --lootname gb447L007 --network goerli
 */
-task("summonAdvToken", "Summons a new DAO from Higher order factory")
+task("baal:summon-advToken", "Summons a new DAO from Higher order factory")
 .addParam("factory", "Dao factory address")
 .addParam(
   "summoners",
@@ -651,9 +656,15 @@ task("summonAdvToken", "Summons a new DAO from Higher order factory")
 .addParam("lootname", "loot token symbol")
 .addOptionalParam("meta", "updated meta data")
 .setAction(async (taskArgs, hre) => {
-  const zeroAddress = "0x0000000000000000000000000000000000000000";
-  const network = await hre.ethers.provider.getNetwork();
-  const chainId = network.chainId;
+  const { deployments, getChainId, network } = hre;
+  const chainId = await getChainId();
+  const _addresses = {
+    ...await getSetupAddresses(chainId, network, deployments),
+    baalDefaultSingleton: network.name === 'hardhat'
+      ? (await deployments.get('Baal'))?.address
+      : currentDeployments[0]['v103'][network.name as SupportedNetwork]?.addresses?.baalSingleton
+  }
+  const zeroAddress = ethers.constants.AddressZero;
   const metadataConfig = {
     CONTENT: taskArgs.meta || '{"name":"test"}',
     TAG: "daohaus.summoner.daoProfile",
@@ -725,7 +736,7 @@ task("summonAdvToken", "Summons a new DAO from Higher order factory")
       [governanceConfig]
     );
 
-    const postMetaData = await poster.interface.encodeFunctionData("post", [
+    const postMetaData = poster.interface.encodeFunctionData("post", [
       metadataConfig.CONTENT,
       metadataConfig.TAG,
     ]);
@@ -779,22 +790,21 @@ task("summonAdvToken", "Summons a new DAO from Higher order factory")
   
 
   const baalSummoner = await hre.ethers.getContractFactory("BaalAdvTokenSummoner");
-  const contract = await baalSummoner.attach(taskArgs.factory);
+  const contract = baalSummoner.attach(taskArgs.factory);
 
   const posterFactory = await hre.ethers.getContractFactory("Poster");
-  const posterAddress =
-    network.name == "kovan" ? _addresses.posterKovan : _addresses.poster;
+  const posterAddress = _addresses.poster;
   console.log("posterAddress", posterAddress);
 
-  const poster = (await posterFactory.attach(posterAddress));
+  const poster = posterFactory.attach(posterAddress);
   console.log("**********************");
 
   const Baal = await hre.ethers.getContractFactory("Baal");
-  const baalSingleton = (await Baal.attach(_addresses.baalDefaultSingleton));
+  const baalSingleton = Baal.attach(_addresses.baalDefaultSingleton);
   const MultisendContract = await hre.ethers.getContractFactory("MultiSend");
-  const multisend = (await MultisendContract.attach(
+  const multisend = MultisendContract.attach(
     _addresses.gnosisMultisendLibrary
-  ));
+  );
 
   encodedInitParams = await getBaalParams(
     baalSingleton,

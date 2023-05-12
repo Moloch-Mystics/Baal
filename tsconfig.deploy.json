@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+        "target": "es5",
+        "module": "commonjs",
+        "strict": true,
+        "esModuleInterop": true,
+        "moduleResolution": "node",
+        "forceConsistentCasingInFileNames": true,
+        "downlevelIteration": true,
+        "skipLibCheck": true,
+        "outDir": "export"
+      },
+    "include": [
+        "hardhat.config.ts",
+        "./deploy"
+    ],
+}

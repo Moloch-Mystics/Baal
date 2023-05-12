@@ -15,6 +15,12 @@
     "src/index.ts",
     "src/types/**/*.ts",
     "src/types/common.ts",
-    "abi/**/*.json"
+    "src/addresses/*.ts",
+    "abi/**/*.json",
+    "hardhat.config.ts",
+    "./scripts",
+    "./deploy",
+    "./test",
+    "typechain/**/*"
   ],
 }
