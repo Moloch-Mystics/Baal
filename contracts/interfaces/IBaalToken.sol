@@ -30,6 +30,8 @@ interface IBaalToken {
 
     function getCurrentSnapshotId() external returns(uint256);
 
+    function balanceOfAt(address account, uint256 snapshotId) external view returns (uint256);
+
     function totalSupplyAt(uint256 snapshotId) external view returns (uint256);
 
     // below is shares token specific
@@ -47,6 +49,20 @@ interface IBaalToken {
         view
         returns (Checkpoint memory);
 
-    function getVotes(address account) external view returns(uint256);
+    function getVotes(address account) external view returns (uint256);
 
+    function delegates(address account) external view returns (address);
+
+    function delegationNonces(address account) external view returns (uint256);
+
+    function delegate(address delegatee) external;
+
+    function delegateBySig(
+        address delegatee,
+        uint256 nonce,
+        uint256 expiry,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
 }
