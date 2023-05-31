@@ -7,7 +7,7 @@
 ███      █    █     ▀
         █    █
        ▀    ▀*/
-pragma solidity 0.8.7;
+pragma solidity ^0.8.7;
 
 import "@gnosis.pm/safe-contracts/contracts/base/Executor.sol";
 import "@gnosis.pm/safe-contracts/contracts/GnosisSafe.sol";
