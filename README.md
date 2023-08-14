@@ -28,7 +28,7 @@ This project uses the [hardhat](https://hardhat.org/) ethereum tools for solidit
 
 If you are looking to work on unit tests for this project be sure to read the README file in the test directory.
 
-`npx hardhat test` - run the unit tests
+`yarn hardhat test` - run the unit tests
 
 ## Publishing
 
