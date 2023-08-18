@@ -15,24 +15,22 @@ jobs:
           node-version: 16.x
           registry-url: https://registry.npmjs.org/
       - run: yarn global add npm
-      - name: Compare package version to published version
+      - name: Check package version
+        id: cpv
+        uses: PostHog/check-package-version@v2
+      - name: Echo package vs published versions
         run: |
-          echo "::set-output name=npm_version::$(npm view @daohaus/baal-contracts version)"
-          echo "::set-output name=package_version::$(cat package.json | grep version | head -1 | awk -F= "{ print $2 }" | sed 's/[version:,"]//g' | tr -d '[[:space:]]')"
-        id: get-versions
-      - name: print outpouts package vs published versions
-        run: |
-          echo ${{steps.get-versions.outputs.npm_version}}
-          echo ${{steps.get-versions.outputs.package_version}}
-          echo ${{steps.get-versions.outputs.package_version > steps.get-versions.outputs.npm_version}}
+            echo "Committed version: ${{ steps.cpv.outputs.committed-version }}"
+            echo "Published version: ${{ steps.cpv.outputs.published-version }}"
+            echo "Is new version: ${{ steps.cpv.outputs.is-new-version }}"
       - run: yarn install
-        if: steps.get-versions.outputs.package_version > steps.get-versions.outputs.npm_version
+        if: steps.cpv.outputs.is-new-version == 'true'
       - run: yarn build
-        if: steps.get-versions.outputs.package_version > steps.get-versions.outputs.npm_version
+        if: steps.cpv.outputs.is-new-version == 'true'
       - run: yarn test
-        if: steps.get-versions.outputs.package_version > steps.get-versions.outputs.npm_version
+        if: steps.cpv.outputs.is-new-version == 'true'
       - name: publishing
-        if: steps.get-versions.outputs.package_version > steps.get-versions.outputs.npm_version
+        if: steps.cpv.outputs.is-new-version == 'true'
         run: |
           echo '//registry.npmjs.org/:_authToken=${{secrets.NPM_TOKEN}}' > .npmrc
           npm publish --access public --scope daohaus --otp ${{ secrets.NPM_TOKEN }}
