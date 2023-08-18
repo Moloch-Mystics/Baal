@@ -27,3 +27,9 @@ export { MultiSend__factory as MultiSendFactory } from "./types/factories/@gnosi
 // Interfaces
 export { IBaalToken } from "./types/contracts/interfaces/IBaalToken";
 export { IBaal } from "./types/contracts/interfaces/IBaal";
+
+export * from "./signDelegation";
+export * from "./signPermit";
+export * from "./signVote";
+export * from "./util";
+export * from "../test/utils";

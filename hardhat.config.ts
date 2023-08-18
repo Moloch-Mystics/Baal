@@ -8,6 +8,8 @@ import "hardhat-contract-sizer";
 import "hardhat-abi-exporter";
 import "hardhat-deploy";
 
+import "./tasks/setup";
+
 dotenv.config();
 
 /*
@@ -19,9 +21,9 @@ dotenv.config();
   conditionally loading tasks if the artifacts folder exists
   allows the config to skip the first compile.
 */
-if (fs.existsSync("./artifacts")) {
-  import("./tasks/setup");
-}
+// if (fs.existsSync("./artifacts")) {
+//   import("./tasks/setup");
+// }
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more

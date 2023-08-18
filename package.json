@@ -12,12 +12,15 @@
     "/dist/**/*.ts",
     "/export/artifacts/**/*.json",
     "/export/deploy/*.js",
-    "/export/src/**/*.js"
+    "/export/src/**/*.js",
+    "README.md",
+    "LICENSE",
+    "package.json"
   ],
   "scripts": {
     "test": "hardhat test --network hardhat",
     "export-deploy": "tsc -p tsconfig.deploy.json && hardhat export-artifacts export/artifacts",
-    "build": "yarn build:sol && yarn build:abi && yarn build:ts && yarn export-deploy",
+    "build": "rm -Rf dist && yarn build:sol && yarn build:abi && yarn build:ts && yarn export-deploy",
     "build:test": "yarn build:sol && yarn build:ts",
     "build:ts": "tsc --build tsconfig.build.json",
     "build:abi": "yarn hardhat export-abi",
@@ -44,8 +47,7 @@
     "@nomicfoundation/hardhat-toolbox": "^2.0.2",
     "@nomiclabs/hardhat-ethers": "npm:hardhat-deploy-ethers",
     "@nomiclabs/hardhat-etherscan": "^3.1.7",
-    "@openzeppelin/contracts": "^4.8.0",
-    "@openzeppelin/contracts-upgradeable": "^4.8.0",
+    "@openzeppelin/hardhat-upgrades": "^1.21.0",
     "@typechain/ethers-v5": "^10.2.0",
     "@typechain/hardhat": "^6.1.5",
     "@types/chai": "^4.2.18",
@@ -57,6 +59,7 @@
     "ethers": "^5.7.1",
     "hardhat": "^2.11.2",
     "hardhat-abi-exporter": "^2.10.0",
+    "hardhat-contract-sizer": "^2.4.0",
     "hardhat-deploy": "^0.11.25",
     "hardhat-gas-reporter": "^1.0.9",
     "shx": "^0.3.4",
@@ -68,7 +71,7 @@
   "dependencies": {
     "@gnosis.pm/zodiac": "^3.3.7",
     "@opengsn/contracts": "2.2.5",
-    "@openzeppelin/hardhat-upgrades": "^1.21.0",
-    "hardhat-contract-sizer": "^2.4.0"
+    "@openzeppelin/contracts": "^4.8.0",
+    "@openzeppelin/contracts-upgradeable": "^4.8.0"
   }
 }

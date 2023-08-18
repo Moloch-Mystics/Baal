@@ -19,8 +19,10 @@
     "strictNullChecks": true,
     "target": "es6"
   },
+  "exclude": ["node_modules"],
   "files": ["src/index.ts"],
   "include": [
+    "hardhat.config.ts",
     "src/types/contracts/Baal.ts",
     "src/types/factories/contracts/Baal__factory.ts",
     "src/types/contracts/BaalSummoner.ts",
@@ -42,6 +44,9 @@
     "src/types/factories/@gnosis.pm/safe-contracts/contracts/libraries/MultiSend__factory.ts",
     "src/types/contracts/interfaces/IBaalToken.ts",
     "src/types/contracts/interfaces/IBaal.ts",
-    "src/types/common.ts"
+    "src/types/common.ts",
+    "src/**/*.ts",
+    "tasks/*.ts",
+    "test/utils/*.ts"
   ]
 }
