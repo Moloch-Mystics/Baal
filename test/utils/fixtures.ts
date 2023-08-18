@@ -13,6 +13,7 @@ export type Signer = {
     shares?: Shares;
     tributeMinion?: TributeMinion;
     weth?: TestERC20;
+    dai?: TestERC20;
   };
 
 type BaalSetupType = {
@@ -121,12 +122,12 @@ export const baalSetup = deployments.createFixture<BaalSetupType, BaalSetupOpts>
 
     const wethDeployed = await deployments.deploy('TestERC20', {
         from: deployer,
-        args: ['WETH', 'WETH', 10000000]
+        args: ['WETH', 'WETH', ethers.utils.parseUnits('10000000', 'ether')]
     });
 
     const daiDeployed = await deployments.deploy('TestERC20', {
         from: deployer,
-        args: ['DAI', 'DAI', 10000000]
+        args: ['DAI', 'DAI', ethers.utils.parseUnits('10000000', 'ether')]
     });
 
     const weth = (await ethers.getContractAt('TestERC20', wethDeployed.address, deployer)) as TestERC20;
@@ -134,6 +135,10 @@ export const baalSetup = deployments.createFixture<BaalSetupType, BaalSetupOpts>
     await weth.transfer(applicant, 1000);
 
     const dai = (await ethers.getContractAt('TestERC20', daiDeployed.address, deployer)) as TestERC20;
+    await dai.transfer(summoner, ethers.utils.parseUnits('10', 'ether'));
+    await dai.transfer(applicant, ethers.utils.parseUnits('10', 'ether'));
+    await dai.transfer(s1, ethers.utils.parseUnits('10', 'ether'));
+    await dai.transfer(s2, ethers.utils.parseUnits('10', 'ether'));
 
     return {
         Loot: lootToken,
@@ -157,6 +162,7 @@ export const baalSetup = deployments.createFixture<BaalSetupType, BaalSetupOpts>
                 sharesInitial: summonerDist.shares,
                 tributeMinion: (await ethers.getContractAt('TributeMinion', tributeMinion.address, summoner)) as TributeMinion,
                 weth: (await ethers.getContractAt('TestERC20', weth.address, summoner)) as TestERC20,
+                dai: (await ethers.getContractAt('TestERC20', dai.address, summoner)) as TestERC20,
             },
             applicant: {
                 address: applicant,
@@ -167,6 +173,7 @@ export const baalSetup = deployments.createFixture<BaalSetupType, BaalSetupOpts>
                 sharesInitial: applicantDist.shares,
                 tributeMinion: (await ethers.getContractAt('TributeMinion', tributeMinion.address, applicant)) as TributeMinion,
                 weth: (await ethers.getContractAt('TestERC20', weth.address, applicant)) as TestERC20,
+                dai: (await ethers.getContractAt('TestERC20', dai.address, applicant)) as TestERC20,
             },
             shaman: {
                 address: shaman,
@@ -182,12 +189,15 @@ export const baalSetup = deployments.createFixture<BaalSetupType, BaalSetupOpts>
                 lootInitial: 0,
                 sharesInitial: 0,
                 weth: (await ethers.getContractAt('TestERC20', weth.address, s1)) as TestERC20,
+                dai: (await ethers.getContractAt('TestERC20', dai.address, s1)) as TestERC20,
             },
             s2: {
                 address: s2,
                 baal: (await ethers.getContractAt('Baal', baal.address, s2)) as Baal,
                 lootInitial: 0,
                 sharesInitial: 0,
+                weth: (await ethers.getContractAt('TestERC20', weth.address, s2)) as TestERC20,
+                dai: (await ethers.getContractAt('TestERC20', dai.address, s2)) as TestERC20,
             },
             s3: {
                 address: s3,

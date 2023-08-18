@@ -1,7 +1,7 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 import { BigNumber } from 'ethers'
 
-export default async function signPermit(
+export const signPermit = async (
   chainId: number,
   contractAddress: string,
   signer: SignerWithAddress,
@@ -11,7 +11,7 @@ export default async function signPermit(
   value: number,
   nonce: BigNumber,
   deadline: number
-) {
+) => {
   // "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
   const domain = {
     name,
@@ -40,4 +40,6 @@ export default async function signPermit(
   })
 
   return sig
-}
+};
+
+export default signPermit;

@@ -1,6 +1,6 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 
-export default async function signVote(
+export const signVote = async (
   chainId: number,
   contractAddress: string,
   signer: SignerWithAddress,
@@ -10,7 +10,7 @@ export default async function signVote(
   proposalId: number,
   support: boolean
 
-) {
+) => {
   const domain = {
     name: 'Vote',
     version: '4',
@@ -41,4 +41,6 @@ export default async function signVote(
   const sig = await signer._signTypedData(domain, types, values)
 
   return sig
-}
+};
+
+export default signVote;
