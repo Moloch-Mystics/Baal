@@ -113,7 +113,23 @@ You can `yarn add @daohaus/baal-contracts` on your own project and get access to
 
   2. On your test scripts, you can call `await deployments.fixture([tag1, tag2, ...])` (e.g. under `beforeEach()`) and specify the deployment tags you need. For example, `await deployments.fixture(['Infra', 'BaalSummoner'])` will deploy both Safe & Baal contracts.
 
-You can find more info about using `fixtures` on hardhat in this [link](https://www.npmjs.com/package/hardhat-deploy#testing-deployed-contracts). It is also recommended to check out the [Baal shamans](https://github.com/HausDAO/baal-shamans) repository for examples
+
+  3. You can also use the [`setupBaal`](test/utils/fixtures.ts) fixture to setup your tests with factory contracts, baal settings, members, loot/shares/token distributions, etc. Moreover, you can also customize it to cover new use cases such as custom summoner contracts, shamans and other setup needs by implementing the`setupBaalOverride` and/or `setupUsersOverride` fixture function parameters. You can take a look at the default implementation ([setupBaal](test/utils/baal.ts) and [setupUsersDefault](test/utils/fixtures.ts)) for inspiration. Below, there's the list of parameters can be customized when calling the hardhat fixture:
+
+  ```js
+    type BaalSetupOpts = {
+      daoSettings?: Partial<DAOSettings>;
+      summonSetupOpts?: Partial<SummonSetup>;
+      safeAddress?: `0x${string}`;
+      forwarderAddress?: `0x${string}`;
+      lootAddress?: `0x${string}`;
+      sharesAddress?: `0x${string}`;
+      setupBaalOverride?: (params: NewBaalParams) => Promise<NewBaalAddresses>;
+      setupUsersOverride?: (params: SetupUsersParams) => Promise<UsersSetup>;
+  }
+  ```
+
+To learn more about using `fixtures` on hardhat visit [link1](https://github.com/wighawag/hardhat-deploy#creating-fixtures) and [link2](https://www.npmjs.com/package/hardhat-deploy#testing-deployed-contracts). It is also recommended to check out the [Baal shamans](https://github.com/HausDAO/baal-shamans) repository for examples.
 
 ----
 ## Contracts
