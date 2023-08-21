@@ -2,7 +2,7 @@ import { deployments } from 'hardhat';
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 
 import { Baal, BaalLessShares, BaalSummoner, GnosisSafe, Loot, MockBaal, MultiSend, Poster, Shares, TestERC20, TributeMinion } from '../../src/types';
-import { DAOSettings, defaultDAOSettings, defaultSummonSetup, setupBaal } from './baal';
+import { DAOSettings, NewBaalAddresses, NewBaalParams, SummonSetup, defaultDAOSettings, defaultSummonSetup, setupBaal } from './baal';
 
 export type Signer = {
     address: string;
@@ -45,74 +45,39 @@ type MockBaalLessTokenSetupType = {
     BaalLessShares: BaalLessShares;
 }
 
-type BaalSetupOpts = {
-    daoSettings?: Partial<DAOSettings>;
-    safeAddress?: `0x${string}`,
-    forwarderAddress?: `0x${string}`,
-    lootAddress?: `0x${string}`,
-    sharesAddress?: `0x${string}`,
+export type SetupUsersParams = {
+    addresses: NewBaalAddresses;
+    baal: Baal;
+    hre: HardhatRuntimeEnvironment;
+};
+
+export type UsersSetup = {
+    dai: TestERC20;
+    weth: TestERC20;
+    signers: { [key: string]: Signer };
 }
 
-export const baalSetup = deployments.createFixture<BaalSetupType, BaalSetupOpts>(
-    async (hre: HardhatRuntimeEnvironment, options?: BaalSetupOpts
-) => {
+type BaalSetupOpts = {
+    daoSettings?: Partial<DAOSettings>;
+    summonSetupOpts?: Partial<SummonSetup>;
+    safeAddress?: `0x${string}`;
+    forwarderAddress?: `0x${string}`;
+    lootAddress?: `0x${string}`;
+    sharesAddress?: `0x${string}`;
+    setupBaalOverride?: (params: NewBaalParams) => Promise<NewBaalAddresses>;
+    setupUsersOverride?: (params: SetupUsersParams) => Promise<UsersSetup>;
+}
+
+const setupUsersDefault = async ({
+    // addresses,
+    baal,
+    hre,
+}: SetupUsersParams) => {
     const { ethers, deployments, getNamedAccounts, getUnnamedAccounts } = hre;
     const { deployer } = await getNamedAccounts();
     const [summoner, applicant, shaman, s1, s2, s3, s4, s5, s6] = await getUnnamedAccounts();
 
-    await deployments.fixture(['Infra', 'TributeMinion', 'BaalSummoner']); // Deployment Tags
-
-    console.log('baalSetup fixture', options);
-    // console.log('deployments', Object.keys(await deployments.all()));
-
-    // TODO: check if set on fixture options
-    const loot = defaultSummonSetup.loot;
-    const lootPaused = defaultSummonSetup.lootPaused;
-    const shares = defaultSummonSetup.shares;
-    const sharesPaused = defaultSummonSetup.sharesPaused;
-
-    const shamanPermissions = defaultSummonSetup.shamanPermissions;
-    
-
-    const baalSingleton = (await ethers.getContract('Baal', deployer)) as Baal;
-    const baalSummoner = (await ethers.getContract('BaalSummoner', deployer)) as BaalSummoner;
-    const poster = (await ethers.getContract('Poster', deployer)) as Poster
     const tributeMinion = (await ethers.getContract('TributeMinion', deployer)) as TributeMinion;
-
-    const summonerDist = {
-        shares: shares * 2,
-        loot,
-    };
-    const applicantDist = { shares, loot };
-
-    const addresses = await setupBaal(
-        baalSummoner,
-        baalSingleton,
-        poster,
-        {
-            ...defaultDAOSettings,
-            ...options?.daoSettings,
-        },
-        [sharesPaused, lootPaused],
-        [[shaman], [shamanPermissions]],
-        [
-            [summoner, applicant],
-            [summonerDist.shares, applicantDist.shares]
-        ],
-        [
-            [summoner, applicant],
-            [summonerDist.loot, applicantDist.loot]
-        ],
-        options?.safeAddress,
-        options?.forwarderAddress,
-        options?.lootAddress,
-        options?.sharesAddress,
-    );
-    // console.log('addresses', addresses);
-
-
-    const baal = (await ethers.getContractAt('Baal', addresses.baal, summoner)) as Baal;
-    const gnosisSafe = (await ethers.getContractAt('GnosisSafe', addresses.safe)) as GnosisSafe;
 
     const lootTokenAddress = await baal.lootToken();
     const lootToken = (await ethers.getContractAt('Loot', lootTokenAddress)) as Loot;
@@ -141,25 +106,16 @@ export const baalSetup = deployments.createFixture<BaalSetupType, BaalSetupOpts>
     await dai.transfer(s2, ethers.utils.parseUnits('10', 'ether'));
 
     return {
-        Loot: lootToken,
-        Shares: sharesToken,
-        // Baal: (await ethers.getContract('Baal', deployer)) as Baal,
-        Baal: baal,
-        BaalSummoner: baalSummoner,
-        GnosisSafe: gnosisSafe,
-        MultiSend: (await ethers.getContract('MultiSend', deployer)) as MultiSend,
-        // Poster: poster,
-        TributeMinion: tributeMinion,
-        WETH: weth,
-        DAI: dai,
+        weth,
+        dai,
         signers: {
             summoner: {
                 address: summoner,
                 baal: baal,
                 loot: (await ethers.getContractAt('Loot', lootToken.address, summoner)) as Loot,
-                lootInitial: summonerDist.loot,
+                lootInitial: (await lootToken.balanceOf(summoner)).toNumber(),
                 shares: (await ethers.getContractAt('Shares', sharesTokenAddress, summoner)) as Shares,
-                sharesInitial: summonerDist.shares,
+                sharesInitial: (await sharesToken.balanceOf(summoner)).toNumber(),
                 tributeMinion: (await ethers.getContractAt('TributeMinion', tributeMinion.address, summoner)) as TributeMinion,
                 weth: (await ethers.getContractAt('TestERC20', weth.address, summoner)) as TestERC20,
                 dai: (await ethers.getContractAt('TestERC20', dai.address, summoner)) as TestERC20,
@@ -168,9 +124,9 @@ export const baalSetup = deployments.createFixture<BaalSetupType, BaalSetupOpts>
                 address: applicant,
                 baal: (await ethers.getContractAt('Baal', baal.address, applicant)) as Baal,
                 loot: (await ethers.getContractAt('Loot', lootToken.address, applicant)) as Loot,
-                lootInitial: applicantDist.loot,
+                lootInitial: (await lootToken.balanceOf(applicant)).toNumber(),
                 shares: (await ethers.getContractAt('Shares', sharesToken.address, applicant)) as Shares,
-                sharesInitial: applicantDist.shares,
+                sharesInitial: (await sharesToken.balanceOf(applicant)).toNumber(),
                 tributeMinion: (await ethers.getContractAt('TributeMinion', tributeMinion.address, applicant)) as TributeMinion,
                 weth: (await ethers.getContractAt('TestERC20', weth.address, applicant)) as TestERC20,
                 dai: (await ethers.getContractAt('TestERC20', dai.address, applicant)) as TestERC20,
@@ -223,8 +179,98 @@ export const baalSetup = deployments.createFixture<BaalSetupType, BaalSetupOpts>
                 lootInitial: 0,
                 sharesInitial: 0,
             },
-
         },
+    };
+}
+
+export const baalSetup = deployments.createFixture<BaalSetupType, BaalSetupOpts>(
+    async (hre: HardhatRuntimeEnvironment, options?: BaalSetupOpts
+) => {
+    const { ethers, deployments, getNamedAccounts, getUnnamedAccounts } = hre;
+    const { deployer } = await getNamedAccounts();
+    const [summoner, applicant, shaman, s1, s2, s3, s4, s5, s6] = await getUnnamedAccounts();
+
+    await deployments.fixture(['Infra', 'TributeMinion', 'BaalSummoner']); // Deployment Tags
+
+    console.log('baalSetup fixture', options);
+    // console.log('deployments', Object.keys(await deployments.all()));
+
+    const loot = options?.summonSetupOpts?.loot || defaultSummonSetup.loot;
+    const lootPaused = options?.summonSetupOpts?.lootPaused || defaultSummonSetup.lootPaused;
+    const shares = options?.summonSetupOpts?.shares || defaultSummonSetup.shares;
+    const sharesPaused = options?.summonSetupOpts?.sharesPaused || defaultSummonSetup.sharesPaused;
+    const shamanPermissions = options?.summonSetupOpts?.shamanPermissions || defaultSummonSetup.shamanPermissions;
+
+    const baalSingleton = (await ethers.getContract('Baal', deployer)) as Baal;
+    const baalSummoner = (await ethers.getContract('BaalSummoner', deployer)) as BaalSummoner;
+    const poster = (await ethers.getContract('Poster', deployer)) as Poster
+    const tributeMinion = (await ethers.getContract('TributeMinion', deployer)) as TributeMinion;
+
+    const summonerDist = {
+        shares: shares * 2,
+        loot,
+    };
+    const applicantDist = { shares, loot };
+
+    const setupParams: NewBaalParams = {
+        baalSummoner,
+        baalSingleton,
+        poster,
+        config: {
+            ...defaultDAOSettings,
+            ...options?.daoSettings,
+        },
+        adminConfig: [sharesPaused, lootPaused],
+        shamans: [[shaman], [shamanPermissions]],
+        shares: [
+            [summoner, applicant],
+            [summonerDist.shares, applicantDist.shares]
+        ],
+        loots: [
+            [summoner, applicant],
+            [summonerDist.loot, applicantDist.loot]
+        ],
+        safeAddress: options?.safeAddress,
+        forwarderAddress: options?.forwarderAddress,
+        lootAddress: options?.lootAddress,
+        sharesAddress: options?.sharesAddress,
+    }; 
+
+    const addresses = options?.setupBaalOverride
+        ? await options.setupBaalOverride(setupParams)
+        : await setupBaal(setupParams); // use default setup
+    // console.log('addresses', addresses);
+
+    const baal = (await ethers.getContractAt('Baal', addresses.baal, summoner)) as Baal;
+    const gnosisSafe = (await ethers.getContractAt('GnosisSafe', addresses.safe)) as GnosisSafe;
+
+    const lootTokenAddress = await baal.lootToken();
+    const lootToken = (await ethers.getContractAt('Loot', lootTokenAddress)) as Loot;
+
+    const sharesTokenAddress = await baal.sharesToken();
+    const sharesToken = (await ethers.getContractAt('Shares', sharesTokenAddress)) as Shares;
+
+    const {
+        dai,
+        weth,
+        signers,
+    } = options?.setupUsersOverride
+        ? await options.setupUsersOverride({ addresses, baal, hre })
+        : await setupUsersDefault({ addresses, baal, hre });
+
+    return {
+        Loot: lootToken,
+        Shares: sharesToken,
+        // Baal: (await ethers.getContract('Baal', deployer)) as Baal,
+        Baal: baal,
+        BaalSummoner: baalSummoner,
+        GnosisSafe: gnosisSafe,
+        MultiSend: (await ethers.getContract('MultiSend', deployer)) as MultiSend,
+        // Poster: poster,
+        TributeMinion: tributeMinion,
+        WETH: weth,
+        DAI: dai,
+        signers,
     };
 
 

@@ -1,5 +1,5 @@
 import { ethers } from 'hardhat';
-import { BigNumber, BigNumberish, ContractTransaction } from 'ethers';
+import { BigNumber, BigNumberish, Contract, ContractTransaction } from 'ethers';
 
 import { Baal, BaalSummoner, MultiSend, Poster } from '../../src/types';
 import { encodeMultiAction } from '../../src/util';
@@ -136,7 +136,15 @@ export const defaultProposalSettings = {
     BAAL_GAS: 0,
 };
 
-export const defaultSummonSetup = {
+export type SummonSetup = {
+    loot: number;
+    lootPaused: boolean;
+    shamanPermissions: SHAMAN_PERMISSIONS;
+    shares: number;
+    sharesPaused: boolean;
+};
+
+export const defaultSummonSetup: SummonSetup = {
     loot: 500,
     lootPaused: false,
     shamanPermissions: SHAMAN_PERMISSIONS.ALL,
@@ -144,9 +152,30 @@ export const defaultSummonSetup = {
     sharesPaused: false,
 };
 
-export const getNewBaalAddresses = async (
-    tx: ContractTransaction
-): Promise<{ baal: string; loot: string; safe: string }> => {
+export type NewBaalParams = {
+    baalSummoner: Contract;
+    baalSingleton: Baal;
+    poster: Poster;
+    config: DAOSettings;
+    adminConfig: [boolean, boolean];
+    shamans: [string[], number[]];
+    shares: [string[], number[]];
+    loots: [string[], number[]];
+    safeAddress?: `0x${string}`;
+    forwarderAddress?: `0x${string}`;
+    lootAddress?: `0x${string}`;
+    sharesAddress?: `0x${string}`;
+    saltNonceOverride?: string;
+}
+
+export type NewBaalAddresses = {
+    baal: string;
+    loot: string;
+    shares: string;
+    safe: string;
+}
+
+export const getNewBaalAddresses = async (tx: ContractTransaction): Promise<NewBaalAddresses> => {
     const receipt = await ethers.provider.getTransactionReceipt(tx.hash);
     // console.log({logs: receipt.logs})
     let baalSummonAbi = [
@@ -154,8 +183,8 @@ export const getNewBaalAddresses = async (
     ];
     let iface = new ethers.utils.Interface(baalSummonAbi);
     let log = iface.parseLog(receipt.logs[receipt.logs.length - 1]);
-    const { baal, loot, safe } = log.args;
-    return { baal, loot, safe };
+    const { baal, loot, shares, safe } = log.args;
+    return { baal, loot, shares, safe };
 };
 
 export const getBaalParams = async function (
@@ -234,24 +263,25 @@ export const getBaalParams = async function (
     };
 };
 
-export const setupBaal = async (
-    baalSummoner: BaalSummoner,
-    baal: Baal,
-    poster: Poster,
-    config: DAOSettings,
-    adminConfig: [boolean, boolean],
-    shamans: [string[], number[]],
-    shares: [string[], number[]],
-    loots: [string[], number[]],
-    safeAddress?: `0x${string}`,
-    forwarderAddress?: `0x${string}`,
-    lootAddress?: `0x${string}`,
-    sharesAddress?: `0x${string}`,
-    saltNonceOverride?: string
-) => {
+// export const setupBaal = async (params: NewBaalParams) => {
+export const setupBaal = async ({
+    baalSummoner,
+    baalSingleton,
+    poster,
+    config,
+    adminConfig,
+    shamans,
+    shares,
+    loots,
+    safeAddress,
+    forwarderAddress,
+    lootAddress,
+    sharesAddress,
+    saltNonceOverride
+}: NewBaalParams) => {
     const saltNonce = saltNonceOverride || (Math.random() * 1000).toFixed(0);
     const encodedInitParams = await getBaalParams(
-        baal,
+        baalSingleton,
         poster,
         config,
         adminConfig,
@@ -263,7 +293,7 @@ export const setupBaal = async (
         lootAddress,
         sharesAddress,
     );
-    const tx = await baalSummoner.summonBaal(
+    const tx = await (baalSummoner as BaalSummoner).summonBaal(
         encodedInitParams.initParams,
         encodedInitParams.initalizationActions,
         saltNonce,
