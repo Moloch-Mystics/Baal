@@ -2878,7 +2878,7 @@ describe("Baal contract", function () {
     });
 
     it("scenario - offer tribute unsafe", async () => {
-      users.summoner.weth?.transfer(users.s1.address, 100); // summoner transfer 100 weth
+      await users.summoner.weth?.transfer(users.s1.address, 100); // summoner transfer 100 weth
       const offerWeth = weth.interface.encodeFunctionData("transferFrom", [
         users.s1.address,
         gnosisSafe.address,
@@ -3583,27 +3583,27 @@ describe("Baal contract - summon baal with current safe", function () {
 
       const shamanPermissions = defaultSummonSetup.shamanPermissions;
 
-      const addresses = await setupBaal(
+      const addresses = await setupBaal({
           baalSummoner,
           baalSingleton,
           poster,
-          defaultDAOSettings,
-          [sharesPaused, lootPaused],
-          [[shaman], [shamanPermissions]],
-          [
+          config: defaultDAOSettings,
+          adminConfig: [sharesPaused, lootPaused],
+          shamans: [[shaman], [shamanPermissions]],
+          shares: [
               [summoner, applicant],
               [shares, shares]
           ],
-          [
+          loots: [
               [summoner, applicant],
               [loot, loot]
           ],
-          avatar.address as `0x${string}`,
-          ethers.constants.AddressZero,
-          ethers.constants.AddressZero,
-          ethers.constants.AddressZero as `0x${string}`,
-          saltNonce
-      );
+          safeAddress: avatar.address as `0x${string}`,
+          forwarderAddress: ethers.constants.AddressZero,
+          lootAddress: ethers.constants.AddressZero,
+          sharesAddress: ethers.constants.AddressZero as `0x${string}`,
+          saltNonceOverride: saltNonce
+      });
 
       expect(expectedAddress).to.equal(addresses.baal);
     });
