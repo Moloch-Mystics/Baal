@@ -118,6 +118,7 @@ You can `yarn add @daohaus/baal-contracts` on your own project and get access to
 
   ```js
     type BaalSetupOpts = {
+      fixtureTags?: Array<string>; // additional deployment tags
       daoSettings?: Partial<DAOSettings>;
       summonSetupOpts?: Partial<SummonSetup>;
       safeAddress?: `0x${string}`;
