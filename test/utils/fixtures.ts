@@ -58,6 +58,7 @@ export type UsersSetup = {
 }
 
 type BaalSetupOpts = {
+    fixtureTags?: Array<string>;
     daoSettings?: Partial<DAOSettings>;
     summonSetupOpts?: Partial<SummonSetup>;
     safeAddress?: `0x${string}`;
@@ -68,7 +69,7 @@ type BaalSetupOpts = {
     setupUsersOverride?: (params: SetupUsersParams) => Promise<UsersSetup>;
 }
 
-const setupUsersDefault = async ({
+export const setupUsersDefault = async ({
     // addresses,
     baal,
     hre,
@@ -190,7 +191,7 @@ export const baalSetup = deployments.createFixture<BaalSetupType, BaalSetupOpts>
     const { deployer } = await getNamedAccounts();
     const [summoner, applicant, shaman, s1, s2, s3, s4, s5, s6] = await getUnnamedAccounts();
 
-    await deployments.fixture(['Infra', 'TributeMinion', 'BaalSummoner']); // Deployment Tags
+    await deployments.fixture(['Infra', 'TributeMinion', 'BaalSummoner', ...(options?.fixtureTags || [])]); // Deployment Tags
 
     console.log('baalSetup fixture', options);
     // console.log('deployments', Object.keys(await deployments.all()));

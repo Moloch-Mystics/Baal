@@ -1,10 +1,10 @@
-import { ethers } from 'hardhat';
+import { expect } from 'chai';
 import { BigNumber, BigNumberish, Contract, ContractTransaction } from 'ethers';
+import { ethers } from 'hardhat';
 
 import { Baal, BaalSummoner, MultiSend, Poster } from '../../src/types';
 import { encodeMultiAction } from '../../src/util';
 import { moveForwardPeriods } from './evm';
-import { expect } from 'chai';
 
 export type DAOSettings = {
     PROPOSAL_OFFERING: any;
