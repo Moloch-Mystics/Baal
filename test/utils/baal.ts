@@ -306,22 +306,18 @@ export const submitAndProcessProposal = async ({
     encodedAction,
     proposal,
     proposalId,
-}: {
-    baal: Baal,
-    encodedAction: string,
-    proposal: ProposalType,
-    proposalId: BigNumberish
-}) => {
-    await baal.submitProposal(
-      encodedAction,
-      proposal.expiration,
-      proposal.baalGas,
-      ethers.utils.id(proposal.details)
-    );
-    await baal.submitVote(proposalId, true);
+  }: {
+    baal: Baal;
+    encodedAction: string;
+    proposal: ProposalType;
+    proposalId?: BigNumberish;
+  }) => {
+    await baal.submitProposal(encodedAction, proposal.expiration, proposal.baalGas, ethers.utils.id(proposal.details));
+    const id = proposalId ? proposalId : await baal.proposalCount();
+    await baal.submitVote(id, true);
     await moveForwardPeriods(defaultDAOSettings.VOTING_PERIOD_IN_SECONDS, 2);
-    return await baal.processProposal(proposalId, encodedAction);
-};
+    return await baal.processProposal(id, encodedAction);
+  };
   
 export const setShamanProposal = async (
     baal: Baal,
