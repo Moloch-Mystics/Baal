@@ -109,7 +109,7 @@ contract BaalAdvTokenSummoner is
             if (summonerLoot[i] > 0) {
                 IBaalToken(_lootToken).mint(
                     summoners[i],
-                    summonerShares[i]
+                    summonerLoot[i]
                 ); /*grant `to` `amount` `loot`*/
             }
             if (summonerShares[i] > 0) {
