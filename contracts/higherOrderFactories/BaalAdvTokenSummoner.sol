@@ -22,6 +22,10 @@ contract BaalAdvTokenSummoner is
 
     event DeployBaalTokens(address lootToken, address sharesToken);
 
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize() public initializer {
         __Ownable_init();
         __UUPSUpgradeable_init();
