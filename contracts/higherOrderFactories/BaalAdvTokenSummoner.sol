@@ -22,6 +22,10 @@ contract BaalAdvTokenSummoner is
 
     event DeployBaalTokens(address lootToken, address sharesToken);
 
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize() public initializer {
         __Ownable_init();
         __UUPSUpgradeable_init();
@@ -109,7 +113,7 @@ contract BaalAdvTokenSummoner is
             if (summonerLoot[i] > 0) {
                 IBaalToken(_lootToken).mint(
                     summoners[i],
-                    summonerShares[i]
+                    summonerLoot[i]
                 ); /*grant `to` `amount` `loot`*/
             }
             if (summonerShares[i] > 0) {
