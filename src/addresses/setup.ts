@@ -61,6 +61,6 @@ export const getSetupAddresses = async (
         poster: "0x000000000000cd17345801aa8147b8D3950260FF",
         gnosisSafeProxyFactory: "0xC22834581EbC8527d974F8a1c97E1bEA4EF910BC",
         moduleProxyFactory: "0x00000000000DC7F163742Eb4aBEf650037b1f588",
-        DAO: "0xCED608Aa29bB92185D9b6340Adcbfa263DAe075b" // Change to Daohaus protocol zodiac baal avatar
+        DAO: "0x1aCFF11474B9C6D15966Da7A08eD23438CDE23D4" // Change to Daohaus protocol zodiac baal avatar
     };
 };
