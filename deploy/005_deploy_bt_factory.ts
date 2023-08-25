@@ -20,7 +20,7 @@ const deployFn: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
 		return;
 	}
 
-    console.log('\n\nDeploying BaalAdvTokenSummoner factory on network:', network.name);
+    console.log('\n\nDeploying BaalAdvTokenSummoner(UUPS) factory on network:', network.name);
 	console.log('Deployer address:', `${chainId}:${deployer}`);
 	console.log(
 		'Deployer balance:',
@@ -42,7 +42,7 @@ const deployFn: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
 		from: deployer,
 		args: [],
         proxy: {
-            proxyContract: 'OpenZeppelinTransparentProxy',
+            proxyContract: 'UUPS',
             methodName: 'initialize',
         },
 		log: true,
