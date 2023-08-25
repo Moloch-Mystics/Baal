@@ -10,6 +10,7 @@ export const deployments = [
           vaultFactory: "0x594E630efbe8dbd810c168e3878817a4094bB312",
           advTokenFactory: "0x8a4A9E36106Ee290811B89e06e2faFE913507965",
           tributeMinion: "0x5c17BFBaB751C5ddF1Ff267acF8fF919537F39Cf",
+          DAO:"0x4A9a27d614a74Ee5524909cA27bdBcBB7eD3b315",
         },
       },
       goerli: {
@@ -21,6 +22,7 @@ export const deployments = [
           vaultFactory: "0x594E630efbe8dbd810c168e3878817a4094bB312",
           advTokenFactory: "0x0858CB45cE9300133FEbf2Ee2179441c6BadFcdD",
           tributeMinion: "0x5c17BFBaB751C5ddF1Ff267acF8fF919537F39Cf",
+          DAO:"0x4A9a27d614a74Ee5524909cA27bdBcBB7eD3b315",
         },
       },
       gnosis: {
@@ -32,6 +34,7 @@ export const deployments = [
           vaultFactory: "0x594E630efbe8dbd810c168e3878817a4094bB312",
           advTokenFactory: "0x8a4A9E36106Ee290811B89e06e2faFE913507965",
           tributeMinion: "0x5c17BFBaB751C5ddF1Ff267acF8fF919537F39Cf",
+          DAO:"0x4A9a27d614a74Ee5524909cA27bdBcBB7eD3b315",
         },
       },
       polygon: {
@@ -43,6 +46,7 @@ export const deployments = [
           vaultFactory: "0x594E630efbe8dbd810c168e3878817a4094bB312",
           advTokenFactory: "0x8a4A9E36106Ee290811B89e06e2faFE913507965",
           tributeMinion: "0x51498dDdd2A8cdeC82932E08A37eBaF346C38EFd",
+          DAO:"0x4A9a27d614a74Ee5524909cA27bdBcBB7eD3b315",
         },
       },
       polygonMumbai: {
@@ -54,6 +58,7 @@ export const deployments = [
           vaultFactory: "0xbB907b1a769bD338c9d09Fb20C2997ECE5E715a3",
           advTokenFactory: "0x8a4A9E36106Ee290811B89e06e2faFE913507965",
           tributeMinion: "0x898fc00771c148257a7edbdAD33c1469F4420740",
+          DAO:"0x4A9a27d614a74Ee5524909cA27bdBcBB7eD3b315",
         },
       },
       arbitrumOne: {
@@ -65,6 +70,7 @@ export const deployments = [
           vaultFactory: "0xC39E8D4DE75c6aC025a0C07dCd8Aeb0728C5DBF1",
           advTokenFactory: "0x8a4A9E36106Ee290811B89e06e2faFE913507965",
           tributeMinion: "0x7707964B4C24A6b8b7B747F7507F56818857A7C2",
+          DAO:"0x4A9a27d614a74Ee5524909cA27bdBcBB7eD3b315",
         },
       },
       optimisticEthereum: {
@@ -74,8 +80,9 @@ export const deployments = [
           baalSingleton: "0x17234C0Ae25AF09fAf57B9D5ea2B93C1f220E800",
           factory: "0x3E0eAdE343Ddc556a6Cf0f858e4f685ba303ce71",
           vaultFactory: "0xb04111e7b4576164145EF97EB81fd43DA0F2D675",
-          advTokenFactory: "0x8a4A9E36106Ee290811B89e06e2faFE913507965",
+          advTokenFactory: "0x84561C97156a128662B62952890469214FDC87bf",
           tributeMinion: "0x7707964B4C24A6b8b7B747F7507F56818857A7C2",
+          DAO:"0x1aCFF11474B9C6D15966Da7A08eD23438CDE23D4",
         },
       },
     },
