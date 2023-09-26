@@ -307,6 +307,7 @@ export type ProposalParams = {
     proposal: ProposalType;
     proposalId?: BigNumberish;
     daoSettings?: DAOSettings;
+    extraSeconds?: number;
 };
 
 export const submitAndProcessProposal = async ({
@@ -315,11 +316,12 @@ export const submitAndProcessProposal = async ({
     proposal,
     proposalId,
     daoSettings = defaultDAOSettings,
+    extraSeconds = 2,
   }: ProposalParams) => {
     await baal.submitProposal(encodedAction, proposal.expiration, proposal.baalGas, ethers.utils.id(proposal.details));
     const id = proposalId ? proposalId : await baal.proposalCount();
     await baal.submitVote(id, true);
-    await moveForwardPeriods(daoSettings.VOTING_PERIOD_IN_SECONDS, 2);
+    await moveForwardPeriods(daoSettings.VOTING_PERIOD_IN_SECONDS, extraSeconds);
     return await baal.processProposal(id, encodedAction);
   };
   
@@ -329,6 +331,7 @@ export const setShamanProposal = async (
     shamanAddress: string,
     permission: BigNumberish,
     daoSettings = defaultDAOSettings,
+    extraSeconds = 2,
 ) => {
     const setShaman = baal.interface.encodeFunctionData('setShamans', [
       [shamanAddress],
@@ -346,7 +349,7 @@ export const setShamanProposal = async (
     await baal.submitProposal(setShamanAction, 0, 0, '');
     const proposalId = await baal.proposalCount();
     await baal.submitVote(proposalId, true);
-    await moveForwardPeriods(daoSettings.VOTING_PERIOD_IN_SECONDS, 2);
+    await moveForwardPeriods(daoSettings.VOTING_PERIOD_IN_SECONDS, extraSeconds);
     await baal.processProposal(proposalId, setShamanAction);
     return proposalId;
 };

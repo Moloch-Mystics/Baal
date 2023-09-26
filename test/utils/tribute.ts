@@ -19,6 +19,7 @@ export type TributeProposalParams = {
     proposalExpiration?: number;
     proposalBaalGas?: number;
     daoSettings?: DAOSettings;
+    extraSeconds?: number;
 };
 
 export type TributeProposalStatus = {
@@ -41,6 +42,7 @@ export const submitAndProcessTributeProposal = async ({
     proposalExpiration = 0,
     proposalBaalGas = 0,
     daoSettings = defaultDAOSettings,
+    extraSeconds = 2,
 }: TributeProposalParams): Promise<TributeProposalStatus> => {
 
     const tx_1 = await tributeMinion.submitTributeProposal(
@@ -59,7 +61,7 @@ export const submitAndProcessTributeProposal = async ({
     const tx_2_r = tx_2 ? await tx_2.wait() : undefined;
     const tx_3 = await baal.submitVote(proposalId, yes);
     const tx_3_r = await tx_3.wait();
-    await moveForwardPeriods(daoSettings.VOTING_PERIOD_IN_SECONDS, 2);
+    await moveForwardPeriods(daoSettings.VOTING_PERIOD_IN_SECONDS, extraSeconds);
 
     const encodedProposal = await tributeMinion.encodeTributeProposal(
         baal.address,
