@@ -32,4 +32,6 @@ export * from "./signDelegation";
 export * from "./signPermit";
 export * from "./signVote";
 export * from "./util";
+export * from "./addresses/setup";
+export { deployments as DEPLOYMENT_ADDRESSES } from "./addresses/deployed";
 export * from "../test/utils";
