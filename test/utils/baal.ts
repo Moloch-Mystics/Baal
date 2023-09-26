@@ -113,7 +113,7 @@ export enum SHAMAN_PERMISSIONS {
     ALL,
 };
 
-export const defaultDAOSettings = {
+export const defaultDAOSettings: DAOSettings = {
     GRACE_PERIOD_IN_SECONDS: 43200,
     VOTING_PERIOD_IN_SECONDS: 432000,
     PROPOSAL_OFFERING: 0,
@@ -301,21 +301,25 @@ export const setupBaal = async ({
     return await getNewBaalAddresses(tx);
 };
 
+export type ProposalParams = {
+    baal: Baal;
+    encodedAction: string;
+    proposal: ProposalType;
+    proposalId?: BigNumberish;
+    daoSettings?: DAOSettings;
+};
+
 export const submitAndProcessProposal = async ({
     baal,
     encodedAction,
     proposal,
     proposalId,
-  }: {
-    baal: Baal;
-    encodedAction: string;
-    proposal: ProposalType;
-    proposalId?: BigNumberish;
-  }) => {
+    daoSettings = defaultDAOSettings,
+  }: ProposalParams) => {
     await baal.submitProposal(encodedAction, proposal.expiration, proposal.baalGas, ethers.utils.id(proposal.details));
     const id = proposalId ? proposalId : await baal.proposalCount();
     await baal.submitVote(id, true);
-    await moveForwardPeriods(defaultDAOSettings.VOTING_PERIOD_IN_SECONDS, 2);
+    await moveForwardPeriods(daoSettings.VOTING_PERIOD_IN_SECONDS, 2);
     return await baal.processProposal(id, encodedAction);
   };
   
@@ -323,7 +327,8 @@ export const setShamanProposal = async (
     baal: Baal,
     multisend: MultiSend,
     shamanAddress: string,
-    permission: BigNumberish
+    permission: BigNumberish,
+    daoSettings = defaultDAOSettings,
 ) => {
     const setShaman = baal.interface.encodeFunctionData('setShamans', [
       [shamanAddress],
@@ -341,7 +346,7 @@ export const setShamanProposal = async (
     await baal.submitProposal(setShamanAction, 0, 0, '');
     const proposalId = await baal.proposalCount();
     await baal.submitVote(proposalId, true);
-    await moveForwardPeriods(defaultDAOSettings.VOTING_PERIOD_IN_SECONDS, 2);
+    await moveForwardPeriods(daoSettings.VOTING_PERIOD_IN_SECONDS, 2);
     await baal.processProposal(proposalId, setShamanAction);
     return proposalId;
 };

@@ -1,9 +1,31 @@
-import { defaultDAOSettings } from './baal';
+import { DAOSettings, defaultDAOSettings } from './baal';
 import { moveForwardPeriods } from './evm';
 import { Baal, TributeMinion } from '../../src/types';
 import { BigNumber } from 'ethers';
 
 const yes = true;
+
+export type TributeProposalParams = {
+    tributeMinion: TributeMinion,
+    baal: Baal,
+    applicantAddress: string,
+    tributeToken: string,
+    tribute: number,
+    requestedShares: number,
+    requestedLoot: number,
+    sponsor?: boolean;
+    proposalId?: number;
+    proposalOffering?: number;
+    proposalExpiration?: number;
+    proposalBaalGas?: number;
+    daoSettings?: DAOSettings;
+};
+
+export type TributeProposalStatus = {
+    spentInGas: BigNumber;
+    state: number;
+    propStatus: [boolean, boolean, boolean, boolean];
+};
 
 export const submitAndProcessTributeProposal = async ({
     tributeMinion,
@@ -18,20 +40,8 @@ export const submitAndProcessTributeProposal = async ({
     proposalOffering = 0,
     proposalExpiration = 0,
     proposalBaalGas = 0,
-}: {
-    tributeMinion: TributeMinion,
-    baal: Baal,
-    applicantAddress: string,
-    tributeToken: string,
-    tribute: number,
-    requestedShares: number,
-    requestedLoot: number,
-    sponsor?: boolean;
-    proposalId?: number;
-    proposalOffering?: number;
-    proposalExpiration?: number;
-    proposalBaalGas?: number;
-}) => {
+    daoSettings = defaultDAOSettings,
+}: TributeProposalParams): Promise<TributeProposalStatus> => {
 
     const tx_1 = await tributeMinion.submitTributeProposal(
         baal.address,
@@ -49,7 +59,7 @@ export const submitAndProcessTributeProposal = async ({
     const tx_2_r = tx_2 ? await tx_2.wait() : undefined;
     const tx_3 = await baal.submitVote(proposalId, yes);
     const tx_3_r = await tx_3.wait();
-    await moveForwardPeriods(defaultDAOSettings.VOTING_PERIOD_IN_SECONDS, 2);
+    await moveForwardPeriods(daoSettings.VOTING_PERIOD_IN_SECONDS, 2);
 
     const encodedProposal = await tributeMinion.encodeTributeProposal(
         baal.address,

@@ -11,14 +11,12 @@ import {
   ProposalType,
   PROPOSAL_STATES,
   revertMessages,
-  setShamanProposal,
   setupBaal,
   SHAMAN_PERMISSIONS,
-  submitAndProcessProposal,
   verifyProposal,
 } from './utils/baal';
 import { blockTime, moveForwardPeriods } from './utils/evm';
-import { baalSetup, mockBaalLessSharesSetup, Signer } from './utils/fixtures';
+import { baalSetup, mockBaalLessSharesSetup, ProposalHelpers, Signer } from './utils/fixtures';
 import signDelegation from "../src/signDelegation";
 import signVote from "../src/signVote";
 import { sharesRevertMessages } from './utils/token';
@@ -63,6 +61,8 @@ describe("Baal contract", function () {
   const yes = true;
   const no = false;
 
+  let proposalHelpers: ProposalHelpers;
+
   beforeEach(async function () {
 
     forwarder = '0x0000000000000000000000000000000000000420';
@@ -76,7 +76,8 @@ describe("Baal contract", function () {
       MultiSend,
       WETH,
       DAI,
-      signers
+      signers,
+      helpers,
     } = await baalSetup({
       daoSettings: deploymentConfig,
       forwarderAddress: forwarder,
@@ -91,6 +92,8 @@ describe("Baal contract", function () {
     weth = WETH;
     dai = DAI;
     users = signers;
+
+    proposalHelpers = helpers;
 
     chainId = Number(await getChainId());
 
@@ -191,7 +194,7 @@ describe("Baal contract", function () {
       );
 
       await expect(
-        submitAndProcessProposal({
+        proposalHelpers.submitAndProcessProposal({
           baal,
           encodedAction,
           proposal,
@@ -226,7 +229,7 @@ describe("Baal contract", function () {
       );
 
       await expect(
-        submitAndProcessProposal({
+        proposalHelpers.submitAndProcessProposal({
           baal,
           encodedAction,
           proposal,
@@ -261,7 +264,7 @@ describe("Baal contract", function () {
       );
 
       await expect(
-        submitAndProcessProposal({
+        proposalHelpers.submitAndProcessProposal({
           baal,
           encodedAction,
           proposal,
@@ -296,7 +299,7 @@ describe("Baal contract", function () {
       );
 
       await expect(
-        submitAndProcessProposal({
+        proposalHelpers.submitAndProcessProposal({
           baal,
           encodedAction,
           proposal,
@@ -336,7 +339,7 @@ describe("Baal contract", function () {
       );
 
       await expect(
-        submitAndProcessProposal({
+        proposalHelpers.submitAndProcessProposal({
           baal,
           encodedAction,
           proposal,
@@ -1230,56 +1233,56 @@ describe("Baal contract", function () {
     });
 
     it("setShamans - 0 - success", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, 0);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, 0);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, false]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.NONE);
     });
 
     it("setShamans - 1 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ALL);
     });
 
     it("setShamans - 2 - success", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, false]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.MANAGER);
     });
 
     it("setShamans - 3 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_MANAGER);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_MANAGER);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ALL);
     });
 
     it("setShamans - 4 - success", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.GOVERNANCE);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.GOVERNANCE);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, false]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.GOVERNANCE);
     });
 
     it("setShamans - 5 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_GOVERNANCE);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_GOVERNANCE);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ALL);
     });
 
     it("setShamans - 6 - success", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER_GOVERNANCE);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER_GOVERNANCE);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, false]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.MANAGER_GOVERNANCE);
     });
 
     it("setShamans - 7 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.summoner.address, SHAMAN_PERMISSIONS.ALL); // use summoner bc shaman default = 7
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.summoner.address, SHAMAN_PERMISSIONS.ALL); // use summoner bc shaman default = 7
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.summoner.address)).to.equal(SHAMAN_PERMISSIONS.NONE);
@@ -1315,56 +1318,56 @@ describe("Baal contract", function () {
     });
 
     it("setShamans - 0 - success", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.NONE);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.NONE);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, false]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.NONE);
     });
 
     it("setShamans - 1 - success", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, false]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ADMIN);
     });
 
     it("setShamans - 2 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ALL);
     });
 
     it("setShamans - 3 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_MANAGER);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_MANAGER);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ALL);
     });
 
     it("setShamans - 4 - success", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.GOVERNANCE);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.GOVERNANCE);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, false]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.GOVERNANCE);
     });
 
     it("setShamans - 5 - success", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_GOVERNANCE);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_GOVERNANCE);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, false]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ADMIN_GOVERNANCE);
     });
 
     it("setShamans - 6 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER_GOVERNANCE);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER_GOVERNANCE);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ALL);
     });
 
     it("setShamans - 7 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.summoner.address, SHAMAN_PERMISSIONS.ALL); // use summoner bc shaman default = 7
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.summoner.address, SHAMAN_PERMISSIONS.ALL); // use summoner bc shaman default = 7
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.summoner.address)).to.equal(SHAMAN_PERMISSIONS.NONE);
@@ -1400,56 +1403,56 @@ describe("Baal contract", function () {
     });
 
     it("setShamans - 0 - success", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.NONE);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.NONE);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, false]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.NONE);
     });
 
     it("setShamans - 1 - success", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, false]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ADMIN);
     });
 
     it("setShamans - 2 - success", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, false]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.MANAGER);
     });
 
     it("setShamans - 3 - success", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_MANAGER);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_MANAGER);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, false]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ADMIN_MANAGER);
     });
 
     it("setShamans - 4 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.GOVERNANCE);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.GOVERNANCE);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ALL);
     });
 
     it("setShamans - 5 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_GOVERNANCE);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_GOVERNANCE);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ALL);
     });
 
     it("setShamans - 6 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER_GOVERNANCE);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER_GOVERNANCE);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ALL);
     });
 
     it("setShamans - 7 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.summoner.address, SHAMAN_PERMISSIONS.ALL); // use summoner bc shaman default = 7
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.summoner.address, SHAMAN_PERMISSIONS.ALL); // use summoner bc shaman default = 7
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.summoner.address)).to.equal(SHAMAN_PERMISSIONS.NONE);
@@ -1491,56 +1494,56 @@ describe("Baal contract", function () {
     });
 
     it("setShamans - 0 - success", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.NONE);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.NONE);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, false]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.NONE);
     });
 
     it("setShamans - 1 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ALL);
     });
 
     it("setShamans - 2 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ALL);
     });
 
     it("setShamans - 3 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_MANAGER);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_MANAGER);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ALL);
     });
 
     it("setShamans - 4 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.GOVERNANCE);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.GOVERNANCE);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ALL);
     });
 
     it("setShamans - 5 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_GOVERNANCE);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.ADMIN_GOVERNANCE);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ALL);
     });
 
     it("setShamans - 6 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER_GOVERNANCE);
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.shaman.address, SHAMAN_PERMISSIONS.MANAGER_GOVERNANCE);
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.shaman.address)).to.equal(SHAMAN_PERMISSIONS.ALL);
     });
 
     it("setShamans - 7 - fail", async () => {
-      const id = await setShamanProposal(baal, multisend, users.summoner.address, SHAMAN_PERMISSIONS.ALL); // use summoner bc shaman default = 7
+      const id = await proposalHelpers.setShamanProposal(baal, multisend, users.summoner.address, SHAMAN_PERMISSIONS.ALL); // use summoner bc shaman default = 7
       const propStatus = await baal.getProposalStatus(id);
       expect(propStatus).to.eql([false, true, true, true]); // [cancelled, processed, passed, actionFailed]
       expect(await baal.shamans(users.summoner.address)).to.equal(SHAMAN_PERMISSIONS.NONE);
@@ -3024,7 +3027,7 @@ describe("Baal contract", function () {
         [0]
       );
 
-      await expect(submitAndProcessProposal({
+      await expect(proposalHelpers.submitAndProcessProposal({
           baal,
           encodedAction,
           proposal,
@@ -3057,7 +3060,7 @@ describe("Baal contract", function () {
         [0]
       );
 
-      await expect(submitAndProcessProposal({
+      await expect(proposalHelpers.submitAndProcessProposal({
           baal,
           encodedAction,
           proposal,
@@ -3090,7 +3093,7 @@ describe("Baal contract", function () {
         [0]
       );
 
-      await expect(submitAndProcessProposal({
+      await expect(proposalHelpers.submitAndProcessProposal({
           baal,
           encodedAction,
           proposal,
@@ -3123,7 +3126,7 @@ describe("Baal contract", function () {
         [0]
       );
 
-      await expect(submitAndProcessProposal({
+      await expect(proposalHelpers.submitAndProcessProposal({
           baal,
           encodedAction,
           proposal,
