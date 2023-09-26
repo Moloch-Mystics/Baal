@@ -32,7 +32,7 @@ const deployFn: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
 		from: deployer,
 		args: [],
         proxy: {
-            proxyContract: 'OpenZeppelinTransparentProxy',
+            proxyContract: 'UUPS',
             methodName: 'initialize',
         },
 		log: true,

@@ -11,5 +11,4 @@ interface IBaalAndVaultSummoner {
         bytes32 referrer,
         string memory name
     ) external returns (address _daoAddress, address _vaultAddress);
-        
 }
