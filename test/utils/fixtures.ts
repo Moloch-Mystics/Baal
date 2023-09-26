@@ -2,7 +2,9 @@ import { deployments } from 'hardhat';
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 
 import { Baal, BaalLessShares, BaalSummoner, GnosisSafe, Loot, MockBaal, MultiSend, Poster, Shares, TestERC20, TributeMinion } from '../../src/types';
-import { DAOSettings, NewBaalAddresses, NewBaalParams, SummonSetup, defaultDAOSettings, defaultSummonSetup, setupBaal } from './baal';
+import { DAOSettings, NewBaalAddresses, NewBaalParams, ProposalParams, ProposalType, SummonSetup, defaultDAOSettings, defaultSummonSetup, setShamanProposal, setupBaal, submitAndProcessProposal } from './baal';
+import { BigNumberish, ContractTransaction } from 'ethers';
+import { TributeProposalParams, TributeProposalStatus, submitAndProcessTributeProposal } from './tribute';
 
 export type Signer = {
     address: string;
@@ -16,7 +18,13 @@ export type Signer = {
     dai?: TestERC20;
   };
 
-type BaalSetupType = {
+export type ProposalHelpers = {
+    submitAndProcessProposal: (params: Omit<ProposalParams, "daoSettings">) => Promise<ContractTransaction>,
+    submitAndProcessTributeProposal: (params: Omit<TributeProposalParams, "daoSettings">) => Promise<TributeProposalStatus>,
+    setShamanProposal: (baal: Baal, multisend: MultiSend, shamanAddress: string, permission: BigNumberish) => Promise<number>,
+};
+
+export type BaalSetupType = {
     Loot: Loot;
     Shares: Shares;
     Baal: Baal;
@@ -30,6 +38,8 @@ type BaalSetupType = {
     signers: {
         [key: string]: Signer;
     };
+    daoSettings: DAOSettings;
+    helpers: ProposalHelpers;
 }
 
 type MockBaalSetupType = {
@@ -189,7 +199,7 @@ export const baalSetup = deployments.createFixture<BaalSetupType, BaalSetupOpts>
 ) => {
     const { ethers, deployments, getNamedAccounts, getUnnamedAccounts } = hre;
     const { deployer } = await getNamedAccounts();
-    const [summoner, applicant, shaman, s1, s2, s3, s4, s5, s6] = await getUnnamedAccounts();
+    const [summoner, applicant, shaman] = await getUnnamedAccounts();
 
     await deployments.fixture(['Infra', 'TributeMinion', 'BaalSummoner', ...(options?.fixtureTags || [])]); // Deployment Tags
 
@@ -213,14 +223,16 @@ export const baalSetup = deployments.createFixture<BaalSetupType, BaalSetupOpts>
     };
     const applicantDist = { shares, loot };
 
+    const daoSettings = {
+        ...defaultDAOSettings,
+        ...options?.daoSettings,
+    };
+
     const setupParams: NewBaalParams = {
         baalSummoner,
         baalSingleton,
         poster,
-        config: {
-            ...defaultDAOSettings,
-            ...options?.daoSettings,
-        },
+        config: daoSettings,
         adminConfig: [sharesPaused, lootPaused],
         shamans: [[shaman], [shamanPermissions]],
         shares: [
@@ -260,6 +272,7 @@ export const baalSetup = deployments.createFixture<BaalSetupType, BaalSetupOpts>
         : await setupUsersDefault({ addresses, baal, hre });
 
     return {
+        daoSettings,
         Loot: lootToken,
         Shares: sharesToken,
         // Baal: (await ethers.getContract('Baal', deployer)) as Baal,
@@ -272,6 +285,17 @@ export const baalSetup = deployments.createFixture<BaalSetupType, BaalSetupOpts>
         WETH: weth,
         DAI: dai,
         signers,
+        helpers: {
+            setShamanProposal: (baal, multisend, shamanAddress, permission) => {
+                return setShamanProposal(baal, multisend, shamanAddress, permission, daoSettings);
+            },
+            submitAndProcessProposal: (params) => {
+                return submitAndProcessProposal({ ...params, daoSettings });
+            },
+            submitAndProcessTributeProposal(params) {
+                return submitAndProcessTributeProposal({ ...params, daoSettings });
+            },
+        }
     };
 
 

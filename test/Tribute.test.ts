@@ -9,8 +9,7 @@ import {
   revertMessages,
 } from './utils/baal';
 import { moveForwardPeriods } from './utils/evm';
-import { baalSetup, Signer } from './utils/fixtures';
-import { submitAndProcessTributeProposal } from './utils/tribute';
+import { baalSetup, ProposalHelpers, Signer } from './utils/fixtures';
 import {
   Baal,
   TestERC20,
@@ -42,6 +41,8 @@ describe("Tribute proposal type", function () {
   const yes = true;
   const no = false;
 
+  let proposalHelpers: ProposalHelpers;
+
   beforeEach(async () => {
     const {
       Baal,
@@ -52,7 +53,8 @@ describe("Tribute proposal type", function () {
       MultiSend,
       TributeMinion,
       WETH,
-      signers
+      signers,
+      helpers,
     } = await baalSetup({});
 
     baal = Baal;
@@ -65,6 +67,8 @@ describe("Tribute proposal type", function () {
     // poster = Poster;
     tributeMinion = TributeMinion;
     users = signers;
+
+    proposalHelpers = helpers;
   });
 
   describe("Dangerous proposal tribute", () => {
@@ -181,7 +185,7 @@ describe("Tribute proposal type", function () {
 
       const currentShares = await sharesToken.balanceOf(users.applicant.address);
 
-      users.applicant.tributeMinion && await submitAndProcessTributeProposal({
+      users.applicant.tributeMinion && await proposalHelpers.submitAndProcessTributeProposal({
         tributeMinion: users.applicant.tributeMinion,
         baal,
         applicantAddress: users.applicant.address,
@@ -236,7 +240,7 @@ describe("Tribute proposal type", function () {
 
       const currentShares = await sharesToken.balanceOf(users.applicant.address);
 
-      users.applicant.tributeMinion && await submitAndProcessTributeProposal({
+      users.applicant.tributeMinion && await proposalHelpers.submitAndProcessTributeProposal({
         tributeMinion: users.applicant.tributeMinion,
         baal,
         applicantAddress: users.applicant.address,
@@ -269,7 +273,7 @@ describe("Tribute proposal type", function () {
 
     //   await users.summoner.weth?.approve(tributeMinion.address, tribute);
 
-    //   users.summoner.tributeMinion && await submitAndProcessTributeProposal({
+    //   users.summoner.tributeMinion && await proposalHelpers.submitAndProcessTributeProposal({
     //     tributeMinion: users.summoner.tributeMinion,
     //     baal,
     //     applicantAddress: users.summoner.address,
