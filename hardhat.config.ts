@@ -60,6 +60,8 @@ const explorerApiKey = (networkName: string) => {
         return process.env.OPTIMISTICSCAN_API_KEY;
       case "arbitrumOne":
         return process.env.ARBISCAN_API_KEY;
+      case "base":
+        return process.env.BASESCAN_API_KEY;
       default:
         break;
     }
@@ -89,6 +91,22 @@ const config: HardhatUserConfig = {
     },
     goerli: {
       url: `https://goerli.infura.io/v3/${infuraKey()}`,
+      // gas: 5000000,
+      // gasPrice: 100000000000,
+      // gasMultiplier: 2,
+      accounts: process.env.ACCOUNT_PK
+        ? [process.env.ACCOUNT_PK]
+        : {
+          mnemonic: mnemonic(),
+        },
+      verify: {
+        etherscan: {
+          apiKey: explorerApiKey('ethereum'),
+        },
+      },
+    },
+    sepolia: {
+      url: `https://sepolia.infura.io/v3/${infuraKey()}`,
       // gas: 5000000,
       // gasPrice: 100000000000,
       // gasMultiplier: 2,
@@ -173,6 +191,17 @@ const config: HardhatUserConfig = {
         },
       },
     },
+    base: {
+      url: `https://mainnet.base.org`,
+      accounts: {
+        mnemonic: mnemonic(),
+      },
+      verify: {
+        etherscan: {
+          apiKey: explorerApiKey('base'),
+        },
+      },
+    },
   },
   etherscan: {
     // Your API key for Etherscan
@@ -187,6 +216,7 @@ const config: HardhatUserConfig = {
       polygonMumbai: explorerApiKey('polygon'),
       arbitrumOne: explorerApiKey('arbitrumOne'),
       optimisticEthereum: explorerApiKey('optimism'),
+      base: explorerApiKey('base'),
     },
     customChains: [
       {

@@ -3,28 +3,6 @@ import { DeployFunction } from 'hardhat-deploy/types';
 
 import { getSetupAddresses } from '../src/addresses/setup';
 
-const networkName = {
-	4: 'Rinkeby',
-	5: 'Goerli',
-	1: 'mainnet',
-	137: 'matic',
-	42: 'kovan',
-	100: 'gnosis',
-	42161: 'arbitrum',
-	10: 'optimism'
-};
-
-const networkCurrency = {
-	4: 'ETH',
-	5: 'ETH',
-	1: 'ETH',
-	137: 'matic',
-	42: 'ETH',
-	100: 'xDai',
-	42161: 'ETH',
-	10: 'ETH'
-};
-
 const deployFn: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
 
     const { deployments, ethers, getChainId, getNamedAccounts, network } = hre;

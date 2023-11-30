@@ -25,6 +25,9 @@ export const deployments = [
           DAO:"0x4A9a27d614a74Ee5524909cA27bdBcBB7eD3b315",
         },
       },
+      sepolia: {
+        // TODO:
+      },
       gnosis: {
         addresses: {
           lootSingleton: "0x0444AE984b9563C8480244693ED65F25B3C64a4E",
@@ -84,6 +87,9 @@ export const deployments = [
           tributeMinion: "0x7707964B4C24A6b8b7B747F7507F56818857A7C2",
           DAO:"0x1aCFF11474B9C6D15966Da7A08eD23438CDE23D4",
         },
+      },
+      base: {
+        // TODO:
       },
     },
   },
