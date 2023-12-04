@@ -15,8 +15,8 @@ const deployFn: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
 
     const _addresses = await getSetupAddresses(chainId, network, deployments);
 
-    if (_addresses.DAO === ethers.constants.AddressZero && network.name !== 'hardhat') {
-		console.log('You need to set DAO adress to transfer ownership of summoner', _addresses.DAO);
+    if ((!_addresses.DAO || _addresses.DAO === ethers.constants.AddressZero) && network.name !== 'hardhat') {
+		console.log('You need to set DAO address to transfer ownership of summoner', _addresses.DAO);
 		return;
 	}
 

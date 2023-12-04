@@ -227,15 +227,14 @@ const config: HardhatUserConfig = {
           browserURL: "https://gnosisscan.io/",
         },
       },
-      // can only have one chainId 100 at a time
-      // {
-      //   network: "xdai",
-      //   chainId: 100,
-      //   urls: {
-      //     apiURL: "https://blockscout.com/xdai/mainnet/api",
-      //     browserURL: "https://blockscout.com/xdai/mainnet/",
-      //   }
-      // }
+      {
+        network: "base",
+        chainId: 8453,
+        urls: {
+          apiURL: "https://api.basescan.org/api",
+          browserURL: "https://basescan.org",
+        }
+      },
     ]
   },
   solidity: {
