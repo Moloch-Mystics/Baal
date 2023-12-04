@@ -57,7 +57,7 @@ export const getSetupAddresses = async (
     const gnosisMultisendLibrary = getMultiSendDeployment(filter)?.networkAddresses[chainId];
     const gnosisSafeProxyFactory = getProxyFactoryDeployment(filter)?.networkAddresses[chainId];
     let moduleProxyFactory = Object.values(SupportedNetworks).includes(Number(chainId))
-        ? ContractVersions[Number(chainId) as SupportedNetworks]?.factory?.['1.1.0']
+        ? ContractVersions[Number(chainId) as SupportedNetworks]?.factory?.['1.2.0']
         : undefined;
     // TODO:  Base network is not officially supported by the Zodiac SDK
     if (chainId === '8453') moduleProxyFactory = '0x000000000000aDdB49795b0f9bA5BC298cDda236';
