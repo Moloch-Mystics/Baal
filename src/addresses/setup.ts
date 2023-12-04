@@ -22,13 +22,13 @@ export type ContractSetup = {
 const DAO_ADDRESS: {[name: string]: string} = {
     mainnet: "0x4A9a27d614a74Ee5524909cA27bdBcBB7eD3b315",
     goerli: "0x4A9a27d614a74Ee5524909cA27bdBcBB7eD3b315",
-    sepolia: "", // TODO:
+    sepolia: "0x1aCFF11474B9C6D15966Da7A08eD23438CDE23D4",
     gnosis: "0x4A9a27d614a74Ee5524909cA27bdBcBB7eD3b315",
     polygon: "0x4A9a27d614a74Ee5524909cA27bdBcBB7eD3b315",
     polygonMumbai: "0x4A9a27d614a74Ee5524909cA27bdBcBB7eD3b315",
     arbitrumOne: "0x4A9a27d614a74Ee5524909cA27bdBcBB7eD3b315",
     optimisticEthereum: "0x1aCFF11474B9C6D15966Da7A08eD23438CDE23D4",
-    base: "", // TODO:
+    base: "0x1aCFF11474B9C6D15966Da7A08eD23438CDE23D4",
 };
 
 export const getSetupAddresses = async (
@@ -56,10 +56,11 @@ export const getSetupAddresses = async (
     const gnosisFallbackLibrary = getCompatibilityFallbackHandlerDeployment(filter)?.networkAddresses[chainId];
     const gnosisMultisendLibrary = getMultiSendDeployment(filter)?.networkAddresses[chainId];
     const gnosisSafeProxyFactory = getProxyFactoryDeployment(filter)?.networkAddresses[chainId];
-    // TODO: Zodiac is not deployed on Base network
-    const moduleProxyFactory = Object.values(SupportedNetworks).includes(Number(chainId))
+    let moduleProxyFactory = Object.values(SupportedNetworks).includes(Number(chainId))
         ? ContractVersions[Number(chainId) as SupportedNetworks]?.factory?.['1.1.0']
         : undefined;
+    // TODO:  Base network is not officially supported by the Zodiac SDK
+    if (chainId === '8453') moduleProxyFactory = '0x000000000000aDdB49795b0f9bA5BC298cDda236';
     const poster = '0x000000000000cd17345801aa8147b8D3950260FF';
 
     if (!gnosisSingleton || !gnosisFallbackLibrary || !gnosisMultisendLibrary || !gnosisSafeProxyFactory)
@@ -72,7 +73,7 @@ export const getSetupAddresses = async (
         gnosisFallbackLibrary,
         gnosisMultisendLibrary,
         gnosisSafeProxyFactory,
-        moduleProxyFactory: '',
+        moduleProxyFactory,
         poster,
         DAO: DAO_ADDRESS[network.name],
     };
