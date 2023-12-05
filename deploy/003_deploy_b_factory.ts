@@ -3,28 +3,6 @@ import { DeployFunction } from 'hardhat-deploy/types';
 
 import { getSetupAddresses } from '../src/addresses/setup';
 
-const networkName = {
-	4: 'Rinkeby',
-	5: 'Goerli',
-	1: 'mainnet',
-	137: 'matic',
-	42: 'kovan',
-	100: 'gnosis',
-	42161: 'arbitrum',
-	10: 'optimism'
-};
-
-const networkCurrency = {
-	4: 'ETH',
-	5: 'ETH',
-	1: 'ETH',
-	137: 'matic',
-	42: 'ETH',
-	100: 'xDai',
-	42161: 'ETH',
-	10: 'ETH'
-};
-
 const deployFn: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
 
     const { deployments, ethers, getChainId, getNamedAccounts, network } = hre;
@@ -34,8 +12,8 @@ const deployFn: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
 
 	const _addresses = await getSetupAddresses(chainId, network, deployments);
 
-	if (_addresses.DAO === ethers.constants.AddressZero && network.name !== 'hardhat') {
-		console.log('You need to set DAO adress to transfer ownership of summoner', _addresses.DAO);
+	if ((!_addresses.DAO || _addresses.DAO === ethers.constants.AddressZero) && network.name !== 'hardhat') {
+		console.log('You need to set DAO address to transfer ownership of summoner', _addresses.DAO);
 		return;
 	}
 
@@ -74,7 +52,7 @@ const deployFn: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
 		from: deployer,
 		args: [],
         proxy: {
-            proxyContract: 'OpenZeppelinTransparentProxy',
+            proxyContract: 'UUPS',
             methodName: 'initialize',
         },
 		log: true,

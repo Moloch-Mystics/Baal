@@ -25,6 +25,18 @@ export const deployments = [
           DAO:"0x4A9a27d614a74Ee5524909cA27bdBcBB7eD3b315",
         },
       },
+      sepolia: {
+        addresses: {
+          lootSingleton: "0x00768B047f73D88b6e9c14bcA97221d6E179d468",
+          sharesSingleton: "0x52acf023d38A31f7e7bC92cCe5E68d36cC9752d6",
+          baalSingleton: "0xc650B598b095613cCddF0f49570FfA475175A5D5",
+          factory: "0xB2B3909661552942AE1115E9Fc99dF0BC93d71d0",
+          vaultFactory: "0x763f5c2E59f997A6cC48Bf1228aBf61325244702",
+          advTokenFactory: "0xD69e5B8F6FA0E5d94B93848700655A78DF24e387",
+          tributeMinion: "0xdb4D89F2199b9Cf451B7Ff4bdC94b1c96De4bdD0",
+          DAO:"0x1aCFF11474B9C6D15966Da7A08eD23438CDE23D4",
+        },
+      },
       gnosis: {
         addresses: {
           lootSingleton: "0x0444AE984b9563C8480244693ED65F25B3C64a4E",
@@ -82,6 +94,18 @@ export const deployments = [
           vaultFactory: "0xb04111e7b4576164145EF97EB81fd43DA0F2D675",
           advTokenFactory: "0x84561C97156a128662B62952890469214FDC87bf",
           tributeMinion: "0x7707964B4C24A6b8b7B747F7507F56818857A7C2",
+          DAO:"0x1aCFF11474B9C6D15966Da7A08eD23438CDE23D4",
+        },
+      },
+      base: {
+        addresses: {
+          lootSingleton: "0x52acf023d38A31f7e7bC92cCe5E68d36cC9752d6",
+          sharesSingleton: "0xc650B598b095613cCddF0f49570FfA475175A5D5",
+          baalSingleton: "0xE0F33E95aF46EAd1Fe181d2A74919bff903cD5d4",
+          factory: "0x22e0382194AC1e9929E023bBC2fD2BA6b778E098",
+          vaultFactory: "0x2eF2fC8a18A914818169eFa183db480d31a90c5D",
+          advTokenFactory: "0x97Aaa5be8B38795245f1c38A883B44cccdfB3E11",
+          tributeMinion: "0x00768B047f73D88b6e9c14bcA97221d6E179d468",
           DAO:"0x1aCFF11474B9C6D15966Da7A08eD23438CDE23D4",
         },
       },

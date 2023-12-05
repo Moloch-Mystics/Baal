@@ -11,8 +11,8 @@ const deployFn: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
 
     const _addresses = await getSetupAddresses(chainId, network, deployments);
 
-    if (_addresses.DAO === ethers.constants.AddressZero && network.name !== 'hardhat') {
-		console.log('You need to set DAO adress to transfer ownership of summoner', _addresses.DAO);
+    if ((!_addresses.DAO || _addresses.DAO === ethers.constants.AddressZero) && network.name !== 'hardhat') {
+		console.log('You need to set DAO address to transfer ownership of summoner', _addresses.DAO);
 		return;
 	}
 
@@ -26,6 +26,7 @@ const deployFn: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
     const { deploy } = deployments;
 
     const baalSummoner = await deployments.get('BaalSummoner');
+    console.log('BaalSummoner address', baalSummoner.address);
 
     const summonerDeeployed = await deploy('BaalAndVaultSummoner', {
 		contract: 'BaalAndVaultSummoner',
@@ -48,8 +49,7 @@ const deployFn: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
 
 
 	if (network.name !== 'hardhat') {
-		console.log("BaalAndVaultSummoner transferOwnership to", _addresses.DAO);
-		// await baalAndVaultSummoner.transferOwnership(_addresses.DAO);
+        console.log("BaalAndVaultSummoner transferOwnership to", _addresses.DAO);
         const tx_4 = await deployments.execute('BaalAndVaultSummoner', {
             from: deployer,
         }, 'transferOwnership',
