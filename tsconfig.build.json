@@ -19,8 +19,10 @@
     "strictNullChecks": true,
     "target": "es6"
   },
-  "exclude": ["node_modules"],
-  "files": ["src/index.ts"],
+  "files": [
+    "src/index.ts",
+    "src/hardhat/index.ts"
+  ],
   "include": [
     "hardhat.config.ts",
     "src/types/contracts/Baal.ts",
