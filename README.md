@@ -114,7 +114,13 @@ You can `yarn add @daohaus/baal-contracts` on your own project and get access to
   2. On your test scripts, you can call `await deployments.fixture([tag1, tag2, ...])` (e.g. under `beforeEach()`) and specify the deployment tags you need. For example, `await deployments.fixture(['Infra', 'BaalSummoner'])` will deploy both Safe & Baal contracts.
 
 
-  3. You can also use the [`setupBaal`](test/utils/fixtures.ts) fixture to setup your tests with factory contracts, baal settings, members, loot/shares/token distributions, etc. Moreover, you can also customize it to cover new use cases such as custom summoner contracts, shamans and other setup needs by implementing the`setupBaalOverride` and/or `setupUsersOverride` fixture function parameters. You can take a look at the default implementation ([setupBaal](test/utils/baal.ts) and [setupUsersDefault](test/utils/fixtures.ts)) for inspiration. Below, there's the list of parameters can be customized when calling the hardhat fixture:
+  3. You can also use the [`baalSetup`](test/utils/fixtures.ts) fixture to setup your tests with factory contracts, baal settings, members, loot/shares/token distributions, etc. Moreover, you can also customize it to cover new use cases such as custom summoner contracts, shamans and other setup needs by implementing the`setupBaalOverride` and/or `setupUsersOverride` fixture function parameters. You can take a look at a few example implementations of ([baalSetup](test/utils/baal.ts) and [setupUsersDefault](test/utils/fixtures.ts)) for inspiration. You can find and import all the available scripts/fixtures available for hardhat testing as follows:
+
+  ```js
+  import { baalSetup, ... } from "@daohaus/baal-contracts/hardhat";
+  ```
+  
+  Below, there's the list of parameters can be customized when calling the hardhat fixture:
 
   ```js
     type BaalSetupOpts = {
