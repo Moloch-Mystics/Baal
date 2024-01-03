@@ -1,5 +1,7 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.13;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.7;
+
+import "@openzeppelin/contracts/proxy/Clones.sol";
 
 import "../Baal.sol";
 
@@ -12,7 +14,8 @@ contract MockBaal {
         string memory _name,
         string memory _symbol
     ) {
-        lootToken = IBaalToken(Clones.clone(_lootSingleton)); /*Clone loot singleton using EIP1167 minimal proxy pattern*/
+        /*Clone loot singleton using EIP1167 minimal proxy pattern*/
+        lootToken = IBaalToken(Clones.clone(_lootSingleton));
         lootToken.setUp(
             string(abi.encodePacked(_name, " LOOT")),
             string(abi.encodePacked(_symbol, "-LOOT"))
@@ -20,9 +23,14 @@ contract MockBaal {
     }
 
     function setLootPaused(bool paused) external {
+        if(!lootToken.paused() && paused){
+            lootToken.pause();
+        } else if(lootToken.paused() && !paused){
+            lootToken.unpause();
+        }
         lootPaused = paused;
     }
-    
+
     function mintLoot(address _to, uint256 _amount) external {
         lootToken.mint(_to, _amount);
     }

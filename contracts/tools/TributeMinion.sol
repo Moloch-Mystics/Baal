@@ -1,13 +1,23 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.13;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.7;
 import "../Baal.sol";
 
 interface IERC20 {
-    function transferFrom(address from, address to, uint256 value) external returns (bool);
+    function transferFrom(
+        address from,
+        address to,
+        uint256 value
+    ) external returns (bool);
 }
 
 contract TributeMinion {
-    event TributeProposal(address indexed baal, address token, uint256 amount, address recipient, uint256 proposalId);
+    event TributeProposal(
+        address indexed baal,
+        address token,
+        uint256 amount,
+        address recipient,
+        uint256 proposalId
+    );
     struct Escrow {
         address token;
         address applicant;
@@ -16,6 +26,14 @@ contract TributeMinion {
         address safe;
     }
     mapping(address => mapping(uint256 => Escrow)) public escrows;
+
+    event EscrowReleased(
+        address indexed baal,
+        uint32 proposalId,
+        address applicant,
+        address safe,
+        uint256 amount
+    );
 
     function encodeTributeProposal(
         address baal,
@@ -98,9 +116,11 @@ contract TributeMinion {
         uint256 shares,
         uint256 loot,
         uint32 expiration,
+        uint256 baalgas,
         string memory details
-    ) external {
+    ) external payable {
         uint32 proposalId = baal.proposalCount() + 1;
+
         bytes memory encodedProposal = encodeTributeProposal(
             address(baal),
             shares,
@@ -109,6 +129,7 @@ contract TributeMinion {
             proposalId,
             address(this)
         );
+
         escrows[address(baal)][proposalId] = Escrow(
             token,
             msg.sender,
@@ -116,24 +137,36 @@ contract TributeMinion {
             false,
             baal.target()
         );
-        baal.submitProposal(encodedProposal, expiration, 0, details);
-        emit TributeProposal(address(baal), token, amount, msg.sender, proposalId);
+
+        baal.submitProposal{value:msg.value}(encodedProposal, expiration, baalgas, details);
+
+        emit TributeProposal(
+            address(baal),
+            token,
+            amount,
+            msg.sender,
+            proposalId
+        );
     }
 
     function releaseEscrow(address _baal, uint32 _proposalId) external {
-        // console.log("releasing");
         Baal baal = Baal(_baal);
         Escrow storage escrow = escrows[address(baal)][_proposalId];
         require(!escrow.released, "Already released");
-        // console.log("releasing1b");
 
         bool[4] memory status = baal.getProposalStatus(_proposalId);
-        // console.log("releasing1c");
         require(status[2], "Not passed");
         escrow.released = true;
 
         IERC20 token = IERC20(escrow.token);
-        // console.log("releasing2");
+
+        emit EscrowReleased(
+            _baal,
+            _proposalId,
+            escrow.applicant,
+            escrow.safe,
+            escrow.amount
+        );
 
         require(
             token.transferFrom(escrow.applicant, escrow.safe, escrow.amount),

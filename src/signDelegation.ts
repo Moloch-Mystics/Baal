@@ -1,6 +1,6 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 
-export default async function signDelegation(
+export const signDelegation = async (
   chainId: number,
   contractAddress: string,
   signer: SignerWithAddress,
@@ -8,10 +8,10 @@ export default async function signDelegation(
   delegatee: string,
   nonce: number,
   expiry: number
-) {
+) => {
   const domain = {
-    name: 'Shares',
-    version: '1',
+    name: 'delegation',
+    version: '4',
     chainId,
     verifyingContract: contractAddress,
   }
@@ -35,4 +35,6 @@ export default async function signDelegation(
   const sig = await signer._signTypedData(domain, types, values)
 
   return sig
-}
+};
+
+export default signDelegation;
