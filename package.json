@@ -1,6 +1,6 @@
 {
   "name": "@daohaus/baal-contracts",
-  "version": "1.2.15",
+  "version": "1.2.16",
   "description": "Lo, also it is the time of His rain.",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -66,7 +66,6 @@
     "hardhat-contract-sizer": "^2.4.0",
     "hardhat-deploy": "^0.11.25",
     "hardhat-gas-reporter": "^1.0.9",
-    "safe-deployments": "^1.26.0",
     "shx": "^0.3.4",
     "solidity-coverage": "^0.8.2",
     "ts-node": "^10.0.0",
@@ -77,6 +76,7 @@
     "@gnosis.pm/zodiac": "^3.3.7",
     "@opengsn/contracts": "2.2.5",
     "@openzeppelin/contracts": "^4.8.0",
-    "@openzeppelin/contracts-upgradeable": "^4.8.0"
+    "@openzeppelin/contracts-upgradeable": "^4.8.0",
+    "safe-deployments": "^1.26.0"
   }
 }
