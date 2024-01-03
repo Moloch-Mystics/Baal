@@ -1,12 +1,17 @@
 {
   "name": "@daohaus/baal-contracts",
-  "version": "1.2.16",
+  "version": "1.2.17",
   "description": "Lo, also it is the time of His rain.",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "exports": {
     ".": "./dist/src/index.js",
     "./hardhat": "./dist/src/hardhat/index.js"
+  },
+  "typesVersions": {
+    "*": {
+      "hardhat": ["./dist/src/hardhat/index.d.ts"]
+    }
   },
   "lockfileVersion": 2,
   "files": [
